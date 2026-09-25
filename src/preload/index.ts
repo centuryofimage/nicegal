@@ -50,6 +50,9 @@ const backend: NicegalBridge["backend"] = {
   getBackendStatus(): Promise<BackendStatus> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.status);
   },
+  restartServer(): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.restartServer);
+  },
   onBackendStatusChanged(listener: (status: BackendStatus) => void): () => void {
     const handler = (_event: Electron.IpcRendererEvent, status: unknown): void => {
       listener(status as BackendStatus);
@@ -168,6 +171,7 @@ const backend: NicegalBridge["backend"] = {
 const native: NativeBridge = {
   getAppInfo: () => ipcRenderer.invoke(IPC_CHANNELS.native.appInfo),
   collectDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.native.collectDiagnostics),
+  recentBackendLog: () => ipcRenderer.invoke(IPC_CHANNELS.native.recentBackendLog),
   prepareFileDrag: (request) => ipcRenderer.invoke(IPC_CHANNELS.native.prepareFileDrag, request),
   startFileDrag: (token) => ipcRenderer.invoke(IPC_CHANNELS.native.startFileDrag, token),
   openExternalUrl(url: string): Promise<void> {

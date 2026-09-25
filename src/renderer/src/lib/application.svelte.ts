@@ -214,9 +214,10 @@ class Application implements ApplicationContext {
     this.savedIndexVideos = null;
     this.saveIndexVideos(get(settings).indexVideos);
     await jobs.sync();
-    // A restart (including a provider fallback) drops any scan that was running or queued.
+    // A restart drops running and queued scans. A routine scan may have started with no
+    // pending folder flag, and a fast scan skips unchanged directories. Revisit every asset.
     if (catalog.selectedId !== null)
-      await orchestrator.scan(catalog.selectedId, { pendingOnly: true });
+      await orchestrator.scan(catalog.selectedId, { scanMode: "full" });
   }
 
   private async initializeReadyBackend(): Promise<void> {

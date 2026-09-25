@@ -74,9 +74,7 @@
       (runtime.models &&
         Object.values(runtime.models).find((model) => model.state === "failed")?.error),
   );
-  // `activeProvider` is the real loaded-model provider once known; `status.activeExecutionProvider`
-  // is only what the process was launched with. They can differ when a launch-time provider failed
-  // to compile and OCR silently fell back further (see RuntimeController.actualExecutionProvider).
+  // Loaded indexing models share one provider. Before they load, show the launch choice.
   const providerTitle = $derived.by(() => {
     const active = runtime.activeProvider;
     if (!active) return undefined;
@@ -86,8 +84,8 @@
     }
     if (
       launched &&
-      runtime.actualExecutionProvider &&
-      runtime.actualExecutionProvider !== launched.activeExecutionProvider
+      launched.loadedExecutionProvider &&
+      launched.loadedExecutionProvider !== launched.activeExecutionProvider
     ) {
       return `Running on ${active}; ${launched.activeExecutionProvider} failed to load and fell back automatically`;
     }

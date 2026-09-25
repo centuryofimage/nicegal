@@ -133,7 +133,7 @@ test("a provider fallback during a scan shows recovery until the backend returns
   assert.equal(f.orchestrator.restartingIndex, true);
   f.orchestrator.backendReady();
   assert.equal(f.orchestrator.restartingIndex, false);
-  assert.deepEqual(f.requests, [], "the backend resumes pending folders itself");
+  assert.deepEqual(f.requests, [], "application recovery requests pending folders after reconnect");
 });
 
 test("an ordinary crash, or a fallback with no scan running, shows no recovery", () => {

@@ -1,8 +1,3 @@
-- make the file tree look better
-- fix library pane
-- speed fixes and ui cleanups
-
-This is a big refactor, if there are problems you should revert to the old one and delete your database
-MacOS: Open finder Cmd+Shift+G, type `~/Library/Application Support/nicegal`, delete the folder
-Linux: Delete `.config/nicegal`
-Windows: Win+R, type %APPDATA%, delete `nicegal`
+Changelog
+- fix some onnxruntime fallback problems
+- add better error reports and manual diagnostic collection

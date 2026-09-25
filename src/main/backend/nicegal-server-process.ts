@@ -12,7 +12,7 @@ interface ReadinessMessage {
 }
 
 /** Exit code the server uses to ask for a clean respawn after silently downgrading its execution
- * provider (DirectML failing to load falls back to CPU in-process; the server then persists
+ * provider (an initial DirectML indexing-model load falls back to CPU in-process; the server then persists
  * OpenVINO and exits with this code instead of running degraded for the rest of the session). Not
  * a crash — see `handleUnexpectedExit` in `main/index.ts`. Must match
  * `nicegal-server/src/api/mod.rs`'s `RESTART_EXIT_CODE`. */

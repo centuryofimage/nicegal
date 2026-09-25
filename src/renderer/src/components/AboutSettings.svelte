@@ -92,7 +92,7 @@
     </button>
     <p class="about-warning">
       <TriangleAlert size={13} aria-hidden="true" />
-      Diagnostics can contain private image paths.
+      Diagnostics may contain file names and error details.
     </p>
   </div>
   {#if status}<p class="about-status" aria-live="polite">{status}</p>{/if}

@@ -33,6 +33,7 @@ export interface RuntimeStatus {
   availableExecutionProviders?: ExecutionProviderId[];
   imageModel: ImageModelStatus;
   activeExecutionProvider: string;
+  loadedExecutionProvider: string | null;
   activeRuntimeDistribution: string;
   onnxRuntimeBuildInfo: string;
   configuredExecutionProvider: string;
@@ -476,9 +477,9 @@ export interface EnsureThumbnailsResponse {
 
 export interface BackendBridge {
   getBackendStatus(): Promise<BackendStatus>;
-  /** Receives a fresh `BackendStatus` whenever the main process's view of it changes on its own —
-   * today, only when the nicegal-server process exits unexpectedly. */
+  /** Receives changes to the main process's backend readiness and error state. */
   onBackendStatusChanged(listener: (status: BackendStatus) => void): () => void;
+  restartServer(): Promise<void>;
   getRuntimeStatus(): Promise<RuntimeStatus>;
   setImageModel(model: string): Promise<RuntimeStatus>;
   setExecutionProvider(executionProvider: ExecutionProviderId): Promise<RuntimeStatus>;
@@ -514,6 +515,7 @@ export interface BackendBridge {
 export interface NativeBridge {
   getAppInfo(): Promise<import("./diagnostics").AppInfo>;
   collectDiagnostics(): Promise<string | null>;
+  recentBackendLog(): Promise<string>;
   openExternalUrl(url: string): Promise<void>;
   openLicenseInformation(): Promise<void>;
   /** `defaultPath` opens the picker inside a folder, e.g. an included folder when excluding. */

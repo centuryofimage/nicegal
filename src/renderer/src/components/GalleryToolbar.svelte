@@ -72,7 +72,7 @@
       ondropvisualfiles={dropImages}
     />
     {#if orchestrator.restartingIndex}
-      <span role="status">Switching to CPU…</span>
+      <span role="status">Switching to OpenVINO…</span>
       <button class="ui-button" onclick={() => orchestrator.cancel()}>Stop indexing</button>
     {:else if jobs.active}
       <JobIndicator

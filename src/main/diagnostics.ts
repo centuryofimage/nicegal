@@ -13,6 +13,13 @@ declare const __NICEGAL_BACKEND_COMMIT__: string;
 
 const MAX_LOG_BYTES = 8 * 1024 * 1024;
 const MAX_SETTINGS_BYTES = 1024 * 1024;
+const RECENT_LOG_BYTES = 64 * 1024;
+const RECENT_LOG_LINES = 12;
+const REDACTED_PATH = "[redacted local path]";
+const WINDOWS_PATH = /(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]/;
+const UNC_PATH = /\\\\(?:\?\\)?[^\\\s]+\\[^\\\s]+/;
+const POSIX_PATH = /(?:^|[\s"'=(])\/(?:Users|home|mnt|media|Volumes|var|tmp|opt|etc|private|run|srv|root|Applications)\//i;
+const LABELED_POSIX_PATH = /\b(?:path|directory|folder|file|root)\s*[=:]\s*\/(?!\/)/i;
 
 interface DiagnosticFile {
   archiveName: string;
@@ -33,6 +40,29 @@ export function getAppInfo(): AppInfo {
     frontendCommit: __NICEGAL_FRONTEND_COMMIT__,
     backendCommit: __NICEGAL_BACKEND_COMMIT__,
   };
+}
+
+/** A short excerpt for the crash dialog. The archive retains the complete bounded logs. */
+export async function recentBackendLog(): Promise<string> {
+  const stateDirectory =
+    process.env["NICEGAL_STATE_DIR"] ?? join(app.getPath("userData"), "nicegal-server");
+  const file = await readFileTail(
+    "backend.log",
+    join(stateDirectory, "backend.log"),
+    RECENT_LOG_BYTES,
+  );
+  if (!file) return "Backend log is unavailable.";
+  const text = file.data.toString("utf8");
+  const firstNewline = text.indexOf("\n");
+  const complete = file.truncated ? (firstNewline < 0 ? "" : text.slice(firstNewline + 1)) : text;
+  const lines = complete.trimEnd().split("\n").filter(Boolean).slice(-RECENT_LOG_LINES);
+  return (
+    lines
+      .map((line) => sanitizeLogLine(line))
+      .map((line) => (line.length > 1200 ? `${line.slice(0, 1200)}…` : line))
+      .join("\n") ||
+    "Backend log has no recent entries."
+  );
 }
 
 export async function collectDiagnostics(
@@ -77,9 +107,9 @@ export async function collectDiagnostics(
   for (const request of requestedFiles) {
     try {
       const file = await readFileTail(request.archiveName, request.path, request.limit);
-      if (file) files.push(file);
+      if (file) files.push(sanitizeDiagnosticFile(file));
     } catch (error) {
-      issues.push(`Could not include ${request.archiveName}: ${formatError(error)}`);
+      issues.push(`Could not include ${request.archiveName}: ${redactDiagnosticString(formatError(error))}`);
     }
   }
 
@@ -105,14 +135,14 @@ export async function collectDiagnostics(
       release: release(),
       version: osVersion(),
     },
-    backend: { ...options.backendStatus },
+    backend: sanitizeDiagnosticValue(options.backendStatus),
     files: files.map(({ archiveName, originalBytes, data, truncated }) => ({
       name: archiveName,
       originalBytes,
       includedBytes: data.byteLength,
       truncated,
     })),
-    issues,
+    issues: issues.map(redactDiagnosticString),
   };
 
   const archive = new AdmZip();
@@ -121,6 +151,57 @@ export async function collectDiagnostics(
 
   await archive.writeZipPromise(result.filePath, { overwrite: true });
   return result.filePath;
+}
+
+function sanitizeDiagnosticFile(file: DiagnosticFile): DiagnosticFile {
+  const text = file.data.toString("utf8");
+  let sanitized: string;
+  if (file.archiveName === "runtime.json") {
+    sanitized = `${JSON.stringify(sanitizeDiagnosticValue(JSON.parse(text)), null, 2)}\n`;
+  } else {
+    const firstNewline = text.indexOf("\n");
+    const complete = file.truncated ? (firstNewline < 0 ? "" : text.slice(firstNewline + 1)) : text;
+    sanitized = complete
+      .split("\n")
+      .filter(Boolean)
+      .map(sanitizeLogLine)
+      .join("\n");
+    if (sanitized) sanitized += "\n";
+  }
+  return { ...file, data: Buffer.from(sanitized, "utf8") };
+}
+
+function sanitizeLogLine(line: string): string {
+  try {
+    return JSON.stringify(sanitizeDiagnosticValue(JSON.parse(line)));
+  } catch {
+    return redactDiagnosticString(line);
+  }
+}
+
+function sanitizeDiagnosticValue(value: unknown, key = ""): unknown {
+  if (typeof value === "string") {
+    const route = /^\/v1(?:\/|$)/.test(value);
+    if (/path|folder|directory|file/i.test(key) && value.startsWith("/") && !route)
+      return REDACTED_PATH;
+    return redactDiagnosticString(value);
+  }
+  if (Array.isArray(value)) return value.map((item) => sanitizeDiagnosticValue(item));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([name, item]) => [name, sanitizeDiagnosticValue(item, name)]),
+    );
+  }
+  return value;
+}
+
+function redactDiagnosticString(value: string): string {
+  return WINDOWS_PATH.test(value) ||
+    UNC_PATH.test(value) ||
+    POSIX_PATH.test(value) ||
+    LABELED_POSIX_PATH.test(value)
+    ? REDACTED_PATH
+    : value;
 }
 
 async function readFileTail(

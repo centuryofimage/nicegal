@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { cleanDiagnostic } from "../lib/errors";
   let {
     title,
@@ -7,6 +8,7 @@
     tone = "error",
     actionLabel,
     onaction,
+    children,
     guidance = "The operation could not finish. Review the details below, then try again.",
   }: {
     title?: string;
@@ -16,6 +18,7 @@
     /** Renders a centered button under the message (e.g. "Choose image folder…"). */
     actionLabel?: string;
     onaction?: () => void;
+    children?: Snippet;
     guidance?: string;
   } = $props();
   let copyStatus = $state("");
@@ -52,6 +55,7 @@
   {#if actionLabel}
     <button class="message-action" type="button" onclick={onaction}>{actionLabel}</button>
   {/if}
+  {#if children}{@render children()}{/if}
 </div>
 
 <style>

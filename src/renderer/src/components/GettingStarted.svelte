@@ -66,8 +66,8 @@
       <figure>
         <img
           src={visualSearchGuide}
-          width="508"
-          height="71"
+          width="320"
+          height="66"
           alt="Visual search composer with sunset weighted 2.00 and crowds weighted −1.00"
         />
         <figcaption>

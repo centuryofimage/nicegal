@@ -59,14 +59,31 @@ const diagnostics = await vite.ssrLoadModule("/src/main/diagnostics.ts");
 
 test("collectDiagnostics saves build details and backend files in a zip", async () => {
   const privatePath = String.raw`C:\Users\someone\Pictures\private.jpg`;
-  await writeFile(join(directory, "backend.log"), `${privatePath}\n`, "utf8");
-  await writeFile(join(directory, "backend.log.1"), "previous log\n", "utf8");
-  await writeFile(join(directory, "runtime.json"), '{"executionProvider":"cpu"}\n', "utf8");
+  const networkPath = String.raw`\\nas\photos\family.jpg`;
+  const posixPath = "/home/alice/photos/private.jpg";
+  const entries = [
+    { source: "desktop", event: "server-spawned", data: { executable: privatePath } },
+    {
+      source: "job",
+      event: "snapshot",
+      data: { folders: [{ path: privatePath }, { path: networkPath }, { path: posixPath }] },
+    },
+    { source: "server", event: "stderr", data: { line: `failed to index ${privatePath}` } },
+    { source: "server", event: "stderr", data: { line: "folder=/data/alice/secret.jpg" } },
+    { source: "http", event: "request-started", data: { path: "/v1/jobs" } },
+  ];
+  await writeFile(join(directory, "backend.log"), `${entries.map(JSON.stringify).join("\n")}\n`, "utf8");
+  await writeFile(join(directory, "backend.log.1"), `previous error: ${privatePath}\n`, "utf8");
+  await writeFile(
+    join(directory, "runtime.json"),
+    JSON.stringify({ executionProvider: "cpu", cachePath: privatePath }),
+    "utf8",
+  );
 
   const savedPath = await diagnostics.collectDiagnostics(
     {},
     {
-      backendStatus: { ready: true, error: null },
+      backendStatus: { ready: false, error: `failed to start at ${privatePath}` },
       flushBackendLog: async () => {
         calls.flushes += 1;
       },
@@ -83,7 +100,17 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
       .toSorted(),
     ["backend.log", "backend.log.1", "diagnostics.json", "runtime.json"],
   );
-  assert.match(zip.readAsText("backend.log"), /private\.jpg/);
+  const savedLog = zip.readAsText("backend.log");
+  assert.match(savedLog, /\[redacted local path\]/);
+  assert.match(savedLog, /"path":"\/v1\/jobs"/);
+  for (const entry of zip.getEntries()) {
+    const contents = zip.readAsText(entry);
+    assert.doesNotMatch(
+      contents,
+      /someone|private\.jpg|nas|family\.jpg|alice|secret\.jpg/,
+      `${entry.entryName} leaked a path`,
+    );
+  }
   const manifest = JSON.parse(zip.readAsText("diagnostics.json"));
   assert.deepEqual(manifest.application, {
     name: "Nicegal",
@@ -92,7 +119,7 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
     frontendCommit: "front1234567",
     backendCommit: "back12345678",
   });
-  assert.deepEqual(manifest.backend, { ready: true, error: null });
+  assert.deepEqual(manifest.backend, { ready: false, error: "[redacted local path]" });
   assert.deepEqual(
     manifest.files.map((file: { name: string }) => file.name),
     ["backend.log", "backend.log.1", "runtime.json"],
@@ -112,4 +139,15 @@ test("collectDiagnostics stops when the save dialog is canceled", async () => {
   );
   assert.equal(savedPath, null);
   assert.equal(calls.flushes, 1, "canceling does not start a second collection");
+});
+
+test("recentBackendLog shows only the last twelve complete lines", async () => {
+  const lines = Array.from({ length: 20 }, (_, index) => `log entry ${index + 1}`);
+  lines[19] = JSON.stringify({ event: "stderr", data: { line: "folder=/home/alice/private.jpg" } });
+  await writeFile(join(directory, "backend.log"), `${lines.join("\n")}\n`, "utf8");
+  const recent = await diagnostics.recentBackendLog();
+  assert.equal(
+    recent,
+    [...lines.slice(-12, -1), '{"event":"stderr","data":{"line":"[redacted local path]"}}'].join("\n"),
+  );
 });

@@ -33,6 +33,7 @@ export interface NativeIpcContext {
   readonly client: NicegalServerClient | null;
   getAppInfo: () => AppInfo;
   collectDiagnostics: (owner: BrowserWindow) => Promise<string | null>;
+  recentBackendLog: () => Promise<string>;
 }
 
 /** Main-process capabilities backed by Electron/OS APIs rather than the search backend. */
@@ -48,6 +49,9 @@ export function registerNativeIpc(context: NativeIpcContext): void {
       if (!owner) throw new Error("Diagnostics require an owning application window");
       return context.collectDiagnostics(owner);
     },
+  );
+  handleTrustedIpc(IPC_CHANNELS.native.recentBackendLog, context.isTrustedSender, () =>
+    context.recentBackendLog(),
   );
   // One preparation per renderer. Tokens keep resolved paths on the trusted side and prevent
   // an older lookup from replacing a newer gesture while the backend is responding.

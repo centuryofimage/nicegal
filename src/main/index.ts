@@ -20,7 +20,7 @@ import { registerBackendIpc } from "./backend/ipc";
 import { NicegalServerClient } from "./backend/nicegal-server-client";
 import { NicegalServerProcess, RESTART_EXIT_CODE } from "./backend/nicegal-server-process";
 import { ThumbnailReader } from "./backend/thumbnail-reader";
-import { collectDiagnostics, getAppInfo } from "./diagnostics";
+import { collectDiagnostics, getAppInfo, recentBackendLog } from "./diagnostics";
 import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
 import { APP_ENTRY_URL } from "./renderer-location";
@@ -51,6 +51,7 @@ let backendClient: NicegalServerClient | null = null;
 let shutdownComplete = false;
 let shutdownStarted = false;
 let backendShutdown: Promise<void> | null = null;
+let backendRecovery: Promise<void> | null = null;
 let updates: ReturnType<typeof startUpdates> | null = null;
 let restartForUpdate = false;
 
@@ -78,6 +79,7 @@ const backendContext = {
       throw error;
     }
   },
+  restartFailedBackend,
 };
 registerBackendIpc(backendContext);
 registerNativeIpc({
@@ -91,6 +93,10 @@ registerNativeIpc({
       backendStatus,
       flushBackendLog: () => backendLog?.flush() ?? Promise.resolve(),
     }),
+  recentBackendLog: async () => {
+    await backendLog?.flush();
+    return recentBackendLog();
+  },
 });
 
 /**
@@ -250,6 +256,32 @@ async function restartAfterProviderFallback(): Promise<void> {
     console.error("Failed to restart nicegal-server after an execution provider fallback", error);
     broadcastBackendStatus();
   }
+}
+
+function restartFailedBackend(): Promise<void> {
+  if (backendRecovery) return backendRecovery;
+  if (shutdownStarted) return Promise.reject(new Error("The app is closing"));
+  if (backendStatus.ready || !backendStatus.error)
+    return Promise.reject(new Error("The gallery service is already running or starting"));
+
+  backendRecovery = (async () => {
+    backendStatus.error = null;
+    delete backendStatus.restartReason;
+    broadcastBackendStatus();
+    try {
+      await shutdownBackend();
+      if (shutdownStarted) throw new Error("The app is closing");
+      await initializeBackend();
+    } catch (error) {
+      backendStatus.error = formatBackendError(error);
+      backendLog?.write("desktop", "initialization-failed", { error: backendStatus.error });
+      broadcastBackendStatus();
+      throw error;
+    }
+  })().finally(() => {
+    backendRecovery = null;
+  });
+  return backendRecovery;
 }
 
 async function initializeBackend(): Promise<void> {

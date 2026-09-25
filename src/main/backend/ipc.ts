@@ -28,6 +28,7 @@ interface BackendIpcContext {
   client: NicegalServerClient | null;
   isTrustedSender: IpcSenderValidator;
   restartForRuntimeChange: () => Promise<void>;
+  restartFailedBackend: () => Promise<void>;
 }
 
 interface JobSubscription {
@@ -90,6 +91,9 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   };
 
   handleTrustedIpc(IPC_CHANNELS.backend.status, context.isTrustedSender, () => context.status);
+  handleTrustedIpc(IPC_CHANNELS.backend.restartServer, context.isTrustedSender, () =>
+    context.restartFailedBackend(),
+  );
   let changingRuntime = false;
   let startingJobs = 0;
   const changeRuntime = async (

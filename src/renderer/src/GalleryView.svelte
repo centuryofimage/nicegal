@@ -5,6 +5,7 @@
 
   import AppMessage from "./components/AppMessage.svelte";
   import AppShell from "./components/AppShell.svelte";
+  import BackendFailureMessage from "./components/BackendFailureMessage.svelte";
   import DetailView from "./components/DetailView.svelte";
   import GalleryDialogs from "./components/GalleryDialogs.svelte";
   import GallerySizeSlider from "./components/GallerySizeSlider.svelte";
@@ -147,11 +148,8 @@
           message="Opening your local catalog."
           placement="overlay"
           tone="neutral"
-        />{:else if !catalog.backendStatus.ready && catalog.backendStatus.error}<AppMessage
-          title="Backend unavailable"
-          guidance="The gallery service could not start or stopped unexpectedly. Review the details, then restart the app. For an incompatible index version, use a compatible app version and preserve the index until migration or rebuilding is chosen."
-          message={catalog.backendStatus.error}
-          placement="overlay"
+        />{:else if !catalog.backendStatus.ready && catalog.backendStatus.error}<BackendFailureMessage
+          error={catalog.backendStatus.error}
         />{:else if catalog.loadError}<AppMessage
           title="Catalog read failed"
           guidance="The library could not be read. Check that its drive is connected and accessible, then retry."

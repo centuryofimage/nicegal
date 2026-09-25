@@ -10,6 +10,7 @@ export const IPC_CHANNELS = {
   backend: {
     status: "backend:status",
     statusChanged: "backend:status-changed",
+    restartServer: "backend:restart-server",
     getRuntimeStatus: "backend:get-runtime-status",
     setImageModel: "backend:set-image-model",
     setExecutionProvider: "backend:set-execution-provider",
@@ -41,6 +42,7 @@ export const IPC_CHANNELS = {
   native: {
     appInfo: "native:app-info",
     collectDiagnostics: "native:collect-diagnostics",
+    recentBackendLog: "native:recent-backend-log",
     openExternalUrl: "native:open-external-url",
     openLicenseInformation: "native:open-license-information",
     chooseDirectory: "native:choose-directory",

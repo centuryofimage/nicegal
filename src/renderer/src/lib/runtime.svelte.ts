@@ -30,37 +30,22 @@ export class RuntimeController {
   }
   imageModelSaving = $state(false);
   imageModelError = $state<string | null>(null);
-  ocrLoaded = $state(false);
-  /**
-   * The provider OCR models actually compiled onto, from `GET /v1/ocr/models`'s `loaded` field —
-   * null until models have loaded this session. `status.activeExecutionProvider` is only the
-   * provider the process was *launched* with; a model load can silently fall back further (e.g.
-   * DirectML failing on hardware without a compatible GPU falls through to CPU), and that fallback
-   * never updates `activeExecutionProvider`. This is the one place that reflects what's really
-   * running, so callers should prefer it over `status.activeExecutionProvider` once it's set.
-   */
-  actualExecutionProvider = $state<string | null>(null);
   private statusGeneration = 0;
-  private actualProviderGeneration = 0;
   private modelGeneration = 0;
 
   reset(): void {
     this.statusGeneration += 1;
-    this.actualProviderGeneration += 1;
     this.modelGeneration += 1;
     this.status = null;
     this.models = null;
-    this.actualExecutionProvider = null;
-    this.ocrLoaded = false;
     this.loading = true;
     this.error = null;
     this.modelError = null;
   }
 
-  /** What's actually running OCR inference right now: the real loaded-model provider once known,
-   * else the process's launch-time provider as a best guess before any model has loaded. */
+  /** The provider shared by loaded indexing models, or the launch choice before any model loads. */
   get activeProvider(): string | null {
-    return this.actualExecutionProvider ?? this.status?.activeExecutionProvider ?? null;
+    return this.status?.loadedExecutionProvider ?? this.status?.activeExecutionProvider ?? null;
   }
 
   async refresh(): Promise<void> {
@@ -79,19 +64,16 @@ export class RuntimeController {
     }
   }
 
-  /** Refreshes `actualExecutionProvider` from the OCR model-load state. Call after any
-   * `ocrModelLoad` job completes, and once at startup in case models are already loaded from a
-   * prior operation. A failed read is reported in Search settings. */
-  async refreshActualProvider(): Promise<void> {
-    const generation = ++this.actualProviderGeneration;
+  /** Refresh the shared provider after a model load without toggling the settings loading state. */
+  async refreshLoadedProvider(): Promise<void> {
+    if (this.saving || this.imageModelSaving) return;
+    const generation = ++this.statusGeneration;
     try {
-      const models = await window.nicegal.backend.getOcrModels();
-      if (generation === this.actualProviderGeneration) {
-        this.actualExecutionProvider = models.loaded?.executionProvider ?? null;
-        this.ocrLoaded = Boolean(models.loaded);
-      }
+      const status = await window.nicegal.backend.getRuntimeStatus();
+      if (generation === this.statusGeneration && !this.saving && !this.imageModelSaving)
+        this.status = status;
     } catch (error) {
-      if (generation === this.actualProviderGeneration) this.modelError = errorMessage(error);
+      if (generation === this.statusGeneration) this.modelError = errorMessage(error);
     }
   }
 
@@ -102,7 +84,7 @@ export class RuntimeController {
       if (generation !== this.modelGeneration) return;
       this.models = models;
       this.modelError = null;
-      await this.refreshActualProvider();
+      await this.refreshLoadedProvider();
     } catch (error) {
       if (generation === this.modelGeneration) this.modelError = errorMessage(error);
     }
