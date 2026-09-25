@@ -4,7 +4,7 @@
 
   import { useApplication } from "../lib/application.svelte";
   import GettingStarted from "./GettingStarted.svelte";
-  import LibrariesDialog from "./LibrariesDialog.svelte";
+  import LibrariesManager from "./LibrariesManager.svelte";
   import Modal from "./Modal.svelte";
   import SettingsPanel from "./SettingsPanel.svelte";
 
@@ -20,8 +20,9 @@
     onretrythumbnails: () => void;
   } = $props();
   const application = useApplication();
-  const { catalog, runtime } = application.services;
+  const { runtime } = application.services;
   const commands = application.commands;
+  let manager = $state.raw<LibrariesManager>();
 </script>
 
 {#if application.welcomeVisible}
@@ -35,19 +36,12 @@
   </Modal>
 {/if}
 
-{#if view.activeDialog === "libraries"}
-  <Modal labelledby="libraries-title" onclose={view.closeDialog}>
-    <LibrariesDialog
-      libraries={catalog.libraries}
-      selectedRoot={catalog.selectedRoot}
-      statuses={catalog.libraryStatuses}
-      backendReady={catalog.backendStatus.ready}
-      jobRunning={view.jobRunning}
+{#if view.activeDialog === "manageLibraries"}
+  <Modal labelledby="libraries-manager-title" onclose={() => manager?.requestClose()} --modal-width="920px">
+    <LibrariesManager
+      bind:this={manager}
+      {view}
       onclose={view.closeDialog}
-      onadd={view.chooseLibraryRoot}
-      onselect={view.selectLibrary}
-      onthumbnails={commands.startThumbnailBackfill}
-      onremove={view.removeLibrary}
       {thumbnailFailures}
       {onretrythumbnails}
     />

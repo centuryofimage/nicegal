@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PanelLeft from "@lucide/svelte/icons/panel-left";
   import PanelRight from "@lucide/svelte/icons/panel-right";
   import { onDestroy } from "svelte";
 
@@ -7,11 +8,13 @@
   import DetailView from "./components/DetailView.svelte";
   import GalleryDialogs from "./components/GalleryDialogs.svelte";
   import GalleryToolbar from "./components/GalleryToolbar.svelte";
+  import LibrariesPane from "./components/LibrariesPane.svelte";
   import MetadataPanel from "./components/MetadataPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import TimelineScrollbar from "./components/TimelineScrollbar.svelte";
   import VirtualGallery from "./components/VirtualGallery.svelte";
   import { useApplication } from "./lib/application.svelte";
+  import { offlineFolders } from "./lib/library-status";
   import { createGalleryShortcutHandler } from "./lib/gallery-shortcuts";
   import { originalUrlOf } from "./lib/gallery/types";
   import { createGalleryWheelZoom } from "./lib/gallery/wheel-zoom";
@@ -19,7 +22,10 @@
   import { galleryLayoutState, settings } from "./lib/settings.svelte";
 
   const application = useApplication();
+  const commands = application.commands;
   const { catalog, runtime, ocrSearch, jobs } = application.services;
+  // Offline folders would leave blank tiles, so the whole gallery explains them instead.
+  const offline = $derived(offlineFolders(catalog.selectedLibrary));
   let infoOpen = $state(false);
   let infoButton: HTMLButtonElement;
   function toggleInfo(): void {
@@ -65,7 +71,11 @@
   });
   function openDetail(index: number): void {
     const item = view.filteredItems[index];
-    const playback = item?.mediaKind === "video" ? gallery?.captureVideoPlayback(item.id) : null;
+    // Visual-search results open from the beginning even if a hover preview was playing.
+    const playback =
+      item?.mediaKind === "video" && !ocrSearch.matchingFrameTimes.has(item.id)
+        ? gallery?.captureVideoPlayback(item.id)
+        : null;
     initialVideoPlayback = item && playback ? { id: item.id, ...playback } : null;
     view.openDetail(index);
   }
@@ -84,6 +94,13 @@
 
 {#snippet workspace()}
   <div class="workspace-row">
+    {#if view.librariesPaneOpen}
+      <LibrariesPane
+        onselect={view.selectLibrary}
+        onmanage={view.openManageLibraries}
+        onscan={() => catalog.selectedId !== null && commands.scanLibrary(catalog.selectedId)}
+      />
+    {/if}
     <div class="content-row" {@attach observeGallery}>
       <div class="gallery-workspace" inert={Boolean(view.detailItem)} {@attach galleryWheelZoom}>
         <VirtualGallery
@@ -98,6 +115,7 @@
           playAnimatedPreviews={$settings.playAnimatedPreviews}
           previewSuspended={Boolean(view.detailItem)}
           snippets={ocrSearch.displaySnippets}
+          matchTimes={ocrSearch.matchingFrameTimes}
           snippetQuery={ocrSearch.query}
           searchQuery={ocrSearch.query}
           selectedIds={view.gallerySelection.ids}
@@ -137,20 +155,31 @@
           onaction={() => catalog.refresh()}
           message={catalog.loadError}
           placement="overlay"
-        />{:else if !catalog.loading && !catalog.libraryRoot}<AppMessage
+        />{:else if offline.length}<AppMessage
+          title={offline.length === 1 ? "Folder not connected" : "Folders not connected"}
+          message={offline.map((folder) => folder.path).join(", ")}
+          guidance="This library's photos can't be shown while its folders are unavailable. Connect the drive or restore the folder, then retry."
+          actionLabel="Retry"
+          onaction={() =>
+            catalog.selectedId !== null &&
+            commands.scanLibrary(catalog.selectedId, { pendingOnly: true })}
+          placement="overlay"
+        />{:else if catalog.librariesLoaded && catalog.selectedId === null}<AppMessage
           title="No library yet"
           message="Choose a folder of photos or videos to get started."
           placement="overlay"
           tone="neutral"
           actionLabel="Choose media folder…"
-          onaction={view.openLibrariesDialog}
-        />{:else if !catalog.loading && catalog.items.length === 0}<AppMessage
+          onaction={view.addLibrary}
+        />{:else if !catalog.loading && catalog.items.length === 0 && catalog.selectedLibrary}<AppMessage
           title="The catalog is empty."
-          message="This library is empty. Add photos or videos to its folder, then reopen Nicegal to sync it."
+          message={jobs.scanState(catalog.selectedLibrary.id)
+            ? "Scanning this library's folders…"
+            : "No photos or videos were found in this library's folders. Add a folder, or check its exclusions."}
           placement="overlay"
           tone="neutral"
-          actionLabel="Open Libraries"
-          onaction={view.openLibrariesDialog}
+          actionLabel="Edit library…"
+          onaction={() => view.editLibrary(catalog.selectedLibrary!.id)}
         />{/if}
       {#if jobs.error && catalog.backendStatus.ready && !catalog.loadError}
         <AppMessage
@@ -207,12 +236,22 @@
 {/snippet}
 
 {#snippet status()}
+  <button
+    class="status-pane-toggle status-pane-toggle-start"
+    aria-controls="libraries-pane"
+    aria-pressed={view.librariesPaneOpen}
+    title="Show or hide libraries"
+    onclick={view.toggleLibrariesPane}
+  >
+    <PanelLeft size={13} aria-hidden="true" /><span>Libraries</span>
+  </button>
   <div class="status-details">
     {#if !view.detailItem}
       <StatusBar
         libraryName={view.libraryName}
-        libraryRoot={catalog.libraryRoot}
-        hasLibrary={Boolean(catalog.libraryRoot)}
+        libraryTitle={catalog.selectedLibrary?.include.map((folder) => folder.path).join("\n") ??
+          ""}
+        hasLibrary={catalog.selectedId !== null}
         matchedCount={view.searchView.matchTotal}
         totalCount={catalog.items.length}
         filtering={view.searchView.filtering}

@@ -68,8 +68,8 @@ test("provider and model changes share restart and exclude overlapping job start
   await invoke(channels.setImageModel, "model");
   assert.equal(restarts, 2);
   const job = invoke(channels.startJob, {
-    type: "libraryIndex",
-    params: { root: process.cwd(), ocr: false, image: true },
+    type: "libraryScan",
+    params: { libraryId: 1 },
   });
   await assert.rejects(invoke(channels.setExecutionProvider, "cpu"), /job is starting/);
   jobStart.resolve({});

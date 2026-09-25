@@ -36,7 +36,9 @@ const PHASE_LABELS: Record<JobPhase, string> = {
   queued: "Queued",
   downloadingModels: "Downloading models",
   loadingModels: "Preparing models",
-  scanning: "Syncing",
+  // Distinct labels: the walk counts files found, then cataloging restarts at 0 of that count.
+  // Sharing one label made the second phase look like progress going backwards.
+  scanning: "Finding files",
   cataloging: "Syncing",
   thumbnails: "Thumbnails",
   ocr: "OCR",
@@ -50,8 +52,7 @@ const PHASE_LABELS: Record<JobPhase, string> = {
 const CANCELLED_COMPLETION_LABELS: Record<JobSnapshot["type"], string> = {
   modelPrepare: "Search model preparation",
   ocrModelLoad: "OCR model loading",
-  libraryIndex: "Indexing",
-  catalogSync: "Sync",
+  libraryScan: "Library scan",
   thumbnailGenerate: "Thumbnail generation",
   pruneMissing: "Pruning",
   libraryPurge: "Removing",
@@ -154,7 +155,10 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
       // A video can spend a long time decoding and embedding samples before its one
       // completed item is committed. Show that the worker is active in the meantime.
       return active > 0 && progress.phaseCompleted === 0
-        ? { ...result, text: `${result.text} · processing ${active} ${active === 1 ? "file" : "files"}` }
+        ? {
+            ...result,
+            text: `${result.text} · processing ${active} ${active === 1 ? "file" : "files"}`,
+          }
         : result;
     }
     case "queued":
@@ -164,7 +168,7 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
   }
 }
 
-export function summarizeCompletion(snapshot: JobSnapshot, libraryIndexEmbeds: boolean): string {
+export function summarizeCompletion(snapshot: JobSnapshot): string {
   if (snapshot.status === "cancelled") {
     return `${CANCELLED_COMPLETION_LABELS[snapshot.type]} cancelled`;
   }
@@ -173,17 +177,19 @@ export function summarizeCompletion(snapshot: JobSnapshot, libraryIndexEmbeds: b
       return "Search models ready";
     case "ocrModelLoad":
       return "OCR models ready";
-    case "libraryIndex": {
+    case "libraryScan": {
       const n = snapshot.progress.cataloged;
       const embedded = snapshot.progress.embedded;
-      const indexed = libraryIndexEmbeds
-        ? `Indexed ${n.toLocaleString()} item${n === 1 ? "" : "s"}, embedded ${embedded.toLocaleString()}`
-        : `Indexed ${n.toLocaleString()} item${n === 1 ? "" : "s"}`;
-      return `${indexed}${removedEntrySummary(snapshot.progress.deleted)}`;
-    }
-    case "catalogSync": {
-      const n = snapshot.progress.cataloged;
-      return `Synced ${n.toLocaleString()} item${n === 1 ? "" : "s"}${removedEntrySummary(snapshot.progress.deleted)}`;
+      const unfinished =
+        snapshot.folders?.filter((folder) => folder.state !== "completed").length ?? 0;
+      return [
+        `Scanned ${n.toLocaleString()} file${n === 1 ? "" : "s"}`,
+        embedded ? `, indexed ${embedded.toLocaleString()}` : "",
+        removedEntrySummary(snapshot.progress.deleted),
+        unfinished
+          ? ` · ${unfinished.toLocaleString()} folder${unfinished === 1 ? "" : "s"} need${unfinished === 1 ? "s" : ""} attention`
+          : "",
+      ].join("");
     }
     case "thumbnailGenerate": {
       const n = snapshot.progress.thumbnailsGenerated;
@@ -220,16 +226,11 @@ export const PHASES_BY_TYPE: Record<JobSnapshot["type"], readonly VisiblePhase[]
     { label: "Load", backendPhases: ["loadingModels"] },
     { label: "Done", backendPhases: ["finished"] },
   ],
-  libraryIndex: [
-    { label: "Sync", backendPhases: ["scanning", "cataloging"] },
-    { label: "Images", backendPhases: ["imageEmbedding"] },
-    { label: "OCR", backendPhases: ["ocr", "cleanup", "pruning"] },
-    { label: "Text", backendPhases: ["textEmbedding"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  catalogSync: [
+  libraryScan: [
     { label: "Sync", backendPhases: ["scanning", "cataloging", "pruning"] },
     { label: "Images", backendPhases: ["imageEmbedding"] },
+    { label: "OCR", backendPhases: ["downloadingModels", "loadingModels", "ocr"] },
+    { label: "Text", backendPhases: ["textEmbedding"] },
     { label: "Done", backendPhases: ["finished"] },
   ],
   thumbnailGenerate: [
@@ -246,25 +247,14 @@ export const PHASES_BY_TYPE: Record<JobSnapshot["type"], readonly VisiblePhase[]
   ],
 };
 
-/** Older snapshots without a selection show every indexing stage. */
+/** A scan shows only the index stages its library runs; without `indexStages`, all of them. */
 export function jobPhases(job: JobSnapshot): readonly VisiblePhase[] {
   const stages = job.indexStages;
-  if (job.type === "catalogSync") {
-    return !stages || stages.image
-      ? PHASES_BY_TYPE.catalogSync
-      : PHASES_BY_TYPE.catalogSync.filter((phase) => phase.label !== "Images");
-  }
-  if (job.type !== "libraryIndex" || !stages) return PHASES_BY_TYPE[job.type];
-  return PHASES_BY_TYPE.libraryIndex
-    .filter(
-      (phase) =>
-        (!phase.backendPhases.includes("ocr") || stages.ocr) &&
-        (!phase.backendPhases.includes("imageEmbedding") || stages.image) &&
-        (!phase.backendPhases.includes("textEmbedding") || stages.text),
-    )
-    .map((phase) =>
-      !stages.ocr && phase.backendPhases.includes("imageEmbedding")
-        ? { ...phase, backendPhases: [...phase.backendPhases, "pruning"] }
-        : phase,
-    );
+  if (job.type !== "libraryScan" || !stages) return PHASES_BY_TYPE[job.type];
+  return PHASES_BY_TYPE.libraryScan.filter(
+    (phase) =>
+      (!phase.backendPhases.includes("ocr") || stages.ocr) &&
+      (!phase.backendPhases.includes("imageEmbedding") || stages.image) &&
+      (!phase.backendPhases.includes("textEmbedding") || stages.text),
+  );
 }

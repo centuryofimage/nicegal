@@ -1,17 +1,18 @@
 import { createContext } from "svelte";
 import { get } from "svelte/store";
 
-import type { JobSnapshot } from "../../../shared/backend";
+import type { LibraryDefinition, LibraryId } from "../../../shared/backend";
 import type { ThumbnailBackfillOptions } from "./job-params";
 
-import { CatalogController, rootsMatch } from "./catalog.svelte";
+import { CatalogController, type LibraryRecord } from "./catalog.svelte";
 import { ONBOARDING_DISMISSED_STORAGE_KEY } from "./constants";
 import { errorMessage } from "./errors";
 import { JobOrchestrator } from "./job-orchestrator.svelte";
 import { JobTracker } from "./job-tracker.svelte";
+import { sameFolder } from "./library-root";
 import { OcrSearchController } from "./ocr-search.svelte";
 import { RuntimeController } from "./runtime.svelte";
-import { libraryIndexing, settings } from "./settings.svelte";
+import { settings } from "./settings.svelte";
 
 type IndexBucket = 128 | 256 | 512 | 1024;
 
@@ -26,18 +27,30 @@ export interface ApplicationServices {
 export interface ApplicationCommands {
   readonly showFileContextMenu: (assetIds: string[]) => Promise<void>;
   readonly startFileDrag: (assetIds: string[], isCurrent: () => boolean) => Promise<void>;
-  readonly startCatalogSync: (root: string) => Promise<JobSnapshot | null>;
-  readonly syncNewLibrary: (root: string) => Promise<void>;
-  readonly startIndex: (root: string, retryFailed?: boolean) => Promise<void>;
+  /** Creates a library for one folder and selects it. */
+  readonly createLibrary: (folder: string) => Promise<LibraryRecord>;
+  /** Saves an edited definition and schedules its pending scan. */
+  readonly saveLibrary: (
+    libraryId: LibraryId,
+    definition: LibraryDefinition,
+    name: string | null,
+  ) => Promise<void>;
+  /** Requests a scan of every folder, or only pending ones; queued by the backend when busy. */
+  readonly scanLibrary: (
+    libraryId: LibraryId,
+    options?: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean },
+  ) => void;
   readonly startThumbnailBackfill: (
-    root: string,
+    libraryId: LibraryId,
     options: ThumbnailBackfillOptions,
   ) => Promise<void>;
   readonly dismissJobResult: () => void;
-  readonly unregisterLibrary: (root: string) => Promise<boolean>;
-  readonly removeLibrary: (root: string, purge: boolean) => Promise<void>;
+  /** Deletes a library; with `purge`, first removes indexed data no other library covers. */
+  readonly removeLibrary: (libraryId: LibraryId, purge: boolean) => Promise<boolean>;
   readonly dismissWelcome: () => void;
   readonly showWelcome: () => void;
+  readonly beginLibraryManagement: () => void;
+  readonly endLibraryManagement: () => void;
 }
 
 export interface ApplicationContext {
@@ -57,10 +70,21 @@ class Application implements ApplicationContext {
 
   private started = false;
   private backendInitialized = false;
+  private managingLibraries = false;
+  private deferredScanId: LibraryId | null = null;
+  /** The video-indexing choice last saved to the backend, so unrelated settings changes do not
+   * resend it. */
+  private savedIndexVideos: boolean | null = null;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
-    const catalog = new CatalogController();
+    // Only the library on screen is indexed: leaving one stops its scan, and opening one scans
+    // whatever its folders still need.
+    const catalog = new CatalogController((previous, next) => {
+      if (!catalog.backendStatus.ready) return;
+      void jobs.cancelLibraryScans(previous);
+      if (next !== null) this.requestPendingScan(next);
+    });
     const runtime = new RuntimeController();
     const jobs: JobTracker = new JobTracker(
       (delay) => catalog.scheduleRefresh(delay),
@@ -68,16 +92,12 @@ class Application implements ApplicationContext {
       (snapshot) => {
         orchestrator.handleTerminalJob(snapshot);
         void runtime.refreshModels();
+        void this.afterJob();
       },
     );
-    const orchestrator = new JobOrchestrator(
-      jobs,
-      () => catalog.libraryRoot,
-      async (root) => {
-        await this.handleOrchestratedLibraryRemoval(root);
-      },
-      () => catalog.refreshLibraryStatuses(),
-    );
+    const orchestrator = new JobOrchestrator(jobs, async (libraryId) => {
+      await this.deleteLibrary(libraryId);
+    });
 
     this.services = Object.freeze({ catalog, runtime, ocrSearch, jobs, orchestrator });
     this.commands = Object.freeze({
@@ -88,17 +108,30 @@ class Application implements ApplicationContext {
       },
       showFileContextMenu: (assetIds: string[]) =>
         window.nicegal.native.showFileContextMenu({ assetIds }),
-      startCatalogSync: (root: string) => this.startCatalogSync(root),
-      syncNewLibrary: (root: string) => this.syncNewLibrary(root),
-      startIndex: (root: string, retryFailed?: boolean) => this.startIndex(root, retryFailed),
-      startThumbnailBackfill: (root: string, options: ThumbnailBackfillOptions) =>
-        this.startThumbnailBackfill(root, options),
-      dismissJobResult: () => this.dismissJobResult(),
-      unregisterLibrary: (root: string) => this.unregisterLibrary(root),
-      removeLibrary: (root: string, purge: boolean) => this.removeLibrary(root, purge),
+      createLibrary: (folder: string) => this.createLibrary(folder),
+      saveLibrary: (libraryId: LibraryId, definition: LibraryDefinition, name: string | null) =>
+        this.saveLibrary(libraryId, definition, name),
+      scanLibrary: (
+        libraryId: LibraryId,
+        options: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean } = {},
+      ) => {
+        if (this.deferredScanId === libraryId) this.deferredScanId = null;
+        void orchestrator.scan(libraryId, { scanMode: "full", ...options });
+      },
+      startThumbnailBackfill: (libraryId: LibraryId, options: ThumbnailBackfillOptions) =>
+        this.startThumbnailBackfill(libraryId, options),
+      dismissJobResult: () => this.services.jobs.dismiss(),
+      removeLibrary: (libraryId: LibraryId, purge: boolean) => this.removeLibrary(libraryId, purge),
       dismissWelcome: () => this.dismissWelcome(),
       showWelcome: () => {
         this.welcomeVisible = true;
+      },
+      beginLibraryManagement: () => { this.managingLibraries = true; },
+      endLibraryManagement: () => {
+        this.managingLibraries = false;
+        const id = this.deferredScanId;
+        this.deferredScanId = null;
+        if (id !== null && id === catalog.selectedId) void orchestrator.scan(id);
       },
     });
   }
@@ -107,8 +140,11 @@ class Application implements ApplicationContext {
     if (this.started) throw new Error("Application lifecycle already started");
     this.started = true;
 
-    const { catalog, runtime } = this.services;
-    const unsubscribeSettings = settings.subscribe((value) => catalog.onSettingsChange(value));
+    const { catalog, runtime, orchestrator, jobs } = this.services;
+    const unsubscribeSettings = settings.subscribe((value) => {
+      catalog.onSettingsChange(value);
+      this.saveIndexVideos(value.indexVideos);
+    });
     const unsubscribeVisualSearch = window.nicegal.native.onAddToVisualSearch(
       (assetIds, replace) => {
         this.services.ocrSearch.addLibraryReferences(
@@ -123,13 +159,11 @@ class Application implements ApplicationContext {
       const recovered = !catalog.backendStatus.ready && status.ready;
       const disconnected = catalog.backendStatus.ready && !status.ready;
       catalog.applyBackendStatus(status);
-      if (status.error && this.services.orchestrator.restartingIndex) {
-        this.services.orchestrator.backendDisconnected();
-      }
+      if (status.error && orchestrator.restartingIndex) orchestrator.backendDisconnected();
       if (disconnected) {
         runtime.reset();
         const providerFallback = status.restartReason === "provider-fallback";
-        const resuming = this.services.orchestrator.backendDisconnected(providerFallback);
+        const resuming = orchestrator.backendDisconnected(providerFallback);
         this.services.jobs.backendDisconnected(resuming);
       }
       if (recovered) {
@@ -137,12 +171,15 @@ class Application implements ApplicationContext {
           void runtime.refresh();
           void runtime.refreshModels();
         }
-        void catalog.refresh();
-        void this.initializeReadyBackend();
-        void this.services.orchestrator.backendReady();
+        void this.recoverBackend();
       }
     });
-    const revisionPoll = setInterval(() => void catalog.pollRevision(), 2_000);
+    // Jobs are polled as well as followed: the backend queues scans on its own after library
+    // edits and restarts, and the next queued scan starts without any client request.
+    const revisionPoll = setInterval(() => {
+      void catalog.pollRevision();
+      if (catalog.backendStatus.ready && document.visibilityState === "visible") void jobs.sync();
+    }, 2_000);
     void this.initialize();
 
     return () => {
@@ -169,79 +206,109 @@ class Application implements ApplicationContext {
     }
   }
 
+  private async recoverBackend(): Promise<void> {
+    await this.services.catalog.loadLibraries();
+    await this.initializeReadyBackend();
+    const { catalog, orchestrator, jobs } = this.services;
+    orchestrator.backendReady();
+    this.savedIndexVideos = null;
+    this.saveIndexVideos(get(settings).indexVideos);
+    await jobs.sync();
+    // A restart (including a provider fallback) drops any scan that was running or queued.
+    if (catalog.selectedId !== null)
+      await orchestrator.scan(catalog.selectedId, { pendingOnly: true });
+  }
+
   private async initializeReadyBackend(): Promise<void> {
     if (this.backendInitialized) return;
     this.backendInitialized = true;
     const { catalog, runtime, orchestrator, jobs } = this.services;
-    this.welcomeVisible = !catalog.libraryRoot && !this.welcomeWasDismissed();
+    this.welcomeVisible =
+      catalog.librariesLoaded && !catalog.libraries.length && !this.welcomeWasDismissed();
     void catalog.refreshLibraryStatuses();
     void runtime.refresh();
     void runtime.refreshModels();
+    this.saveIndexVideos(get(settings).indexVideos);
     try {
-      await orchestrator.resumeInterruptedJob();
-      if (!jobs.running && !orchestrator.indexing && catalog.libraryRoot)
-        await this.startCatalogSync(catalog.libraryRoot);
+      // Follow whatever the backend is already running or has queued from its last session.
+      await jobs.sync();
+      await orchestrator.resumeInterruptedJob(catalog.selectedId);
+      // Opening the app checks the selected library; the backend runs a full walk when due.
+      if (catalog.selectedId !== null) await orchestrator.scan(catalog.selectedId);
     } catch (error) {
       jobs.error = errorMessage(error);
     }
   }
 
-  private async startCatalogSync(root: string): Promise<JobSnapshot | null> {
-    const { jobs } = this.services;
-    if (jobs.running || !root) return null;
-    const debugLimit = get(settings).debugIndexLimit;
-    return jobs.start({
-      type: "catalogSync",
-      params: {
-        root,
-        image: libraryIndexing(get(settings), root).image,
-        indexVideos: get(settings).indexVideos,
-        scan: {
-          recursive: true,
-          ...(debugLimit > 0 ? { debugLimit } : {}),
-        },
-      },
+  /** Called after every terminal job: library state may have moved, and the backend may have
+   * started the next queued scan. */
+  private async afterJob(): Promise<void> {
+    const { catalog, jobs } = this.services;
+    await catalog.loadLibraries();
+    void catalog.refreshLibraryStatuses();
+    await jobs.sync();
+  }
+
+  /** Scans read the video choice from the backend's runtime settings, so keep it saved there. */
+  private saveIndexVideos(indexVideos: boolean): void {
+    if (!this.services.catalog.backendStatus.ready || this.savedIndexVideos === indexVideos) return;
+    this.savedIndexVideos = indexVideos;
+    void window.nicegal.backend.setIndexVideos(indexVideos).catch((error: unknown) => {
+      this.savedIndexVideos = null;
+      this.services.jobs.error = errorMessage(error);
     });
   }
 
-  private async syncNewLibrary(root: string): Promise<void> {
-    const { jobs, orchestrator } = this.services;
-    if (jobs.running || orchestrator.indexing || !root) return;
-    if (!libraryIndexing(get(settings), root).image) {
-      await this.startCatalogSync(root);
-      return;
+  private async createLibrary(folder: string): Promise<LibraryRecord> {
+    const { catalog } = this.services;
+    await catalog.loadLibraries();
+    if (catalog.librariesError) throw new Error(`Could not check existing libraries: ${catalog.librariesError}`);
+    const existing = catalog.libraries.find((library) =>
+      library.include.some((included) => sameFolder(included.path, folder)),
+    );
+    if (existing) {
+      throw new Error(`That folder is already in “${existing.displayName}”. Select that library or add a different folder.`);
     }
-    await orchestrator.startLibraryIndex(root, false, {
-      ocr: false,
-      image: true,
-      indexVideos: get(settings).indexVideos,
-    });
+    const library = await catalog.createLibrary(folder);
+    this.librarySelectionRevision += 1;
+    this.requestPendingScan(library.id);
+    return library;
   }
 
-  private async startIndex(root: string, retryFailed = false): Promise<void> {
-    const { jobs, orchestrator } = this.services;
-    if (jobs.running || orchestrator.indexing || !root) return;
-    const { ocr, image } = libraryIndexing(get(settings), root);
-    if (!ocr && !image) return;
-    await orchestrator.startLibraryIndex(root, retryFailed, {
-      ocr,
-      image,
-      indexVideos: get(settings).indexVideos,
-    });
+  private async saveLibrary(
+    libraryId: LibraryId,
+    definition: LibraryDefinition,
+    name: string | null,
+  ): Promise<void> {
+    const { catalog } = this.services;
+    const current = catalog.definitions.find((library) => library.id === libraryId);
+    if (current && definitionChanged(current, definition)) {
+      const updated = await catalog.updateLibrary(libraryId, definition);
+      catalog.updateLibraryViewState(libraryId, { name });
+      if (this.managingLibraries || updated.include.some((folder) => folder.scanPending))
+        this.requestPendingScan(libraryId);
+    } else {
+      catalog.updateLibraryViewState(libraryId, { name });
+    }
+  }
+
+  private requestPendingScan(libraryId: LibraryId): void {
+    if (this.managingLibraries) this.deferredScanId = libraryId;
+    else void this.services.orchestrator.scan(libraryId, { pendingOnly: true });
   }
 
   private async startThumbnailBackfill(
-    root: string,
+    libraryId: LibraryId,
     options: ThumbnailBackfillOptions,
   ): Promise<void> {
     const { jobs, orchestrator } = this.services;
-    if (jobs.running || !root) return;
+    if (jobs.running) return;
     const buckets = this.toBucketList(options.buckets);
     const { sortField } = get(settings);
-    await orchestrator.startResumableJob(root, {
+    await orchestrator.startResumableJob({
       type: "thumbnailGenerate",
       params: {
-        root,
+        libraryId,
         buckets: buckets.length ? buckets : undefined,
         timeline: sortField,
         range:
@@ -252,28 +319,20 @@ class Application implements ApplicationContext {
     });
   }
 
-  private dismissJobResult(): void {
-    this.services.jobs.dismiss();
+  private async deleteLibrary(libraryId: LibraryId): Promise<boolean> {
+    const { catalog } = this.services;
+    const selected = catalog.selectedId === libraryId;
+    await catalog.deleteLibrary(libraryId);
+    if (selected) this.librarySelectionRevision += 1;
+    return true;
   }
 
-  private async unregisterLibrary(root: string): Promise<boolean> {
-    return this.services.catalog.unregisterLibrary(root);
-  }
-
-  private async handleOrchestratedLibraryRemoval(root: string): Promise<void> {
-    const selected = rootsMatch(root, this.services.catalog.libraryRoot);
-    const removed = await this.unregisterLibrary(root);
-    if (removed && selected) this.librarySelectionRevision += 1;
-  }
-
-  private async removeLibrary(root: string, purge: boolean): Promise<void> {
+  private async removeLibrary(libraryId: LibraryId, purge: boolean): Promise<boolean> {
     const { jobs, orchestrator } = this.services;
-    if (jobs.running || !root) return;
-    if (purge) {
-      await orchestrator.purgeLibrary(root);
-      return;
-    }
-    await this.unregisterLibrary(root);
+    if (jobs.running) return false;
+    // A purge deletes the definition itself once it completes; see `JobOrchestrator`.
+    if (purge) return orchestrator.purgeLibrary(libraryId);
+    return this.deleteLibrary(libraryId);
   }
 
   private welcomeWasDismissed(): boolean {
@@ -297,6 +356,25 @@ class Application implements ApplicationContext {
     const validBuckets: readonly number[] = [128, 256, 512, 1024];
     return values.filter((value): value is IndexBucket => validBuckets.includes(value));
   }
+}
+
+function sameFolders(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((path, index) => path === right[index]);
+}
+
+function definitionChanged(
+  current: { include: { path: string }[]; exclude: string[]; ocr: boolean; image: boolean },
+  next: LibraryDefinition,
+): boolean {
+  return (
+    current.ocr !== next.ocr ||
+    current.image !== next.image ||
+    !sameFolders(
+      current.include.map((folder) => folder.path),
+      next.include,
+    ) ||
+    !sameFolders(current.exclude, next.exclude)
+  );
 }
 
 const [getApplication, setApplication] = createContext<ApplicationContext>();

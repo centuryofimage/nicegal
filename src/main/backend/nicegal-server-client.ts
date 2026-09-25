@@ -5,10 +5,15 @@ import type {
   ImageEmbeddingCoverage,
   GalleryAsset,
   AssetMetadata,
+  CreateLibraryRequest,
+  Library,
+  LibraryDefinition,
+  LibraryId,
   Timeline,
   EnsureThumbnailsRequest,
   EnsureThumbnailsResponse,
   ExecutionProviderId,
+  JobListResponse,
   JobRequest,
   JobSnapshot,
   OcrModelsResponse,
@@ -20,18 +25,11 @@ import type {
 } from "../../shared/backend";
 import type { BackendLog } from "./backend-log";
 
-import { DEFAULT_OCR_MODEL_LOAD_REQUEST } from "../../shared/backend";
-
 const TERMINAL_STATUSES: Partial<Record<JobSnapshot["status"], true>> = {
   cancelled: true,
   completed: true,
   failed: true,
 };
-
-interface JobListResponse {
-  activeJobId: string | null;
-  jobs: JobSnapshot[];
-}
 
 export class NicegalServerClient {
   private readonly jobLogState = new Map<
@@ -45,16 +43,46 @@ export class NicegalServerClient {
     private readonly log?: BackendLog,
   ) {}
 
-  async listAssets(root: string, timeline: Timeline): Promise<GalleryAsset[]> {
+  async listLibraries(): Promise<Library[]> {
+    return this.requestJson<Library[]>("/v1/libraries", { method: "GET" });
+  }
+
+  async createLibrary(request: CreateLibraryRequest): Promise<Library> {
+    return this.requestJson<Library>("/v1/libraries", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(request),
+    });
+  }
+
+  async updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library> {
+    return this.requestJson<Library>(`/v1/libraries/${libraryId}`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(definition),
+    });
+  }
+
+  async deleteLibrary(libraryId: LibraryId): Promise<void> {
+    await this.request(`/v1/libraries/${libraryId}`, { method: "DELETE" });
+  }
+
+  async listAssets(libraryId: LibraryId, timeline: Timeline): Promise<GalleryAsset[]> {
     const url = new URL("/v1/catalog", this.endpoint);
-    url.searchParams.set("root", root);
+    url.searchParams.set("libraryId", String(libraryId));
     url.searchParams.set("timeline", timeline);
     return this.requestJson<GalleryAsset[]>(url, { method: "GET" });
   }
 
-  async countAssets(root: string): Promise<number> {
+  async listFolders(libraryId: LibraryId): Promise<string[]> {
+    const url = new URL("/v1/catalog/folders", this.endpoint);
+    url.searchParams.set("libraryId", String(libraryId));
+    return this.requestJson<string[]>(url, { method: "GET" });
+  }
+
+  async countAssets(libraryId: LibraryId): Promise<number> {
     const url = new URL("/v1/catalog/count", this.endpoint);
-    url.searchParams.set("root", root);
+    url.searchParams.set("libraryId", String(libraryId));
     return this.requestJson<number>(url, { method: "GET" });
   }
 
@@ -100,9 +128,17 @@ export class NicegalServerClient {
     });
   }
 
-  async getImageEmbeddingCoverage(root: string): Promise<ImageEmbeddingCoverage> {
+  async setIndexVideos(indexVideos: boolean): Promise<void> {
+    await this.request("/v1/runtime", {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ indexVideos }),
+    });
+  }
+
+  async getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage> {
     const url = new URL("/v1/image-embeddings", this.endpoint);
-    url.searchParams.set("root", root);
+    url.searchParams.set("libraryId", String(libraryId));
     const response = await this.request(url, { method: "GET" });
     const value = (await response.json()) as Partial<ImageEmbeddingCoverage>;
     if (!isCount(value.total) || !isCount(value.indexed) || value.indexed > value.total) {
@@ -111,9 +147,9 @@ export class NicegalServerClient {
     return { total: value.total, indexed: value.indexed };
   }
 
-  async getTextEmbeddingCoverage(root: string): Promise<TextEmbeddingCoverage> {
+  async getTextEmbeddingCoverage(libraryId: LibraryId): Promise<TextEmbeddingCoverage> {
     const url = new URL("/v1/text-embeddings", this.endpoint);
-    url.searchParams.set("root", root);
+    url.searchParams.set("libraryId", String(libraryId));
     const response = await this.request(url, { method: "GET" });
     const value = (await response.json()) as Partial<TextEmbeddingCoverage>;
     if (!isCount(value.indexed) || !isCount(value.embedded) || !isCount(value.pending)) {
@@ -123,7 +159,7 @@ export class NicegalServerClient {
       indexed: value.indexed,
       embedded: value.embedded,
       pending: value.pending,
-      // Absent on a server that predates the field, and null when nothing under the root is
+      // Absent on a server that predates the field, and null when nothing in the library is
       // indexed yet. Both mean "no date to show", so both collapse to null here.
       lastIndexedAt: isCount(value.lastIndexedAt) ? value.lastIndexedAt : null,
     };
@@ -134,7 +170,10 @@ export class NicegalServerClient {
     const url = new URL("/v1/search", this.endpoint);
     url.searchParams.set("q", request.query);
     url.searchParams.set("type", request.type);
-    url.searchParams.set("root", request.root);
+    url.searchParams.set("libraryId", String(request.libraryId));
+    if (request.folder !== undefined) url.searchParams.set("folder", request.folder);
+    if (request.pathContains !== undefined)
+      url.searchParams.set("pathContains", request.pathContains);
     url.searchParams.set("limit", String(request.limit ?? 100_000));
     if (request.before !== undefined) url.searchParams.set("before", request.before);
     if (request.after !== undefined) url.searchParams.set("after", request.after);
@@ -155,6 +194,7 @@ export class NicegalServerClient {
       total: value.total,
       results: value.results.map((result) => ({
         assetId: String(result.assetId),
+        timestampMs: result.timestampMs,
         snippet: result.snippet,
         rank: result.rank,
         distance: result.distance,
@@ -171,7 +211,9 @@ export class NicegalServerClient {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        root: request.root,
+        libraryId: request.libraryId,
+        ...(request.folder === undefined ? {} : { folder: request.folder }),
+        ...(request.pathContains === undefined ? {} : { pathContains: request.pathContains }),
         limit: request.limit ?? 100_000,
         ...(request.before === undefined ? {} : { before: request.before }),
         ...(request.after === undefined ? {} : { after: request.after }),
@@ -191,6 +233,7 @@ export class NicegalServerClient {
       total: visual.total,
       results: visual.results.map((result) => ({
         assetId: String(result.assetId),
+        timestampMs: result.timestampMs,
         snippet: result.snippet ?? "",
         rank: result.rank,
         distance: result.distance,
@@ -307,9 +350,6 @@ export class NicegalServerClient {
       return snapshot;
     } catch (error) {
       if (!(error instanceof NicegalServerError)) throw error;
-      if (error.code === "ocr_models_not_loaded" && request.type === "libraryIndex") {
-        return this.startJob(DEFAULT_OCR_MODEL_LOAD_REQUEST);
-      }
       if (error.code !== "job_busy") throw error;
 
       const activeJob = await this.getActiveJob().catch(() => null);
@@ -337,9 +377,12 @@ export class NicegalServerClient {
     return (await response.json()) as JobSnapshot;
   }
 
+  async listJobs(): Promise<JobListResponse> {
+    return this.requestJson<JobListResponse>("/v1/jobs", { method: "GET" });
+  }
+
   private async getActiveJob(): Promise<JobSnapshot | null> {
-    const response = await this.request("/v1/jobs", { method: "GET" });
-    const { activeJobId, jobs } = (await response.json()) as JobListResponse;
+    const { activeJobId, jobs } = await this.listJobs();
     if (!activeJobId) return null;
     const activeJob = jobs.find((snapshot) => snapshot.jobId === activeJobId);
     return activeJob && !TERMINAL_STATUSES[activeJob.status] ? activeJob : null;

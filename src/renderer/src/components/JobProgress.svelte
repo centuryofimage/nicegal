@@ -47,7 +47,7 @@
       metrics.push({ label: "Deleted", value: job.progress.deleted.toLocaleString() });
     }
     if (
-      (job.type === "libraryIndex" || job.type === "catalogSync") &&
+      job.type === "libraryScan" &&
       (job.progress.pruneCandidates > 0 || job.progress.deleted > 0)
     ) {
       metrics.push({ label: "Deleted", value: job.progress.deleted.toLocaleString() });

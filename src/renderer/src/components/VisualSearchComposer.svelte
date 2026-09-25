@@ -266,7 +266,6 @@
         {/if}
       </div>
       <button class="ui-button" type="button" onclick={onclear}>Clear search</button>
-      <span class="external-note">Search updates after you pause typing.</span>
     </div>
   </div>
 </div>
@@ -433,6 +432,8 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-3);
+    flex: none;
+    white-space: nowrap;
   }
   .add-menu {
     position: relative;
@@ -467,13 +468,6 @@
   .add-menu-popup button:disabled {
     color: var(--text-tertiary);
   }
-  .external-note {
-    overflow: hidden;
-    color: var(--text-tertiary);
-    font-size: var(--font-size-md);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   select:focus-visible,
   input:focus-visible,
   .remove:focus-visible {
@@ -484,9 +478,6 @@
     .term-head,
     .term-row {
       grid-template-columns: 75px minmax(40px, 1fr) 58px 28px;
-    }
-    .external-note {
-      display: none;
     }
   }
 </style>

@@ -20,11 +20,14 @@ interface ThumbnailRow {
 }
 
 const THUMBNAIL_SCHEMA_VERSION = 4n;
+// Keep in sync with nicegal-core's video::SAMPLING_VERSION.
+const VIDEO_SAMPLING_VERSION = 3n;
 
 export class ThumbnailReader {
   private readonly database: DatabaseSync;
   private readonly lookup: StatementSync;
   private readonly staleLookup: StatementSync;
+  private readonly sampleLookup: StatementSync;
 
   constructor(path: string) {
     this.database = new DatabaseSync(path, { readOnly: true });
@@ -68,6 +71,21 @@ export class ThumbnailReader {
       LIMIT 1
     `);
     this.staleLookup.setReadBigInts(true);
+
+    this.sampleLookup = this.database.prepare(`
+      SELECT size_bucket, width, height, encoding, data
+      FROM video_thumbnails
+      WHERE asset_id = $assetId
+        AND timestamp_ms = $timestampMs
+        AND sampling_version = $samplingVersion
+        AND source_modified_ns = $sourceModifiedNs
+        AND source_size = $sourceSize
+      ORDER BY CASE WHEN size_bucket >= $requestedSize THEN 0 ELSE 1 END,
+               CASE WHEN size_bucket >= $requestedSize THEN size_bucket END ASC,
+               CASE WHEN size_bucket < $requestedSize THEN size_bucket END DESC
+      LIMIT 1
+    `);
+    this.sampleLookup.setReadBigInts(true);
   }
 
   get(
@@ -91,6 +109,25 @@ export class ThumbnailReader {
 
     const staleRow = this.staleLookup.get(params) as unknown as ThumbnailRow | undefined;
     return staleRow ? toRecord(staleRow, true) : null;
+  }
+
+  /** Return the exact frame scored by visual search; never substitute a different timestamp. */
+  getVideoSample(
+    assetId: string,
+    timestampMs: number,
+    sourceModifiedNs: string,
+    sourceSize: string,
+    requestedSize: number,
+  ): ThumbnailRecord | null {
+    const row = this.sampleLookup.get({
+      $assetId: BigInt(assetId),
+      $timestampMs: BigInt(timestampMs),
+      $samplingVersion: VIDEO_SAMPLING_VERSION,
+      $sourceModifiedNs: BigInt(sourceModifiedNs),
+      $sourceSize: BigInt(sourceSize),
+      $requestedSize: BigInt(requestedSize),
+    }) as unknown as ThumbnailRow | undefined;
+    return row ? toRecord(row, false) : null;
   }
 
   close(): void {

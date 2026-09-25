@@ -6,6 +6,7 @@
 
 :root {
   --metadata-panel-width: 280px;
+  --libraries-pane-width: 200px;
   /* Playlist-style search groups: content-colored background, plain heading and a fine rule. */
   --search-section-height: 26px;
   --search-section-gap: 6px;
@@ -51,6 +52,9 @@
      VirtualGallery.svelte's .match-caption), and the highlighted terms within it. The surface is
      translucent so the tile's image stays readable behind the strip. */
   --surface-caption: rgba(240, 240, 240, 0.88);
+  --media-badge-bg: rgba(0, 0, 0, 0.62);
+  --media-badge-fg: #ffffff;
+  --media-badge-inset: 6px;
   --search-highlight-bg: #ffe58a;
   --search-highlight-fg: #1a1a1a;
   /* Semantic-search nudge: a pale yellow tab attached below the search scope control. */

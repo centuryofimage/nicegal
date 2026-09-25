@@ -34,12 +34,16 @@ export type DateFilter =
 
 export type QueryToken =
   | { kind: "scope"; scope: Exclude<SearchScope, "all">; raw: string }
+  | { kind: "path"; value: string; raw: string }
+  | { kind: "folder"; path: string; raw: string }
   | { kind: "media"; media: MediaFilter; raw: string }
   | DateFilter
   | { kind: "text"; raw: string };
 
 export type ParsedQuery = {
   scope: SearchScope;
+  path: string | null;
+  folder: string | null;
   body: string;
   dates: DateFilter[];
   media: MediaFilter | null;
@@ -55,12 +59,13 @@ const dateValuePattern = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/;
 type DateBounds = { from: string; to: string };
 
 export function parseQuery(raw: string): ParsedQuery {
-  const parts = raw.match(/\s+|\S+/g) ?? [];
+  const parts = raw.match(/\s+|(?:[^\s"]|"[^"]*")+/g) ?? [];
   const tokens: QueryToken[] = [];
   let scope: SearchScope = "all";
+  let path: string | null = null;
+  let folder: string | null = null;
   const dates: DateFilter[] = [];
   let media: MediaFilter | null = null;
-  let firstToken = true;
 
   for (const part of parts) {
     if (/^\s+$/.test(part)) {
@@ -68,9 +73,24 @@ export function parseQuery(raw: string): ParsedQuery {
       continue;
     }
 
-    const scopeMatch = firstToken ? part.match(scopePattern) : null;
+    // A scope may follow filters (for example `type:video like:cat`). Keep the first
+    // scope authoritative so a second scope-like word remains searchable text.
+    const scopeMatch = scope === "all" ? part.match(scopePattern) : null;
     const temporalMatch = part.match(temporalPattern);
-    firstToken = false;
+    const folderMatch = /^in:(?:"([^"]*)"|([^\s"]+))$/i.exec(part);
+    const pathMatch = /^path:(?:"([^"]*)"|([^\s"]*))$/i.exec(part);
+
+    if (folderMatch) {
+      folder = folderMatch[1] ?? folderMatch[2];
+      tokens.push({ kind: "folder", path: folder, raw: part });
+      continue;
+    }
+
+    if (pathMatch) {
+      path = pathMatch[1] ?? pathMatch[2];
+      tokens.push({ kind: "path", value: path, raw: part });
+      continue;
+    }
 
     if (scopeMatch) {
       const rawScope = scopeMatch[0];
@@ -107,12 +127,38 @@ export function parseQuery(raw: string): ParsedQuery {
 
   return {
     scope,
+    path,
+    folder,
     body,
     dates,
     media,
     tokens,
     ocrMode: detectOcrMode(body),
   };
+}
+
+/** Folder selection changes only the structural focus term. */
+export function withFolder(raw: string, folder: string | null): string {
+  const body = textWithoutFolder(parseQuery(raw).tokens).trim();
+  return folder ? `${body}${body ? " " : ""}in:"${folder}"` : body;
+}
+
+/** Hide a structural folder term when a compact chip already represents it. */
+export function textWithoutFolder(tokens: readonly QueryToken[]): string {
+  let text = "";
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.kind === "folder") {
+      if (tokens[index + 1]?.kind === "text" && /^\s+$/.test(tokens[index + 1].raw)) {
+        index += 1;
+      } else if (text.endsWith(" ")) {
+        text = text.slice(0, -1);
+      }
+      continue;
+    }
+    text += token.raw;
+  }
+  return text;
 }
 
 /**
@@ -165,14 +211,29 @@ function isColumnFilterColon(body: string, index: number): boolean {
 }
 
 export function withScope(raw: string, scope: SearchScope): string {
-  const body = parseQuery(raw)
-    .tokens.filter((token) => token.kind !== "scope")
-    .map((token) => token.raw)
-    .join("")
-    .trim();
+  const body = textWithoutScope(parseQuery(raw).tokens).trim();
 
   if (scope === "all") return body;
   return body ? `${scope}: ${body}` : `${scope}:`;
+}
+
+/** Preserves typed text while closing the whitespace gap left by a removed scope token. */
+export function textWithoutScope(tokens: readonly QueryToken[]): string {
+  let text = "";
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token.kind === "scope") {
+      if (
+        text.endsWith(" ") &&
+        tokens[index + 1]?.kind === "text" &&
+        /^\s+$/.test(tokens[index + 1].raw)
+      )
+        index += 1;
+      continue;
+    }
+    text += token.raw;
+  }
+  return text;
 }
 
 export function withMediaFilter(raw: string, media: MediaFilter | null): string {

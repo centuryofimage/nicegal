@@ -51,10 +51,12 @@ function response(ids: string[]): SearchResponse {
 function fixture(): {
   search: Controller;
   requests: SearchRequest[];
+  fileRequests: SearchRequest[];
   complete: (lane: string, result: SearchResponse | Error) => void;
   cancellations: () => number;
 } {
   const requests: SearchRequest[] = [];
+  const fileRequests: SearchRequest[] = [];
   const pending = new Map<
     string,
     { resolve: (value: SearchResponse) => void; reject: (error: Error) => void }
@@ -68,6 +70,15 @@ function fixture(): {
         },
         getTextEmbeddingCoverage: async () => ({ indexed: 8, embedded: 8 }),
         searchOcr: (request: SearchRequest) => {
+          if (request.type === "name") {
+            fileRequests.push(request);
+            const snippet = request.query === "OR_" ? "Before OR_after.jpg" : "needle.jpg";
+            const ids = request.query === "needle" || request.query === "OR_" ? ["2"] : [];
+            return Promise.resolve({
+              total: ids.length,
+              results: ids.map((assetId, index) => ({ assetId, snippet, rank: index + 1 })),
+            });
+          }
           requests.push(request);
           return new Promise<SearchResponse>((resolve, reject) =>
             pending.set(request.searchLane!, { resolve, reject }),
@@ -79,6 +90,7 @@ function fixture(): {
   return {
     search: new OcrSearchController(),
     requests,
+    fileRequests,
     cancellations: () => cancellations,
     complete: (lane, result) => {
       const task = pending.get(lane)!;
@@ -93,12 +105,13 @@ test("All publishes fast results, independent lanes, top-ten related tail and de
   const f = fixture();
   const catalog = items();
   f.search.query = "needle";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause(240);
   assert.deepEqual(
     f.requests.map((request) => request.searchLane),
     ["literal"],
   );
+  assert.equal(f.fileRequests[0]?.type, "name");
   f.complete("literal", response(["1"]));
   await pause(5);
   assert.deepEqual(
@@ -160,7 +173,7 @@ test("All omits empty sections while searching and after results are filtered to
   const f = fixture();
   const catalog = items();
   f.search.query = "unmatched";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause();
   assert.deepEqual(f.search.apply(catalog).sections, []);
   f.complete("literal", response([]));
@@ -185,7 +198,7 @@ test("All keeps text search but skips visual text requests for an image-only mod
   const f = fixture();
   const catalog = items();
   f.search.query = "needle";
-  f.search.schedule("library", catalog, "modified", false);
+  f.search.schedule(1, catalog, "modified", false);
   await pause();
   assert.deepEqual(
     f.requests.map((request) => request.searchLane),
@@ -206,7 +219,7 @@ test("All caps related text at ten hits and appends it inside the literal sectio
   const f = fixture();
   const catalog = items(30);
   f.search.query = "needle";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause();
   f.complete("literal", response(["30"]));
   f.complete("meaning", response(catalog.map((item) => item.id)));
@@ -232,7 +245,7 @@ test("filename captions share the OCR pool, highlight literal names, and clear w
   const catalog = items(2);
   catalog[1].displayName = "Before OR_after.jpg";
   f.search.query = "name: OR_";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause(240);
   assert.equal(f.requests.length, 0);
   assert.equal(f.search.displaySnippets.get("2"), "Before OR_after.jpg");
@@ -257,7 +270,7 @@ test("filename captions share the OCR pool, highlight literal names, and clear w
   );
   assert.equal(recyclePool({ ...request, tiles })[0].snippetSegments, tiles[0].snippetSegments);
   f.search.query = "";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   assert.equal(f.search.displaySnippets.size, 0);
   const cleared = recyclePool({
     ...request,
@@ -268,7 +281,7 @@ test("filename captions share the OCR pool, highlight literal names, and clear w
   });
   assert.equal(cleared[0].snippetSegments, undefined);
   f.search.query = "OR_";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause(240);
   f.complete("literal", {
     total: 1,
@@ -297,10 +310,10 @@ test("clear cancels immediately and late lane results cannot refill the gallery"
   const f = fixture();
   const catalog = items();
   f.search.query = "needle";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause();
   f.search.query = "";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   assert.equal(f.cancellations(), 2);
   for (const lane of ["literal", "meaning", "visual"]) f.complete(lane, response(["1"]));
   await pause(5);
@@ -314,7 +327,7 @@ test("a lane failure preserves siblings and commits wait until pointer interacti
   const f = fixture();
   const catalog = items();
   f.search.query = "needle";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause();
   f.search.setInteracting(true);
   f.complete("visual", response(["8"]));
@@ -341,7 +354,7 @@ test("date constraints reach all lanes; no frontend top-500 cutoff remains", asy
   const f = fixture();
   const catalog = items(700);
   f.search.query = "needle during:2026";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause();
   for (const request of f.requests) {
     assert.ok(request.after);
@@ -355,7 +368,7 @@ test("date constraints reach all lanes; no frontend top-500 cutoff remains", asy
     f.search.apply(catalog).items.every((item) => new Date(item.date).getFullYear() === 2026),
   );
   f.search.query = "like: needle";
-  f.search.schedule("library", catalog, "modified");
+  f.search.schedule(1, catalog, "modified");
   await pause(240);
   f.complete("literal", response(catalog.map((item) => item.id)));
   await pause(5);
@@ -397,7 +410,7 @@ test("section layouts preserve indices and range indexes in all three modes, inc
 test("All without OCR retains filename matches alongside visual results", async () => {
   const f = fixture();
   f.search.query = "needle";
-  f.search.schedule("library", items(), "modified", true, false);
+  f.search.schedule(1, items(), "modified", true, false);
   await pause();
   assert.equal(f.requests.length, 1);
   assert.equal(f.requests[0].type, "image");
@@ -410,7 +423,7 @@ test("All without OCR retains filename matches alongside visual results", async 
   );
   assert.equal(f.search.indexNotice, "");
   f.search.query = "name: needle";
-  f.search.schedule("library", items(), "modified", true, false);
+  f.search.schedule(1, items(), "modified", true, false);
   await pause(240);
   assert.equal(f.requests.length, 1);
   assert.deepEqual(
@@ -419,29 +432,25 @@ test("All without OCR retains filename matches alongside visual results", async 
   );
 });
 
-test("indexing choices persist independently for each library", async () => {
-  const { settings, settingsDefaults, libraryIndexing, setLibraryIndexing } =
-    await vite.ssrLoadModule("/src/renderer/src/lib/settings.svelte.ts");
-  settings.set({ ...settingsDefaults, libraryIndexing: {} });
-  setLibraryIndexing("screenshots", { ocr: true, image: true });
-  setLibraryIndexing("photos", { ocr: false, image: true });
-  let current;
-  const unsubscribe = settings.subscribe((value: unknown) => {
-    current = value;
-  });
-  assert.deepEqual(libraryIndexing(current, "screenshots"), { ocr: true, image: true });
-  assert.deepEqual(libraryIndexing(current, "photos"), { ocr: false, image: true });
-  assert.deepEqual(libraryIndexing(current, "new library"), { ocr: false, image: true });
-  const restored = JSON.parse(JSON.stringify(current));
-  assert.deepEqual(libraryIndexing(restored, "screenshots"), { ocr: true, image: true });
-  unsubscribe();
+test("v2 per-root indexing choices remain readable for the library import", async () => {
+  const { settingsDefaults, libraryIndexing } = await vite.ssrLoadModule(
+    "/src/renderer/src/lib/settings.svelte.ts",
+  );
+  const stored = JSON.parse(
+    JSON.stringify({
+      ...settingsDefaults,
+      libraryIndexing: { screenshots: { ocr: true, image: true } },
+    }),
+  );
+  assert.deepEqual(libraryIndexing(stored, "screenshots"), { ocr: true, image: true });
+  assert.deepEqual(libraryIndexing(stored, "photos"), { ocr: false, image: true });
 });
 
 test("a malformed section response cannot corrupt successful results, including deferred arrivals", async () => {
   for (const deferred of [false, true]) {
     const f = fixture();
     f.search.query = "needle";
-    f.search.schedule("library", items(), "modified", true, false);
+    f.search.schedule(1, items(), "modified", true, false);
     await pause();
     f.search.setInteracting(deferred);
     f.complete("visual", { total: 10, results: null } as unknown as SearchResponse);
@@ -508,12 +517,12 @@ test("missing text coverage exposes setup state independently of library status 
       lastIndexedAt: null,
     });
     f.search.query = `${prefix} needle`;
-    f.search.schedule("library", items(), "modified");
+    f.search.schedule(1, items(), "modified");
     await pause(240);
     assert.equal(f.search.textSetupRequired, true);
     assert.equal(f.requests.length, 0);
     f.search.query = "name: needle";
-    f.search.schedule("library", items(), "modified");
+    f.search.schedule(1, items(), "modified");
     assert.equal(f.search.textSetupRequired, false);
     f.search.dispose();
   }

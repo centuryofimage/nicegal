@@ -1,12 +1,11 @@
 /* eslint-disable svelte/prefer-svelte-reactivity -- Search collections are immutable snapshots; raw state tracks replacement without per-hit reactive bookkeeping. */
 
-import type { Timeline, SearchResponse } from "../../../shared/backend";
+import type { LibraryId, Timeline, SearchResponse, SearchResult } from "../../../shared/backend";
 import type { ExternalVisualReference } from "../../../shared/backend";
 import type { CatalogController } from "./catalog.svelte";
 import type { GallerySection } from "./gallery/types";
 
 import { isQuerySyntaxError, searchErrorMessage } from "./errors";
-import { FilenameSearchClient } from "./filename-search-client";
 import { localDateToExclusiveNs, localDateToNs } from "./job-params";
 import { parseQuery, withScope, type DateFilter, type SearchScope } from "./search-query";
 import {
@@ -16,6 +15,15 @@ import {
 } from "./visual-query";
 
 type CatalogItem = CatalogController["items"][number];
+const EMPTY_FRAME_TIMES: ReadonlyMap<string, number> = new Map();
+
+function frameTimes(hits: readonly SearchResult[]): ReadonlyMap<string, number> {
+  return new Map(
+    hits.flatMap((hit) =>
+      hit.timestampMs === undefined ? [] : [[hit.assetId, hit.timestampMs] as const],
+    ),
+  );
+}
 
 /** Validate before queueing a publication: malformed IPC responses must not poison a section
  * or throw later when deferred results are applied after scrolling/selection ends. */
@@ -30,6 +38,8 @@ function validateSearchResponse(response: SearchResponse): SearchResponse {
         !hit ||
         typeof hit.assetId !== "string" ||
         typeof hit.snippet !== "string" ||
+        (hit.timestampMs !== undefined &&
+          (!Number.isSafeInteger(hit.timestampMs) || hit.timestampMs < 0)) ||
         [hit.rank, hit.distance, hit.score].some(
           (value) => value !== undefined && !Number.isFinite(value),
         ),
@@ -50,7 +60,7 @@ export type SearchSortMode = "relevance" | "date";
 
 /**
  * How long `schedule()` waits after the last keystroke before running filename matching and
- * firing the backend text/vector/image query. Coalesce a typing burst so the worker and backend
+ * firing the backend file/text/vector/image queries. Coalesce a typing burst so the backend
  * do not compute and transfer result sets that a later keystroke will immediately replace.
  */
 const SEARCH_DEBOUNCE_MS = 200;
@@ -120,6 +130,7 @@ export class OcrSearchController {
     if (this.visualReferences.length) this.setVisualReferences([]);
   }
   private literalPending = $state(false);
+  private filePending = $state(false);
   private broadPending = $state({ meaning: false, visual: false });
   // Responses are immutable snapshots. Avoid proxying hundreds of thousands of hit objects.
   private broadResults = $state.raw<Record<"meaning" | "visual", SearchResponse>>({
@@ -156,7 +167,12 @@ export class OcrSearchController {
     else commit();
   }
   get pending(): boolean {
-    return this.literalPending || this.broadPending.meaning || this.broadPending.visual;
+    return (
+      this.literalPending ||
+      this.filePending ||
+      this.broadPending.meaning ||
+      this.broadPending.visual
+    );
   }
   set pending(value: boolean) {
     this.literalPending = value;
@@ -209,6 +225,15 @@ export class OcrSearchController {
   rankedIds = $state.raw<string[]>([]);
   /** Per-hit relevance signal: cosine distance for `meaning`/`like`, FTS5 `bm25()` for `ocr`/`all`. */
   scores = $state.raw(new Map<string, number>());
+  private dedicatedFrameTimes = $state.raw<ReadonlyMap<string, number>>(new Map());
+  /** Winning video samples from the visual lane only; other search modes keep their posters. */
+  readonly matchingFrameTimes = $derived.by(() =>
+    this.parsed.scope === "like"
+      ? this.dedicatedFrameTimes
+      : this.parsed.scope === "all"
+        ? frameTimes(this.broadResults.visual.results)
+        : EMPTY_FRAME_TIMES,
+  );
   /** Session-only image examples. External bytes are never persisted or added to the catalog. */
   visualReferences = $state<VisualReferenceTerm[]>([]);
   visualReferenceRevision = $state(0);
@@ -225,10 +250,9 @@ export class OcrSearchController {
 
   private filenameMatches = $state.raw<ReadonlySet<string> | null>(null);
   private filenameOrderedIds = $state.raw<string[]>([]);
-  private readonly filenameSearch = new FilenameSearchClient();
   private generation = 0;
   private timer: ReturnType<typeof setTimeout> | undefined;
-  private lastRoot = "";
+  private lastLibraryId: LibraryId | null = null;
   /** `id -> item` for `rankItems`, memoized by array identity. `filterItemsByDates` returns the
    * same array reference when no date filter is active — the common case at 100k+ items — so
    * this reuses one Map across every keystroke instead of rebuilding it each time. */
@@ -365,6 +389,7 @@ export class OcrSearchController {
   get pendingLabel(): string {
     switch (this.parsed.scope) {
       case "all":
+        if (this.parsed.path && !this.searchBody) return "Searching paths…";
         return this.literalPending
           ? "Searching names and text…"
           : this.broadPending.meaning && this.broadPending.visual
@@ -374,6 +399,8 @@ export class OcrSearchController {
               : "Searching images…";
       case "ocr":
         return "Searching text…";
+      case "name":
+        return "Searching file names…";
       case "meaning":
         return "Searching related text…";
       case "like":
@@ -393,7 +420,7 @@ export class OcrSearchController {
   }
 
   schedule(
-    root: string,
+    libraryId: LibraryId | null,
     items: CatalogItem[],
     timeline: Timeline,
     supportsImageTextQueries = true,
@@ -410,14 +437,14 @@ export class OcrSearchController {
     this.broadErrors = { meaning: "", visual: "" };
     // Sort mode and the percentile cutoff describe one library's result set, so they reset with
     // the library and survive edits to the query within it.
-    if (root !== this.lastRoot) {
-      this.lastRoot = root;
+    if (libraryId !== this.lastLibraryId) {
+      this.lastLibraryId = libraryId;
       this.sortMode = "relevance";
       this.meaningMinMatchPercentile = DEFAULT_MATCH_QUALITY;
       this.clipMatchQuality = DEFAULT_CLIP_MATCH_QUALITY;
     }
     const generation = ++this.generation;
-    const { scope, body: rawBody, dates, ocrMode } = this.parsed;
+    const { scope, body: rawBody, dates, ocrMode, folder, path } = this.parsed;
     const body = normalizeSearchBody(scope, rawBody);
     const references = scope === "like" ? this.visualReferences : [];
     const composedVisual = scope === "like" && (isVisualComposition(body) || references.length > 0);
@@ -428,10 +455,12 @@ export class OcrSearchController {
     this.imageSetupRequired = false;
     this.semanticAvailable = false;
     this.pending = false;
+    this.filePending = false;
     this.snippets = new Map<string, string>();
     this.filenameSnippets = new Map<string, string>();
     this.rankedIds = [];
     this.scores = new Map<string, number>();
+    this.dedicatedFrameTimes = EMPTY_FRAME_TIMES;
     this.filenameMatches = new Set<string>();
     this.filenameOrderedIds = [];
     this.matches = new Set<string>();
@@ -443,10 +472,71 @@ export class OcrSearchController {
       return;
     }
 
-    if (!body && !references.length) {
+    if (!body && !references.length && !path) {
       this.filenameMatches = null;
       this.matches = null;
       this.total = items.length;
+      return;
+    }
+
+    if ((scope === "name" && !!body) || (!body && !!path && !references.length)) {
+      const fileScope = body && scope === "name" ? "name" : "path";
+      const time = timeRangeForDates(dates);
+      if (time === null) {
+        this.total = 0;
+        return;
+      }
+      if (libraryId === null) {
+        this.error = "No library selected.";
+        return;
+      }
+      this.filePending = true;
+      this.timer = setTimeout(() => {
+        void window.nicegal.backend
+          .searchOcr({
+            query: body || path || "",
+            type: fileScope,
+            libraryId,
+            ...(folder ? { folder } : {}),
+            ...(body && path ? { pathContains: path } : {}),
+            limit: SEARCH_RESULT_LIMIT,
+            searchSession,
+            searchLane: "files",
+            timeline,
+            ...time,
+          })
+          .then(validateSearchResponse)
+          .then((response) =>
+            this.publish(generation, () => {
+              const ids = response.results.map((result) => result.assetId);
+              if (fileScope === "name") {
+                this.filenameMatches = new Set(ids);
+                this.filenameOrderedIds = ids;
+                this.filenameSnippets = new Map(
+                  response.results.map((result) => [result.assetId, result.snippet] as const),
+                );
+              } else {
+                this.matches = new Set(ids);
+                this.snippets = new Map(
+                  response.results.map((result) => [result.assetId, result.snippet] as const),
+                );
+              }
+              this.total = response.total;
+              if (response.total > response.results.length)
+                this.indexNotice = "Result limit reached; narrow the search by date.";
+            }),
+          )
+          .catch((error: unknown) =>
+            this.publish(generation, () => {
+              this.error = searchErrorMessage(error);
+            }),
+          )
+          .finally(() =>
+            this.publish(generation, () => {
+              this.filePending = false;
+            }),
+          );
+      }, SEARCH_DEBOUNCE_MS);
       return;
     }
 
@@ -457,14 +547,13 @@ export class OcrSearchController {
       return;
     }
 
-    // The worker searches and sorts filenames after typing pauses. A catalog replacement sends
-    // its compact ID/name snapshot once; later queries send only their text.
     this.pending = true;
+    this.filePending = scope === "all" || scope === "meaning";
     const time = timeRangeForDates(dates);
     // Fast literal results need not wait for either embedder. Each lane owns its completion and
     // error state; one failed or unavailable engine must never discard successful sibling results.
     // The shared session cancels obsolete work; the renderer generation also guards late replies.
-    if (scope === "all" && root && time !== null) {
+    if (scope === "all" && libraryId !== null && time !== null) {
       this.broadPending = { meaning: hasOcr, visual: supportsImageTextQueries && hasImages };
       this.broadTimer = setTimeout(() => {
         for (const lane of ["meaning", "visual"] as const) {
@@ -473,7 +562,9 @@ export class OcrSearchController {
           void window.nicegal.backend
             .searchOcr({
               query: body,
-              root,
+              libraryId,
+              ...(folder ? { folder } : {}),
+              ...(path ? { pathContains: path } : {}),
               timeline,
               ...time,
               type: lane === "meaning" ? "vector" : "image",
@@ -509,18 +600,54 @@ export class OcrSearchController {
       }, 400);
     }
     this.timer = setTimeout(
-      async () => {
-        const filenameEntries =
-          scope === "ocr" || scope === "like" ? [] : await this.filenameSearch.search(items, body);
-        if (generation !== this.generation) return;
-        this.filenameSnippets = new Map(filenameEntries);
-        this.filenameOrderedIds = filenameEntries.map(([id]) => id);
-        this.filenameMatches =
-          scope === "ocr" || scope === "like" ? null : new Set(this.filenameOrderedIds);
-        this.matches = scope === "name" ? null : new Set<string>();
-        this.total = scope === "name" ? this.filenameMatches.size : 0;
+      () => {
+        if ((scope === "all" || scope === "meaning") && libraryId !== null) {
+          const fileTime = timeRangeForDates(dates);
+          if (fileTime !== null) {
+            void window.nicegal.backend
+              .searchOcr({
+                query: body,
+                type: "name",
+                libraryId,
+                ...(folder ? { folder } : {}),
+                ...(path ? { pathContains: path } : {}),
+                limit: SEARCH_RESULT_LIMIT,
+                searchSession,
+                searchLane: "files",
+                timeline,
+                ...fileTime,
+              })
+              .then(validateSearchResponse)
+              .then((response) =>
+                this.publish(generation, () => {
+                  this.filenameOrderedIds = response.results.map((result) => result.assetId);
+                  this.filenameMatches = new Set(this.filenameOrderedIds);
+                  this.filenameSnippets = new Map(
+                    response.results.map((result) => [result.assetId, result.snippet] as const),
+                  );
+                  if (scope === "all" && !hasOcr) this.total = response.total;
+                  if (response.total > response.results.length)
+                    this.indexNotice = "Result limit reached; narrow the search by date.";
+                }),
+              )
+              .catch((error: unknown) =>
+                this.publish(generation, () => {
+                  this.error = searchErrorMessage(error);
+                }),
+              )
+              .finally(() =>
+                this.publish(generation, () => {
+                  this.filePending = false;
+                }),
+              );
+          } else {
+            this.filePending = false;
+          }
+        } else {
+          this.filePending = false;
+        }
 
-        if (scope === "name" || (scope === "all" && !hasOcr)) {
+        if (scope === "all" && !hasOcr) {
           this.pending = false;
           return;
         }
@@ -533,7 +660,7 @@ export class OcrSearchController {
           return;
         }
 
-        if (!root) {
+        if (libraryId === null) {
           this.error = "No library selected.";
           this.pending = false;
           return;
@@ -547,12 +674,12 @@ export class OcrSearchController {
             : scope === "like"
               ? "image"
               : ocrMode === "glob"
-                ? "glob"
-                : "match";
+                ? "ocrGlob"
+                : "ocrMatch";
         // `terms` and `raw` share the `match` mode, so a `terms` body must be quoted on the way
         // out — unquoted, FTS5 would parse `12:30` as a column filter and reject it.
         const searchQuery =
-          searchType === "match" && ocrMode === "terms" ? quoteFtsTerms(body) : body;
+          searchType === "ocrMatch" && ocrMode === "terms" ? quoteFtsTerms(body) : body;
         const runSearch = (): void => {
           const visualComponents = [
             ...visualTerms.map((term) => ({
@@ -571,7 +698,9 @@ export class OcrSearchController {
             .searchOcr({
               query: composedVisual ? "" : searchQuery,
               type: searchType,
-              root,
+              libraryId,
+              ...(folder ? { folder } : {}),
+              ...(path ? { pathContains: path } : {}),
               limit: SEARCH_RESULT_LIMIT,
               searchSession,
               searchLane: "literal",
@@ -603,6 +732,7 @@ export class OcrSearchController {
                     return score === undefined ? [] : [[result.assetId, score] as const];
                   }),
                 );
+                if (scope === "like") this.dedicatedFrameTimes = frameTimes(response.results);
                 this.total = response.total;
                 if (response.total > response.results.length)
                   this.indexNotice = "Result limit reached; narrow the search by date.";
@@ -616,7 +746,7 @@ export class OcrSearchController {
                 this.error =
                   scope === "like" &&
                   /model.*not ready|prepare.*search|prepar.*model/i.test(message)
-                    ? "Visual search needs preparation. Open Libraries and choose Prepare search."
+                    ? "Visual search needs preparation. Open Library manager and rescan the library."
                     : scope === "all" && !isQuerySyntaxError(message)
                       ? "Text search unavailable. Try again."
                       : message;
@@ -635,7 +765,7 @@ export class OcrSearchController {
           return;
         }
 
-        const coverageRequest = window.nicegal.backend.getTextEmbeddingCoverage(root);
+        const coverageRequest = window.nicegal.backend.getTextEmbeddingCoverage(libraryId);
 
         // `meaning` needs embeddings; `ocr` and `all` only need OCR text, so they gate on
         // `indexed` instead — an un-embedded-but-OCR'd library should still search fine.
@@ -673,11 +803,18 @@ export class OcrSearchController {
    * `VirtualGallery` renders as happily as any other order because layout consumes the array.
    */
   apply(items: CatalogItem[]): SearchView {
-    const { scope, dates, media } = this.parsed;
+    const { scope, dates, media, folder, path } = this.parsed;
     const body = this.searchBody;
     const dated = filterItemsByDates(items, dates);
-    const eligible = media ? dated.filter((item) => item.mediaKind === media) : dated;
+    const focused = folder ? dated.filter((item) => pathIsInFolder(item.path, folder)) : dated;
+    const eligible = media ? focused.filter((item) => item.mediaKind === media) : focused;
     const filtering = this.query.length > 0;
+    if (!body && !this.activeVisualReferences.length && path)
+      return {
+        items: filterItems(eligible, this.matches),
+        matchTotal: filterItems(eligible, this.matches).length,
+        filtering,
+      };
     if (!body && !this.activeVisualReferences.length)
       return { items: eligible, matchTotal: eligible.length, filtering };
 
@@ -804,7 +941,7 @@ export class OcrSearchController {
     if (scope === "meaning" && (ranked.length || !this.indexNotice)) return ranked;
 
     const claimed = new Set(ranked.map((item) => item.id));
-    // The worker already sorted filename hits, so only membership and catalog lookup remain here.
+    // The backend already sorted filename hits, so only membership and catalog lookup remain here.
     const filenameOnly: CatalogItem[] = [];
     for (const id of this.filenameOrderedIds) {
       if (claimed.has(id)) continue;
@@ -816,7 +953,6 @@ export class OcrSearchController {
 
   dispose(): void {
     this.suspend();
-    this.filenameSearch.dispose();
   }
 
   /** Preserve the query while the service is unavailable, and ignore obsolete responses. */
@@ -831,8 +967,18 @@ export class OcrSearchController {
     this.broadPending = { meaning: false, visual: false };
     this.timer = null;
     this.pending = false;
+    this.filePending = false;
     this.error = "";
   }
+}
+
+function pathIsInFolder(path: string, folder: string): boolean {
+  const windows = /^[A-Za-z]:[\\/]|^\\\\/.test(folder);
+  const normalize = (value: string): string => {
+    const normalized = value.replaceAll("\\", "/").replace(/\/+$/, "");
+    return windows ? normalized.toLowerCase() : normalized;
+  };
+  return normalize(path).startsWith(`${normalize(folder)}/`);
 }
 
 function normalizeSearchBody(scope: SearchScope, rawBody: string): string {

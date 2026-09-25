@@ -14,8 +14,18 @@ import { layoutOptions, settings } from "../../src/renderer/src/lib/settings.sve
 
 const app = createApplication();
 const { catalog, ocrSearch } = app.services;
-catalog.selectedRoot = "library";
-catalog.libraries = [{ root: "library", displayName: "Library", query: "", scrollTop: 0 }];
+catalog.definitions = [
+  {
+    id: 1,
+    include: [
+      { path: "C:/library", scanPending: false, scanError: null, lastScanCompletedNs: null },
+    ],
+    exclude: [],
+    ocr: false,
+    image: true,
+  },
+];
+catalog.selectedId = 1;
 catalog.loading = false;
 catalog.backendStatus = { ready: true, error: null };
 const row = {
@@ -27,7 +37,7 @@ const row = {
   loading: false,
   error: null,
 };
-catalog.libraryStatuses.set("library", row);
+catalog.libraryStatuses.set(1, row);
 let schedules = 0;
 ocrSearch.schedule = () => {
   schedules++;
@@ -38,15 +48,21 @@ const stop = $effect.root(() => {
 });
 flushSync();
 assert.equal(schedules, 1);
+const librariesBeforeScroll = catalog.libraries;
 for (let offset = 100; offset <= 500; offset += 100) {
-  catalog.updateLibraryViewState("library", { scrollTop: offset });
-  catalog.libraryStatuses.set("library", { ...row });
+  catalog.updateLibraryViewState(1, { scrollTop: offset });
+  catalog.libraryStatuses.set(1, { ...row });
   flushSync();
 }
 assert.equal(schedules, 1, "scroll saves and unchanged row snapshots must not restart search");
-catalog.libraryStatuses.set("library", { ...row, loading: true });
+assert.equal(
+  catalog.libraries,
+  librariesBeforeScroll,
+  "scroll saves must not rebuild the library records the pane renders",
+);
+catalog.libraryStatuses.set(1, { ...row, loading: true });
 flushSync();
-catalog.libraryStatuses.set("library", { ...row, error: "Temporary status failure" });
+catalog.libraryStatuses.set(1, { ...row, error: "Temporary status failure" });
 flushSync();
 assert.equal(schedules, 1, "transient status states must not toggle search engines");
 view.handleGalleryScroll({ scrollTop: 900, layout: emptyLayout() });
@@ -55,7 +71,7 @@ assert.equal(schedules, 1);
 ocrSearch.query = "cats";
 flushSync();
 assert.equal(schedules, 2, "query changes still search");
-catalog.libraryStatuses.set("library", { ...row, indexed: 1 });
+catalog.libraryStatuses.set(1, { ...row, indexed: 1 });
 flushSync();
 assert.equal(schedules, 3, "new OCR data enables text search");
 const selection = view.gallerySelection;
@@ -79,12 +95,12 @@ catalog.items = first;
 flushSync();
 const beforeJob = schedules;
 const { jobs } = app.services;
-jobs.active = { jobId: "catalog", type: "catalogSync", status: "running" } as JobSnapshot;
+jobs.active = { jobId: "catalog", type: "libraryScan", status: "running" } as JobSnapshot;
 flushSync();
 assert.equal(schedules, beforeJob, "starting a job retains settled search results");
 const latest = [{ id: "first" }, { id: "second" }] as GalleryItem[];
 catalog.items = latest;
-catalog.libraryStatuses.set("library", { ...row, cataloged: 2, indexed: 0 });
+catalog.libraryStatuses.set(1, { ...row, cataloged: 2, indexed: 0 });
 flushSync();
 assert.equal(catalog.items.length, 2, "live catalog keeps advancing");
 assert.equal(view.filteredItems, first, "displayed search uses the retained catalog snapshot");

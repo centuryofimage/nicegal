@@ -63,7 +63,7 @@
       textSetupRequired={ocrSearch.textSetupRequired}
       semanticSuggestion={ocrSearch.shouldSuggestSemantic}
       onsemanticsearch={view.switchToMeaningSearch}
-      onsetuptextsearch={view.openLibrariesDialog}
+      onsetuptextsearch={() => catalog.selectedId !== null && view.editLibrary(catalog.selectedId)}
       visualReferences={ocrSearch.visualReferences}
       onvisualreferenceschange={(references) => ocrSearch.setVisualReferences(references)}
       onchoosevisualfile={() => void chooseVisualFile(ocrSearch)}
@@ -92,15 +92,15 @@
     />
     <button
       class="app-toolbar-button app-toolbar-text-button"
-      class:active={view.activeDialog === "libraries"}
-      onclick={view.openLibrariesDialog}
-      title="Libraries"
-      aria-label="Libraries"
+      class:active={view.activeDialog === "manageLibraries"}
+      onclick={view.openManageLibraries}
+      title="Library manager"
+      aria-label="Library manager"
       aria-haspopup="dialog"
-      aria-expanded={view.activeDialog === "libraries"}
+      aria-expanded={view.activeDialog === "manageLibraries"}
     >
       <FolderOpen size={13} aria-hidden="true" />
-      <span>Libraries</span>
+      <span>Library manager</span>
     </button>
     <button
       class="app-toolbar-button app-toolbar-text-button"

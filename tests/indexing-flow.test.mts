@@ -3,9 +3,16 @@ import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
+import type { CatalogController as Catalog } from "../src/renderer/src/lib/catalog.svelte.ts";
 import type { JobOrchestrator as Orchestrator } from "../src/renderer/src/lib/job-orchestrator.svelte.ts";
 import type { JobTracker } from "../src/renderer/src/lib/job-tracker.svelte.ts";
-import type { JobRequest, JobSnapshot } from "../src/shared/backend.ts";
+import type {
+  CreateLibraryRequest,
+  JobListResponse,
+  JobRequest,
+  JobSnapshot,
+  Library,
+} from "../src/shared/backend.ts";
 
 // Compile the actual rune module with the project's existing Svelte/Vite tools. Middleware mode
 // opens no listening socket and never connects to Electron or the user's backend.
@@ -21,6 +28,12 @@ after(() => vite.close());
 const { JobOrchestrator } = (await vite.ssrLoadModule(
   "/src/renderer/src/lib/job-orchestrator.svelte.ts",
 )) as { JobOrchestrator: typeof Orchestrator };
+const { JobTracker: Tracker } = (await vite.ssrLoadModule(
+  "/src/renderer/src/lib/job-tracker.svelte.ts",
+)) as { JobTracker: new (...args: unknown[]) => JobTracker };
+const { CatalogController } = (await vite.ssrLoadModule(
+  "/src/renderer/src/lib/catalog.svelte.ts",
+)) as { CatalogController: new () => Catalog };
 const storage = new Map<string, string>();
 Object.defineProperty(globalThis, "localStorage", {
   configurable: true,
@@ -30,35 +43,49 @@ Object.defineProperty(globalThis, "localStorage", {
     removeItem: (key: string) => storage.delete(key),
   },
 });
+Object.defineProperty(globalThis, "document", {
+  configurable: true,
+  value: { visibilityState: "visible" },
+});
 
 function snapshot(
   type: JobSnapshot["type"],
   status: JobSnapshot["status"],
   jobId = "1",
+  libraryId?: number,
 ): JobSnapshot {
   return {
     jobId,
     type,
     status,
+    ...(libraryId === undefined ? {} : { libraryId }),
     phase: status === "completed" ? "finished" : "queued",
     errors: [],
-    progress: {} as JobSnapshot["progress"],
+    progress: { cataloged: 0 } as JobSnapshot["progress"],
   };
 }
 
-function fixture(
-  responses: JobSnapshot[],
-  restartRequired = true,
-): {
+function library(id: number, path: string): Library {
+  return {
+    id,
+    include: [{ path, scanPending: false, scanError: null, lastScanCompletedNs: null }],
+    exclude: [],
+    ocr: false,
+    image: true,
+  };
+}
+
+function fixture(responses: JobSnapshot[]): {
   orchestrator: Orchestrator;
+  jobs: { running: boolean; active: JobSnapshot | null; cancelledAll: number };
   requests: JobRequest[];
-  disconnect: (planned?: boolean) => boolean;
 } {
   storage.clear();
   const requests: JobRequest[] = [];
   const jobs = {
     running: false,
     error: "",
+    cancelledAll: 0,
     active: null as JobSnapshot | null,
     async start(request: JobRequest): Promise<JobSnapshot> {
       requests.push(request);
@@ -70,182 +97,61 @@ function fixture(
         orchestrator.handleTerminalJob(result);
       return result;
     },
-    async cancel(): Promise<void> {
+    async cancelAll(): Promise<void> {
+      this.cancelledAll++;
       this.running = false;
     },
   };
-  globalThis.window = {
-    nicegal: {
-      backend: {
-        getRuntimeStatus: async () => ({
-          restartRequired,
-          activeExecutionProvider: "directml",
-          configuredExecutionProvider: "openvino",
-        }),
-      },
-    },
-  } as unknown as Window & typeof globalThis;
-  const orchestrator = new JobOrchestrator(
-    jobs as unknown as JobTracker,
-    () => "C:/other-library",
-    async () => {},
-    () => {},
-  );
-  return {
-    orchestrator,
-    requests,
-    disconnect(planned = true): boolean {
-      jobs.running = false;
-      return orchestrator.backendDisconnected(planned);
-    },
-  };
+  globalThis.window = { nicegal: { backend: {} } } as unknown as Window & typeof globalThis;
+  const orchestrator = new JobOrchestrator(jobs as unknown as JobTracker, async () => {});
+  return { orchestrator, jobs, requests };
 }
 
-const flush = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
+test("automatic scans request fast mode; explicit full and other options are forwarded", async () => {
+  const f = fixture([
+    snapshot("libraryScan", "completed", "1", 3),
+    snapshot("libraryScan", "completed", "2", 3),
+    snapshot("libraryScan", "completed", "3", 3),
+  ]);
+  await f.orchestrator.scan(3);
+  await f.orchestrator.scan(3, { pendingOnly: true });
+  await f.orchestrator.scan(3, { scanMode: "full", retryFailed: true });
+  assert.deepEqual(
+    f.requests.map((request) => request.params),
+    [
+      { libraryId: 3, scanMode: "fast" },
+      { libraryId: 3, scanMode: "fast", pendingOnly: true },
+      { libraryId: 3, scanMode: "full", retryFailed: true },
+    ],
+  );
+});
 
-test("model preparation persists index intent and waits for planned fallback before resuming the original root", async () => {
-  const f = fixture([snapshot("ocrModelLoad", "completed"), snapshot("libraryIndex", "running")]);
-  await f.orchestrator.startLibraryIndex("C:/photos");
-  await flush();
+test("a provider fallback during a scan shows recovery until the backend returns", () => {
+  const f = fixture([]);
+  f.jobs.active = snapshot("libraryScan", "running", "1", 3);
+  assert.equal(f.orchestrator.backendDisconnected(true), true);
   assert.equal(f.orchestrator.restartingIndex, true);
-  assert.equal(f.requests.length, 1);
-  assert.equal(storage.size, 1);
-  assert.equal(f.disconnect(), true);
-  await f.orchestrator.backendReady();
-  assert.equal(f.requests.length, 2);
-  assert.equal((f.requests[1].params as { root: string }).root, "C:/photos");
-  assert.equal(f.orchestrator.indexing, true);
-  f.orchestrator.handleTerminalJob(snapshot("libraryIndex", "completed"));
-  assert.equal(f.orchestrator.indexing, false);
-  assert.equal(storage.size, 0);
+  f.orchestrator.backendReady();
+  assert.equal(f.orchestrator.restartingIndex, false);
+  assert.deepEqual(f.requests, [], "the backend resumes pending folders itself");
 });
 
-test("Stop during fallback cancels continuation and persisted intent", async () => {
-  const f = fixture([snapshot("ocrModelLoad", "completed")]);
-  await f.orchestrator.startLibraryIndex("C:/photos");
-  await flush();
-  f.disconnect();
+test("an ordinary crash, or a fallback with no scan running, shows no recovery", () => {
+  const f = fixture([]);
+  f.jobs.active = snapshot("libraryScan", "running", "1", 3);
+  assert.equal(f.orchestrator.backendDisconnected(false), false);
+  f.jobs.active = snapshot("thumbnailGenerate", "running", "2", 3);
+  assert.equal(f.orchestrator.backendDisconnected(true), false);
+});
+
+test("Stop cancels the active job and every queued scan", async () => {
+  const f = fixture([]);
+  f.jobs.active = snapshot("libraryScan", "running", "1", 3);
+  f.orchestrator.backendDisconnected(true);
   await f.orchestrator.cancel();
-  await f.orchestrator.backendReady();
-  assert.equal(f.requests.length, 1);
-  assert.equal(f.orchestrator.indexing, false);
-  assert.equal(storage.size, 0);
+  assert.equal(f.jobs.cancelledAll, 1);
+  assert.equal(f.orchestrator.restartingIndex, false);
 });
-
-test("ordinary crashes do not automatically replay indexing", async () => {
-  const f = fixture([snapshot("libraryIndex", "running")]);
-  await f.orchestrator.startLibraryIndex("C:/photos");
-  assert.equal(f.disconnect(false), false);
-  await f.orchestrator.backendReady();
-  assert.equal(f.requests.length, 1);
-});
-
-test("repeated provider restarts cannot create an indexing retry loop", async () => {
-  const f = fixture([snapshot("libraryIndex", "running"), snapshot("libraryIndex", "running")]);
-  await f.orchestrator.startLibraryIndex("C:/photos");
-  f.disconnect();
-  await f.orchestrator.backendReady();
-  assert.equal(f.disconnect(), false);
-  await f.orchestrator.backendReady();
-  assert.equal(f.requests.length, 2);
-});
-
-test("normal updates preserve cached failures; retry-failed is explicit", async () => {
-  const f = fixture([snapshot("libraryIndex", "completed"), snapshot("libraryIndex", "completed")]);
-  await f.orchestrator.startLibraryIndex("C:/photos");
-  await f.orchestrator.startLibraryIndex("C:/photos", true);
-  assert.equal(
-    (f.requests[0] as Extract<JobRequest, { type: "libraryIndex" }>).params.scan?.retryFailed,
-    undefined,
-  );
-  assert.equal(
-    (f.requests[1] as Extract<JobRequest, { type: "libraryIndex" }>).params.scan?.retryFailed,
-    true,
-  );
-  assert.equal(storage.size, 0);
-});
-
-test("Stop before the start response cancels the accepted backend job", async () => {
-  const { JobTracker } = (await vite.ssrLoadModule(
-    "/src/renderer/src/lib/job-tracker.svelte.ts",
-  )) as { JobTracker: new (...args: unknown[]) => JobTracker };
-  let accept!: (job: JobSnapshot) => void;
-  const cancelled: string[] = [];
-  globalThis.window = {
-    nicegal: {
-      backend: {
-        startJob: () =>
-          new Promise<JobSnapshot>((resolve) => {
-            accept = resolve;
-          }),
-        subscribeJob: () => () => {},
-        cancelJob: async (id: string) => {
-          cancelled.push(id);
-          return snapshot("libraryIndex", "cancelled", id);
-        },
-      },
-    },
-  } as unknown as Window & typeof globalThis;
-  const tracker = new JobTracker(
-    () => {},
-    () => {},
-    () => {},
-  );
-  const start = tracker.start({ type: "libraryIndex", params: { root: "C:/photos" } });
-  await tracker.cancel();
-  accept(snapshot("libraryIndex", "running", "accepted"));
-  await start;
-  assert.deepEqual(cancelled, ["accepted"]);
-  assert.equal(tracker.running, false);
-  tracker.dispose();
-});
-
-for (const rejected of [false, true]) {
-  test(`old cancellation ${rejected ? "failure" : "response"} cannot affect a restarted job`, async () => {
-    const { JobTracker } = await vite.ssrLoadModule("/src/renderer/src/lib/job-tracker.svelte.ts");
-    const reply = Promise.withResolvers<JobSnapshot>();
-    const listeners: Array<(job: JobSnapshot) => void> = [];
-    const connections: Array<(error: string | null) => void> = [];
-    globalThis.window = {
-      nicegal: {
-        backend: {
-          startJob: async () => snapshot("libraryIndex", "running"),
-          subscribeJob: (
-            _id: string,
-            listener: (job: JobSnapshot) => void,
-            connection: (error: string | null) => void,
-          ) => {
-            listeners.push(listener);
-            connections.push(connection);
-            return () => {};
-          },
-          cancelJob: () => reply.promise,
-        },
-      },
-    } as unknown as Window & typeof globalThis;
-    const tracker = new JobTracker(
-      () => {},
-      () => {},
-      () => {},
-    );
-    await tracker.start({ type: "libraryIndex", params: { root: "C:/photos" } });
-    const cancelling = tracker.cancel();
-    tracker.backendDisconnected(true);
-    await tracker.start({ type: "libraryIndex", params: { root: "C:/photos" } });
-    listeners[0](snapshot("libraryIndex", "cancelled"));
-    connections[0]("old connection failed");
-    if (rejected) reply.reject(new Error("old cancellation failed"));
-    else reply.resolve(snapshot("libraryIndex", "cancelled"));
-    await cancelling;
-    assert.equal(tracker.running, true);
-    assert.equal(tracker.active?.status, "running");
-    assert.equal(tracker.error, "");
-    assert.equal(tracker.connectionError, null);
-    listeners[1](snapshot("libraryIndex", "cancelled"));
-    assert.equal(tracker.running, false, "current subscription still works");
-    tracker.dispose();
-  });
-}
 
 for (const loaded of [null, { executionProvider: "cpu" }]) {
   test(`Stop during model-state lookup prevents preparation (loaded=${Boolean(loaded)})`, async () => {
@@ -261,8 +167,214 @@ for (const loaded of [null, { executionProvider: "cpu" }]) {
   });
 }
 
+for (const status of ["completed", "failed", "cancelled"] as const) {
+  test(`immediately ${status} thumbnail job clears the resume record`, async () => {
+    const f = fixture([snapshot("thumbnailGenerate", status)]);
+    const request = { type: "thumbnailGenerate", params: { libraryId: 3 } } as const;
+    storage.set("nicegal.jobResume.v1", JSON.stringify({ libraryId: 3, request }));
+    await f.orchestrator.startResumableJob(request);
+    assert.equal(storage.has("nicegal.jobResume.v1"), false);
+  });
+}
+
+test("running thumbnail job remains resumable until its terminal snapshot", async () => {
+  const f = fixture([snapshot("thumbnailGenerate", "running")]);
+  await f.orchestrator.startResumableJob({ type: "thumbnailGenerate", params: { libraryId: 3 } });
+  assert.equal(storage.has("nicegal.jobResume.v1"), true);
+  f.orchestrator.handleTerminalJob(snapshot("thumbnailGenerate", "completed"));
+  assert.equal(storage.has("nicegal.jobResume.v1"), false);
+});
+
+test("an interrupted thumbnail job resumes only for its own library", async () => {
+  const f = fixture([snapshot("thumbnailGenerate", "running")]);
+  const request = { type: "thumbnailGenerate", params: { libraryId: 3 } } as const;
+  storage.set("nicegal.jobResume.v1", JSON.stringify({ libraryId: 3, request }));
+  await f.orchestrator.resumeInterruptedJob(4);
+  assert.deepEqual(f.requests, []);
+  await f.orchestrator.resumeInterruptedJob(3);
+  assert.deepEqual(f.requests, [request]);
+});
+
+function trackerBackend(overrides: Record<string, unknown>): void {
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        subscribeJob: () => () => {},
+        cancelJob: async (id: string) => snapshot("libraryScan", "cancelled", id),
+        listJobs: async (): Promise<JobListResponse> => ({ activeJobId: null, jobs: [] }),
+        ...overrides,
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+}
+
+test("a scan requested while a job runs is listed as queued, not followed", async () => {
+  const started: JobSnapshot[] = [
+    snapshot("thumbnailGenerate", "running", "1", 3),
+    snapshot("libraryScan", "queued", "2", 4),
+  ];
+  trackerBackend({ startJob: async () => started.shift() });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  await tracker.start({ type: "thumbnailGenerate", params: { libraryId: 3 } });
+  assert.equal(
+    await tracker.start({ type: "thumbnailGenerate", params: { libraryId: 3 } }),
+    null,
+    "other job types still wait for the slot",
+  );
+  await tracker.start({ type: "libraryScan", params: { libraryId: 4 } });
+  assert.equal(tracker.active?.jobId, "1");
+  assert.equal(tracker.libraryId, 3);
+  assert.equal(tracker.scanState(4), "queued");
+  assert.equal(tracker.scanState(3), null);
+  tracker.dispose();
+});
+
+test("sync follows a scan the backend started and refreshes the queue", async () => {
+  let list: JobListResponse = {
+    activeJobId: "7",
+    jobs: [snapshot("libraryScan", "running", "7", 3), snapshot("libraryScan", "queued", "8", 4)],
+  };
+  const subscribed: string[] = [];
+  trackerBackend({
+    listJobs: async () => list,
+    subscribeJob: (id: string) => {
+      subscribed.push(id);
+      return () => {};
+    },
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  await tracker.sync();
+  assert.equal(tracker.scanState(3), "scanning");
+  assert.equal(tracker.scanState(4), "queued");
+  assert.deepEqual(subscribed, ["7"]);
+  await tracker.sync();
+  assert.deepEqual(subscribed, ["7"], "an already followed job is not resubscribed");
+  list = { activeJobId: null, jobs: [snapshot("libraryScan", "completed", "7", 3)] };
+  await tracker.sync();
+  assert.equal(tracker.scanState(4), null);
+  tracker.dispose();
+});
+
+test("leaving a library cancels its running and queued scans only", async () => {
+  const cancelled: string[] = [];
+  trackerBackend({
+    listJobs: async (): Promise<JobListResponse> => ({
+      activeJobId: "1",
+      jobs: [snapshot("libraryScan", "running", "1", 3), snapshot("libraryScan", "queued", "2", 4)],
+    }),
+    cancelJob: async (id: string) => {
+      cancelled.push(id);
+      return snapshot("libraryScan", "cancelled", id);
+    },
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  await tracker.sync();
+  await tracker.cancelLibraryScans(4);
+  assert.deepEqual(cancelled, ["2"], "the other library's running scan continues");
+  assert.equal(tracker.scanState(4), null);
+  await tracker.cancelLibraryScans(3);
+  assert.deepEqual(cancelled, ["2", "1"]);
+  tracker.dispose();
+});
+
+test("Stop before the start response cancels the accepted backend job", async () => {
+  let accept!: (job: JobSnapshot) => void;
+  const cancelled: string[] = [];
+  trackerBackend({
+    startJob: () =>
+      new Promise<JobSnapshot>((resolve) => {
+        accept = resolve;
+      }),
+    cancelJob: async (id: string) => {
+      cancelled.push(id);
+      return snapshot("libraryScan", "cancelled", id);
+    },
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  const start = tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+  await tracker.cancel();
+  accept(snapshot("libraryScan", "running", "accepted", 3));
+  await start;
+  assert.deepEqual(cancelled, ["accepted"]);
+  assert.equal(tracker.running, false);
+  tracker.dispose();
+});
+
+for (const rejected of [false, true]) {
+  test(`old cancellation ${rejected ? "failure" : "response"} cannot affect a restarted job`, async () => {
+    const reply = Promise.withResolvers<JobSnapshot>();
+    const listeners: Array<(job: JobSnapshot) => void> = [];
+    const connections: Array<(error: string | null) => void> = [];
+    trackerBackend({
+      startJob: async () => snapshot("libraryScan", "running", "1", 3),
+      subscribeJob: (
+        _id: string,
+        listener: (job: JobSnapshot) => void,
+        connection: (error: string | null) => void,
+      ) => {
+        listeners.push(listener);
+        connections.push(connection);
+        return () => {};
+      },
+      cancelJob: () => reply.promise,
+    });
+    const tracker = new Tracker(
+      () => {},
+      () => {},
+      () => {},
+    );
+    await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+    const cancelling = tracker.cancel();
+    tracker.backendDisconnected(true);
+    await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+    listeners[0](snapshot("libraryScan", "cancelled"));
+    connections[0]("old connection failed");
+    if (rejected) reply.reject(new Error("old cancellation failed"));
+    else reply.resolve(snapshot("libraryScan", "cancelled"));
+    await cancelling;
+    assert.equal(tracker.running, true);
+    assert.equal(tracker.active?.status, "running");
+    assert.equal(tracker.error, "");
+    assert.equal(tracker.connectionError, null);
+    listeners[1](snapshot("libraryScan", "cancelled"));
+    assert.equal(tracker.running, false, "current subscription still works");
+    tracker.dispose();
+  });
+}
+
+function catalogBackend(overrides: Record<string, unknown>): void {
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        getBackendStatus: async () => ({ ready: true, error: null }),
+        getCatalogRevision: async () => "1",
+        listAssets: async () => [],
+        listLibraries: async () => [],
+        getImageEmbeddingCoverage: async () => ({ total: 0, indexed: 0 }),
+        ...overrides,
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+}
+
 test("catalog polling detects an insertion during a row load", async () => {
-  const { CatalogController } = await vite.ssrLoadModule("/src/renderer/src/lib/catalog.svelte.ts");
+  storage.clear();
   let revision = "1";
   let lists = 0;
   const asset = {
@@ -274,28 +386,19 @@ test("catalog polling detects an insertion during a row load", async () => {
     width: 1,
     height: 1,
   };
-  globalThis.window = {
-    nicegal: {
-      backend: {
-        getCatalogRevision: async () => revision,
-        listAssets: async () => {
-          lists++;
-          if (lists === 1) {
-            revision = "2"; // This insertion happened after the first list's snapshot.
-            return [];
-          }
-          return [asset];
-        },
-        getImageEmbeddingCoverage: async () => ({}),
-      },
+  catalogBackend({
+    getCatalogRevision: async () => revision,
+    listAssets: async () => {
+      lists++;
+      if (lists === 1) {
+        revision = "2"; // This insertion happened after the first list's snapshot.
+        return [];
+      }
+      return [asset];
     },
-  } as unknown as Window & typeof globalThis;
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: { visibilityState: "visible" },
   });
   const catalog = new CatalogController();
-  catalog.selectedRoot = "C:/photos";
+  catalog.selectedId = 1;
   catalog.backendStatus = { ready: true, error: null };
   await catalog.refresh();
   assert.equal(catalog.items.length, 0);
@@ -307,94 +410,27 @@ test("catalog polling detects an insertion during a row load", async () => {
   catalog.dispose();
 });
 
-for (const selection of [
-  { ocr: true, image: false },
-  { ocr: false, image: true },
-]) {
-  test(`index selection ${JSON.stringify(selection)} survives model preparation and fallback`, async () => {
-    const f = fixture([snapshot("ocrModelLoad", "completed"), snapshot("libraryIndex", "running")]);
-    await f.orchestrator.startLibraryIndex("C:/photos", true, selection);
-    await flush();
-    assert.equal(f.disconnect(), true);
-    await f.orchestrator.backendReady();
-    assert.equal(f.requests.length, 2);
-    for (const request of f.requests) {
-      assert.equal(request.type, "libraryIndex");
-      const params = (request as Extract<JobRequest, { type: "libraryIndex" }>).params;
-      assert.equal(params.ocr, selection.ocr);
-      assert.equal(params.image, selection.image);
-      assert.equal(params.scan?.retryFailed, true);
-    }
-  });
-  test(`index selection ${JSON.stringify(selection)} survives app restart`, async () => {
-    const f = fixture([snapshot("libraryIndex", "running"), snapshot("libraryIndex", "running")]);
-    await f.orchestrator.startLibraryIndex("C:/other-library", false, selection);
-    f.disconnect(false);
-    await f.orchestrator.resumeInterruptedJob();
-    assert.equal(f.requests.length, 2);
-    const params = (f.requests[1] as Extract<JobRequest, { type: "libraryIndex" }>).params;
-    assert.equal(params.ocr, selection.ocr);
-    assert.equal(params.image, selection.image);
-  });
-}
-
-test("no selected search types cannot start a job", async () => {
-  const f = fixture([]);
-  await f.orchestrator.startLibraryIndex("C:/photos", false, { ocr: false, image: false });
-  assert.equal(f.requests.length, 0);
-  assert.equal(f.orchestrator.indexing, false);
-});
-
-for (const status of ["completed", "failed", "cancelled"] as const) {
-  test(`immediately ${status} thumbnail job clears the resume record`, async () => {
-    const f = fixture([snapshot("thumbnailGenerate", status)]);
-    const request = { type: "thumbnailGenerate", params: { root: "C:/photos" } } as const;
-    storage.set("nicegal.jobResume.v1", JSON.stringify({ root: "C:/photos", request }));
-    await f.orchestrator.startResumableJob("C:/photos", request);
-    assert.equal(storage.has("nicegal.jobResume.v1"), false);
-  });
-}
-
-test("running thumbnail job remains resumable until its terminal snapshot", async () => {
-  const f = fixture([snapshot("thumbnailGenerate", "running")]);
-  await f.orchestrator.startResumableJob("C:/photos", {
-    type: "thumbnailGenerate",
-    params: { root: "C:/photos" },
-  });
-  assert.equal(storage.has("nicegal.jobResume.v1"), true);
-  f.orchestrator.handleTerminalJob(snapshot("thumbnailGenerate", "completed"));
-  assert.equal(storage.has("nicegal.jobResume.v1"), false);
-});
-
 test("automatic catalog refresh and coverage polling remain available", async () => {
-  const { CatalogController } = await vite.ssrLoadModule("/src/renderer/src/lib/catalog.svelte.ts");
+  storage.clear();
   let lists = 0;
   let revisions = 0;
   let coverage = 0;
-  globalThis.window = {
-    nicegal: {
-      backend: {
-        listAssets: async () => {
-          lists++;
-          return [];
-        },
-        getCatalogRevision: async () => {
-          revisions++;
-          return "1";
-        },
-        getImageEmbeddingCoverage: async () => {
-          coverage++;
-          return { total: 0, indexed: 0 };
-        },
-      },
+  catalogBackend({
+    listAssets: async () => {
+      lists++;
+      return [];
     },
-  } as unknown as Window & typeof globalThis;
-  Object.defineProperty(globalThis, "document", {
-    configurable: true,
-    value: { visibilityState: "visible" },
+    getCatalogRevision: async () => {
+      revisions++;
+      return "1";
+    },
+    getImageEmbeddingCoverage: async () => {
+      coverage++;
+      return { total: 0, indexed: 0 };
+    },
   });
   const catalog = new CatalogController();
-  catalog.selectedRoot = "C:/photos";
+  catalog.selectedId = 1;
   catalog.backendStatus = { ready: true, error: null };
   catalog.scheduleRefresh(0);
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -407,5 +443,117 @@ test("automatic catalog refresh and coverage polling remain available", async ()
   assert.equal(lists, 3);
   await catalog.pollRevision();
   assert.equal(coverage, 2);
+  catalog.dispose();
+});
+
+test("v2 roots import once as one-folder libraries with their view state", async () => {
+  storage.clear();
+  storage.set(
+    "nicegal.libraries.v2",
+    JSON.stringify({
+      selectedRoot: "D:/Phone",
+      libraries: [
+        { root: "C:/Pictures", displayName: "Pictures", query: "cat", scrollTop: 40 },
+        { root: "D:/Phone", displayName: "Holiday phone", query: "", scrollTop: 0 },
+      ],
+    }),
+  );
+  storage.set(
+    "nicegal.settings.v1",
+    JSON.stringify({ libraryIndexing: { "d:/phone": { ocr: true, image: false } } }),
+  );
+  const created: CreateLibraryRequest[] = [];
+  const backend: Library[] = [];
+  catalogBackend({
+    createLibrary: async (request: CreateLibraryRequest) => {
+      created.push(request);
+      const existing = backend.find((_, index) => created[index]?.importKey === request.importKey);
+      if (existing) return existing;
+      const next = library(backend.length + 1, request.include[0]);
+      backend.push(next);
+      return next;
+    },
+    listLibraries: async () => backend,
+  });
+  const catalog = new CatalogController();
+  await catalog.initialize();
+  assert.equal(created.length, 2);
+  assert.ok(created.every((request) => request.importKey?.startsWith("nicegal.libraries.v2:")));
+  assert.deepEqual(
+    catalog.libraries.map(({ id, displayName }) => ({
+      id,
+      displayName,
+      ...catalog.viewState(id),
+    })),
+    [
+      { id: 1, displayName: "Pictures", name: null, query: "cat", scrollTop: 40 },
+      { id: 2, displayName: "Holiday phone", name: "Holiday phone", query: "", scrollTop: 0 },
+    ],
+  );
+  assert.equal(catalog.selectedId, 2);
+  assert.ok(storage.has("nicegal.libraries.v2"), "v2 stays as rollback material");
+  catalog.dispose();
+
+  const again = new CatalogController();
+  await again.initialize();
+  assert.equal(created.length, 2, "a completed import is not repeated");
+  assert.equal(again.selectedId, 2);
+  again.dispose();
+});
+
+test("a failed import is retried with the same import key", async () => {
+  storage.clear();
+  storage.set(
+    "nicegal.libraries.v2",
+    JSON.stringify({ selectedRoot: "C:/Pictures", libraries: [{ root: "C:/Pictures" }] }),
+  );
+  const keys: string[] = [];
+  let fail = true;
+  catalogBackend({
+    createLibrary: async (request: CreateLibraryRequest) => {
+      keys.push(request.importKey ?? "");
+      if (fail) throw new Error("backend busy");
+      return library(1, "C:/Pictures");
+    },
+    listLibraries: async () => (fail ? [] : [library(1, "C:/Pictures")]),
+  });
+  const first = new CatalogController();
+  await first.initialize();
+  assert.equal(first.libraries.length, 0);
+  first.dispose();
+  fail = false;
+  const second = new CatalogController();
+  await second.initialize();
+  assert.equal(second.selectedId, 1);
+  assert.equal(keys.length, 2);
+  assert.equal(keys[0], keys[1]);
+  second.dispose();
+});
+
+test("repeated reloads during a slow catalog load coalesce into one follow-up", async () => {
+  storage.clear();
+  const pending: Array<() => void> = [];
+  let lists = 0;
+  catalogBackend({
+    listAssets: () =>
+      new Promise((resolve) => {
+        lists++;
+        pending.push(() => resolve([]));
+      }),
+  });
+  const catalog = new CatalogController();
+  catalog.selectedId = 1;
+  catalog.backendStatus = { ready: true, error: null };
+  const first = catalog.refresh();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  for (let request = 0; request < 10; request++) void catalog.refresh();
+  assert.equal(lists, 1, "requests during a load do not restart it");
+  pending.shift()!();
+  await first;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(lists, 2, "one follow-up load covers every request made during the first");
+  pending.shift()!();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(catalog.loading, false);
   catalog.dispose();
 });

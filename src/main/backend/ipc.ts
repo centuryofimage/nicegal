@@ -1,15 +1,17 @@
 import { type WebContents } from "electron";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute } from "node:path";
 
 import type {
   BackendStatus,
-  CatalogSyncJobRequest,
+  CreateLibraryRequest,
   EnsureThumbnailsRequest,
   ExecutionProviderId,
   JobRequest,
   JobSnapshot,
+  LibraryDefinition,
+  LibraryId,
   LibraryPurgeJobRequest,
-  LibraryIndexJobRequest,
+  LibraryScanJobRequest,
   OcrModelLoadTarget,
   SearchRequest,
   ThumbnailJobRequest,
@@ -123,13 +125,40 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       return changeRuntime((client) => client.setExecutionProvider(provider));
     },
   );
+  handleTrustedIpc(IPC_CHANNELS.backend.listLibraries, context.isTrustedSender, () =>
+    requireBackend().listLibraries(),
+  );
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.createLibrary,
+    context.isTrustedSender,
+    (_event, value: unknown) => requireBackend().createLibrary(validateCreateLibrary(value)),
+  );
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.updateLibrary,
+    context.isTrustedSender,
+    (_event, libraryId: unknown, definition: unknown) =>
+      requireBackend().updateLibrary(
+        validateLibraryId(libraryId),
+        validateLibraryDefinition(definition),
+      ),
+  );
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.deleteLibrary,
+    context.isTrustedSender,
+    (_event, libraryId: unknown) => requireBackend().deleteLibrary(validateLibraryId(libraryId)),
+  );
   handleTrustedIpc(
     IPC_CHANNELS.backend.listAssets,
     context.isTrustedSender,
     (_event, value: unknown) => {
-      const { root, timeline } = validateListAssetsRequest(value);
-      return requireBackend().listAssets(root, timeline);
+      const { libraryId, timeline } = validateListAssetsRequest(value);
+      return requireBackend().listAssets(libraryId, timeline);
     },
+  );
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.listFolders,
+    context.isTrustedSender,
+    (_event, value: unknown) => requireBackend().listFolders(validateLibraryId(value)),
   );
   handleTrustedIpc(
     IPC_CHANNELS.backend.assetMetadata,
@@ -151,20 +180,20 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleTrustedIpc(
     IPC_CHANNELS.backend.countAssets,
     context.isTrustedSender,
-    (_event, value: unknown) => requireBackend().countAssets(validateAbsoluteRoot(value)),
+    (_event, value: unknown) => requireBackend().countAssets(validateLibraryId(value)),
   );
   handleTrustedIpc(
     IPC_CHANNELS.backend.getImageEmbeddingCoverage,
     context.isTrustedSender,
     (_event, value: unknown) => {
-      return requireBackend().getImageEmbeddingCoverage(validateAbsoluteRoot(value));
+      return requireBackend().getImageEmbeddingCoverage(validateLibraryId(value));
     },
   );
   handleTrustedIpc(
     IPC_CHANNELS.backend.getTextEmbeddingCoverage,
     context.isTrustedSender,
     (_event, value: unknown) => {
-      return requireBackend().getTextEmbeddingCoverage(validateAbsoluteRoot(value));
+      return requireBackend().getTextEmbeddingCoverage(validateLibraryId(value));
     },
   );
   handleTrustedIpc(IPC_CHANNELS.backend.getOcrModels, context.isTrustedSender, () =>
@@ -237,6 +266,18 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       }
     },
   );
+  handleTrustedIpc(IPC_CHANNELS.backend.listJobs, context.isTrustedSender, () =>
+    requireBackend().listJobs(),
+  );
+  // Scan options are not a runtime restart: the backend saves them for later scans.
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.setIndexVideos,
+    context.isTrustedSender,
+    (_event, value: unknown) => {
+      if (typeof value !== "boolean") throw new TypeError("Invalid video indexing choice");
+      return requireBackend().setIndexVideos(value);
+    },
+  );
   handleTrustedIpc(IPC_CHANNELS.backend.cancelJob, context.isTrustedSender, (_event, value) => {
     return requireBackend().cancelJob(validateJobId(value));
   });
@@ -298,15 +339,57 @@ function validateTimeline(value: unknown): Timeline {
   return value;
 }
 
-function validateListAssetsRequest(value: unknown): { root: string; timeline: Timeline } {
+function validateListAssetsRequest(value: unknown): {
+  libraryId: LibraryId;
+  timeline: Timeline;
+} {
   if (!value || typeof value !== "object") throw new TypeError("Invalid asset listing request");
-  const request = value as { root?: unknown; timeline?: unknown };
-  return { root: validateAbsoluteRoot(request.root), timeline: validateTimeline(request.timeline) };
+  const request = value as { libraryId?: unknown; timeline?: unknown };
+  return {
+    libraryId: validateLibraryId(request.libraryId),
+    timeline: validateTimeline(request.timeline),
+  };
 }
 
-function validateAbsoluteRoot(value: unknown): string {
-  if (typeof value !== "string" || !isAbsolute(value)) throw new TypeError("Invalid library root");
-  return resolve(value);
+function validateLibraryId(value: unknown): LibraryId {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1)
+    throw new TypeError("Invalid library ID");
+  return value;
+}
+
+function validateFolderList(value: unknown, allowEmpty: boolean): string[] {
+  if (
+    !Array.isArray(value) ||
+    (!allowEmpty && value.length === 0) ||
+    value.length > 1_000 ||
+    !value.every((path) => typeof path === "string" && path.length <= 32_767 && isAbsolute(path))
+  )
+    throw new TypeError("Library folders must be absolute paths");
+  return value as string[];
+}
+
+function validateLibraryDefinition(value: unknown): LibraryDefinition {
+  if (!isRecord(value) || !hasOnlyFields(value, ["include", "exclude", "ocr", "image"]))
+    throw new TypeError("Invalid library definition");
+  if (typeof value.ocr !== "boolean" || typeof value.image !== "boolean")
+    throw new TypeError("Invalid library search options");
+  return {
+    include: validateFolderList(value.include, false),
+    exclude: validateFolderList(value.exclude, true),
+    ocr: value.ocr,
+    image: value.image,
+  };
+}
+
+function validateCreateLibrary(value: unknown): CreateLibraryRequest {
+  if (!isRecord(value)) throw new TypeError("Invalid library definition");
+  const { importKey, ...definition } = value;
+  if (importKey !== undefined && (typeof importKey !== "string" || importKey.length > 32_800))
+    throw new TypeError("Invalid library import key");
+  return {
+    ...validateLibraryDefinition(definition),
+    ...(importKey === undefined ? {} : { importKey }),
+  };
 }
 
 function validateExecutionProvider(value: unknown): ExecutionProviderId {
@@ -336,6 +419,7 @@ function validateSearchRequest(value: unknown): SearchRequest {
       (!Number.isSafeInteger(request.searchSession) || request.searchSession < 0)) ||
     (request.searchLane !== undefined &&
       request.searchLane !== "literal" &&
+      request.searchLane !== "files" &&
       request.searchLane !== "meaning" &&
       request.searchLane !== "visual")
   ) {
@@ -344,13 +428,20 @@ function validateSearchRequest(value: unknown): SearchRequest {
   if (
     typeof request.query !== "string" ||
     request.query.length > 10_000 ||
-    (request.type !== "simple" &&
-      request.type !== "match" &&
-      request.type !== "glob" &&
+    (request.type !== "ocrSimple" &&
+      request.type !== "ocrMatch" &&
+      request.type !== "ocrGlob" &&
+      request.type !== "name" &&
+      request.type !== "path" &&
       request.type !== "vector" &&
       request.type !== "image") ||
-    typeof request.root !== "string" ||
-    !isAbsolute(request.root) ||
+    typeof request.libraryId !== "number" ||
+    !Number.isSafeInteger(request.libraryId) ||
+    request.libraryId < 1 ||
+    (request.folder !== undefined &&
+      (typeof request.folder !== "string" || request.folder.length > 4096)) ||
+    (request.pathContains !== undefined &&
+      (typeof request.pathContains !== "string" || request.pathContains.length > 4096)) ||
     (request.limit !== undefined &&
       (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > 250_000))
   ) {
@@ -453,31 +544,31 @@ function validateJobRequest(value: unknown): JobRequest {
     requireJobParams(value, [], "Invalid model preparation job");
     return { type: "modelPrepare", params: {} };
   }
-  if (request.type === "libraryIndex") {
+  if (request.type === "libraryScan") {
     const params = requireJobParams(
       value,
-      ["root", "embed", "ocr", "image", "indexVideos", "scan"],
-      "Invalid library index job",
+      ["libraryId", "scanMode", "pendingOnly", "retryFailed", "debugLimit"],
+      "Invalid library scan job",
     );
-    for (const key of ["embed", "ocr", "image", "indexVideos"] as const) {
-      if (params[key] !== undefined && typeof params[key] !== "boolean") {
-        throw new TypeError("Invalid index job");
-      }
+    if (
+      (params.scanMode !== undefined && params.scanMode !== "full" && params.scanMode !== "fast") ||
+      (params.pendingOnly !== undefined && typeof params.pendingOnly !== "boolean") ||
+      (params.retryFailed !== undefined && typeof params.retryFailed !== "boolean") ||
+      (params.debugLimit !== undefined &&
+        (typeof params.debugLimit !== "number" ||
+          !Number.isSafeInteger(params.debugLimit) ||
+          params.debugLimit <= 0))
+    ) {
+      throw new TypeError("Invalid library scan job");
     }
-    if (params.ocr === false && (params.image ?? params.embed ?? true) === false) {
-      throw new TypeError("Select text recognition or image search");
-    }
-    const root = validateAbsoluteRoot(params.root);
-    const scan = validateLibraryIndexScan(params.scan);
-    const job: LibraryIndexJobRequest = {
-      type: "libraryIndex",
+    const job: LibraryScanJobRequest = {
+      type: "libraryScan",
       params: {
-        root,
-        ...(params.embed === undefined ? {} : { embed: params.embed as boolean }),
-        ...(params.ocr === undefined ? {} : { ocr: params.ocr as boolean }),
-        ...(params.image === undefined ? {} : { image: params.image as boolean }),
-        ...(params.indexVideos === undefined ? {} : { indexVideos: params.indexVideos as boolean }),
-        ...(scan === undefined ? {} : { scan }),
+        libraryId: validateLibraryId(params.libraryId),
+        ...(params.scanMode === undefined ? {} : { scanMode: params.scanMode as "full" | "fast" }),
+        ...(params.pendingOnly === undefined ? {} : { pendingOnly: params.pendingOnly as boolean }),
+        ...(params.retryFailed === undefined ? {} : { retryFailed: params.retryFailed as boolean }),
+        ...(params.debugLimit === undefined ? {} : { debugLimit: params.debugLimit as number }),
       },
     };
     return job;
@@ -496,52 +587,32 @@ function validateJobRequest(value: unknown): JobRequest {
       },
     };
   }
-  if (request.type === "catalogSync") {
+  if (request.type === "pruneMissing") {
     const params = requireJobParams(
       value,
-      ["root", "scan", "image", "indexVideos"],
-      "Invalid catalog sync job",
+      ["libraryId", "dryRun"],
+      "Invalid missing-file prune job",
     );
-    if (
-      (params.scan !== undefined && !isCatalogSyncScan(params.scan)) ||
-      (params.image !== undefined && typeof params.image !== "boolean") ||
-      (params.indexVideos !== undefined && typeof params.indexVideos !== "boolean")
-    ) {
-      throw new TypeError("Invalid catalog sync job");
-    }
-    const job: CatalogSyncJobRequest = {
-      type: "catalogSync",
-      params: {
-        root: validateAbsoluteRoot(params.root),
-        ...(params.image === undefined ? {} : { image: params.image as boolean }),
-        ...(params.indexVideos === undefined ? {} : { indexVideos: params.indexVideos as boolean }),
-        ...(params.scan === undefined ? {} : { scan: params.scan }),
-      },
-    };
-    return job;
-  }
-  if (request.type === "pruneMissing") {
-    const params = requireJobParams(value, ["root", "dryRun"], "Invalid missing-file prune job");
     if (typeof params.dryRun !== "boolean") {
       throw new TypeError("Invalid missing-file prune job");
     }
     return {
       type: "pruneMissing",
-      params: { root: validateAbsoluteRoot(params.root), dryRun: params.dryRun },
+      params: { libraryId: validateLibraryId(params.libraryId), dryRun: params.dryRun },
     };
   }
   if (request.type === "libraryPurge") {
-    const params = requireJobParams(value, ["root"], "Invalid library purge job");
+    const params = requireJobParams(value, ["libraryId"], "Invalid library purge job");
     const job: LibraryPurgeJobRequest = {
       type: "libraryPurge",
-      params: { root: validateAbsoluteRoot(params.root) },
+      params: { libraryId: validateLibraryId(params.libraryId) },
     };
     return job;
   }
   if (request.type === "thumbnailGenerate") {
     const params = requireJobParams(
       value,
-      ["root", "buckets", "force", "sweepStale", "timeline", "range"],
+      ["libraryId", "buckets", "force", "sweepStale", "timeline", "range"],
       "Invalid thumbnail generation job",
     );
     if (!isThumbnailGenerateParams(params)) throw new TypeError("Invalid thumbnail generation job");
@@ -549,7 +620,7 @@ function validateJobRequest(value: unknown): JobRequest {
       type: "thumbnailGenerate",
       params: {
         ...params,
-        root: validateAbsoluteRoot(params.root),
+        libraryId: validateLibraryId(params.libraryId),
       },
     };
     return job;
@@ -563,79 +634,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasOnlyFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
   return Object.keys(value).every((key) => fields.includes(key));
-}
-
-function isCatalogSyncScan(
-  value: unknown,
-): value is NonNullable<CatalogSyncJobRequest["params"]["scan"]> {
-  if (!isRecord(value) || !hasOnlyFields(value, ["recursive", "exclude", "debugLimit"]))
-    return false;
-  return (
-    (value.recursive === undefined || typeof value.recursive === "boolean") &&
-    (value.exclude === undefined ||
-      (Array.isArray(value.exclude) &&
-        value.exclude.every((pattern) => typeof pattern === "string"))) &&
-    (value.debugLimit === undefined ||
-      (typeof value.debugLimit === "number" &&
-        Number.isSafeInteger(value.debugLimit) &&
-        value.debugLimit > 0))
-  );
-}
-
-function validateLibraryIndexScan(value: unknown): LibraryIndexJobRequest["params"]["scan"] {
-  if (value === undefined) return undefined;
-  if (
-    !isRecord(value) ||
-    !hasOnlyFields(value, [
-      "recursive",
-      "exclude",
-      "force",
-      "retryFailed",
-      "cleanup",
-      "maxDimensions",
-      "debugLimit",
-    ]) ||
-    (value.recursive !== undefined && typeof value.recursive !== "boolean") ||
-    (value.exclude !== undefined &&
-      (!Array.isArray(value.exclude) ||
-        !value.exclude.every((pattern) => typeof pattern === "string"))) ||
-    (value.force !== undefined && typeof value.force !== "boolean") ||
-    (value.retryFailed !== undefined && typeof value.retryFailed !== "boolean") ||
-    // `cleanup` may only ever be omitted or explicitly `false` — the backend does not accept
-    // requesting cleanup from the renderer.
-    (value.cleanup !== undefined && value.cleanup !== false) ||
-    (value.maxDimensions !== undefined && !isMaxDimensions(value.maxDimensions)) ||
-    (value.debugLimit !== undefined &&
-      (typeof value.debugLimit !== "number" ||
-        !Number.isSafeInteger(value.debugLimit) ||
-        value.debugLimit <= 0))
-  ) {
-    throw new TypeError("Invalid library index job");
-  }
-  return {
-    ...(value.recursive === undefined ? {} : { recursive: value.recursive as boolean }),
-    ...(value.exclude === undefined ? {} : { exclude: value.exclude as string[] }),
-    ...(value.force === undefined ? {} : { force: value.force as boolean }),
-    ...(value.retryFailed === undefined ? {} : { retryFailed: value.retryFailed as boolean }),
-    ...(value.cleanup === undefined ? {} : { cleanup: value.cleanup as false }),
-    ...(value.maxDimensions === undefined
-      ? {}
-      : { maxDimensions: value.maxDimensions as { width: number; height: number } }),
-    ...(value.debugLimit === undefined ? {} : { debugLimit: value.debugLimit as number }),
-  };
-}
-
-function isMaxDimensions(value: unknown): value is { width: number; height: number } {
-  return (
-    isRecord(value) &&
-    hasOnlyFields(value, ["width", "height"]) &&
-    typeof value.width === "number" &&
-    typeof value.height === "number" &&
-    Number.isFinite(value.width) &&
-    Number.isFinite(value.height) &&
-    value.width > 0 &&
-    value.height > 0
-  );
 }
 
 function validateOcrModelLoadTarget(value: unknown): OcrModelLoadTarget {
@@ -661,8 +659,7 @@ function validateOcrModelLoadTarget(value: unknown): OcrModelLoadTarget {
 function isThumbnailGenerateParams(value: unknown): value is ThumbnailJobRequest["params"] {
   if (
     !isRecord(value) ||
-    !hasOnlyFields(value, ["root", "buckets", "force", "sweepStale", "timeline", "range"]) ||
-    typeof value.root !== "string" ||
+    !hasOnlyFields(value, ["libraryId", "buckets", "force", "sweepStale", "timeline", "range"]) ||
     (value.buckets !== undefined &&
       (!Array.isArray(value.buckets) ||
         !value.buckets.every(

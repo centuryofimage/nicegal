@@ -98,7 +98,7 @@
     height: var(--statusbar-height);
     flex: none;
     align-items: center;
-    padding: 0 var(--space-4) 0 var(--space-10);
+    padding: 0 var(--space-4);
     border-top: 1px solid var(--border-subtle);
     background: var(--surface-1);
     color: var(--text-tertiary);

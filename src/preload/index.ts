@@ -3,12 +3,17 @@ import { contextBridge, ipcRenderer } from "electron";
 import type {
   BackendStatus,
   AssetMetadata,
+  CreateLibraryRequest,
+  Library,
+  LibraryDefinition,
+  LibraryId,
   TextEmbeddingCoverage,
   ImageEmbeddingCoverage,
   EnsureThumbnailsRequest,
   EnsureThumbnailsResponse,
   ExecutionProviderId,
   GalleryAsset,
+  JobListResponse,
   JobRequest,
   JobSnapshot,
   NativeBridge,
@@ -60,23 +65,38 @@ const backend: NicegalBridge["backend"] = {
   setExecutionProvider(executionProvider: ExecutionProviderId): Promise<RuntimeStatus> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.setExecutionProvider, executionProvider);
   },
-  listAssets(options: { root: string; timeline: Timeline }): Promise<GalleryAsset[]> {
+  listLibraries(): Promise<Library[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.listLibraries);
+  },
+  createLibrary(request: CreateLibraryRequest): Promise<Library> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.createLibrary, request);
+  },
+  updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.updateLibrary, libraryId, definition);
+  },
+  deleteLibrary(libraryId: LibraryId): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.deleteLibrary, libraryId);
+  },
+  listAssets(options: { libraryId: LibraryId; timeline: Timeline }): Promise<GalleryAsset[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.listAssets, options);
+  },
+  listFolders(libraryId: LibraryId): Promise<string[]> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.listFolders, libraryId);
   },
   getAssetMetadata(assetId: string): Promise<AssetMetadata> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.assetMetadata, assetId);
   },
-  countAssets(root: string): Promise<number> {
-    return ipcRenderer.invoke(IPC_CHANNELS.backend.countAssets, root);
+  countAssets(libraryId: LibraryId): Promise<number> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.countAssets, libraryId);
   },
   getCatalogRevision(): Promise<string> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.catalogRevision);
   },
-  getTextEmbeddingCoverage(root: string): Promise<TextEmbeddingCoverage> {
-    return ipcRenderer.invoke(IPC_CHANNELS.backend.getTextEmbeddingCoverage, root);
+  getTextEmbeddingCoverage(libraryId: LibraryId): Promise<TextEmbeddingCoverage> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.getTextEmbeddingCoverage, libraryId);
   },
-  getImageEmbeddingCoverage(root: string): Promise<ImageEmbeddingCoverage> {
-    return ipcRenderer.invoke(IPC_CHANNELS.backend.getImageEmbeddingCoverage, root);
+  getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.getImageEmbeddingCoverage, libraryId);
   },
   getOcrModels(): Promise<OcrModelsResponse> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.getOcrModels);
@@ -92,6 +112,12 @@ const backend: NicegalBridge["backend"] = {
   },
   startJob(request: JobRequest): Promise<JobSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.startJob, request);
+  },
+  listJobs(): Promise<JobListResponse> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.listJobs);
+  },
+  setIndexVideos(indexVideos: boolean): Promise<void> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.setIndexVideos, indexVideos);
   },
   cancelJob(jobId: string): Promise<JobSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.cancelJob, jobId);
@@ -149,8 +175,8 @@ const native: NativeBridge = {
   openLicenseInformation(): Promise<void> {
     return ipcRenderer.invoke(IPC_CHANNELS.native.openLicenseInformation);
   },
-  chooseDirectory(): Promise<string | null> {
-    return ipcRenderer.invoke(IPC_CHANNELS.native.chooseDirectory);
+  chooseDirectory(defaultPath?: string): Promise<string | null> {
+    return ipcRenderer.invoke(IPC_CHANNELS.native.chooseDirectory, defaultPath);
   },
   chooseVisualSearchImage(): Promise<ExternalVisualReference | null> {
     return ipcRenderer.invoke(IPC_CHANNELS.native.chooseVisualSearchImage);

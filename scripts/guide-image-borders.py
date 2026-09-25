@@ -28,21 +28,30 @@ def trim_border(image: Image.Image) -> Image.Image:
         _, y, color = min(candidates)
         return y, color
 
-    top, border = horizontal(range(10))
+    top, top_border = horizontal(range(10))
     bottom, bottom_border = horizontal(range(height - 10, height))
-    assert border == bottom_border, "Top and bottom borders differ; inspect the capture."
 
-    def vertical(columns: range) -> int:
-        matches = [x for x in columns if colors(image, (x, 0, x + 1, height))[border] / height >= 0.9]
-        assert matches, "No matching vertical border found; inspect the capture."
-        return matches[0]
+    def vertical(columns: range) -> tuple[int, tuple[int, int, int]]:
+        candidates = []
+        for x in columns:
+            color, count = colors(image, (x, 0, x + 1, height)).most_common(1)[0]
+            if count / height >= 0.9:
+                candidates.append((sum(color), x, color))
+        assert candidates, "No solid vertical border found; inspect the capture."
+        _, x, color = min(candidates)
+        return x, color
 
-    left = vertical(range(10))
-    right = vertical(range(width - 1, width - 11, -1))
+    left, left_border = vertical(range(10))
+    right, right_border = vertical(range(width - 1, width - 11, -1))
     cropped = image.crop((left, top, right + 1, bottom + 1))
     w, h = cropped.size
-    for edge in [(0, 0, w, 1), (0, h - 1, w, h), (0, 0, 1, h), (w - 1, 0, w, h)]:
-        assert set(colors(cropped, edge)) == {border}, "Crop does not have four complete borders."
+    for edge, border, length in [
+        ((0, 0, w, 1), top_border, w),
+        ((0, h - 1, w, h), bottom_border, w),
+        ((0, 0, 1, h), left_border, h),
+        ((w - 1, 0, w, h), right_border, h),
+    ]:
+        assert colors(cropped, edge)[border] / length >= 0.95, "Crop does not have four complete borders."
     return cropped
 
 

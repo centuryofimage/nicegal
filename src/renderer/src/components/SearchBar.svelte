@@ -1,8 +1,10 @@
 <script lang="ts">
+  import CalendarDays from "@lucide/svelte/icons/calendar-days";
   import Check from "@lucide/svelte/icons/check";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
   import FileText from "@lucide/svelte/icons/file-text";
+  import FolderSearch from "@lucide/svelte/icons/folder-search";
   import Images from "@lucide/svelte/icons/images";
   import Info from "@lucide/svelte/icons/info";
   import ScanEye from "@lucide/svelte/icons/scan-eye";
@@ -13,13 +15,22 @@
   import { tick } from "svelte";
 
   import { useApplication } from "../lib/application.svelte";
+  import { folderName } from "../lib/catalog.svelte";
   import { isQuerySyntaxError } from "../lib/errors";
   import { popoverDismiss } from "../lib/popover-dismiss";
-  import { OCR_SYNTAX_NOTES, parseQuery, withScope, type SearchScope } from "../lib/search-query";
+  import {
+    OCR_SYNTAX_NOTES,
+    parseQuery,
+    textWithoutFolder,
+    textWithoutScope,
+    withFolder,
+    withScope,
+    type SearchScope,
+  } from "../lib/search-query";
   import { parseVisualTextTerms, type VisualReferenceTerm } from "../lib/visual-query";
   import VisualSearchComposer from "./VisualSearchComposer.svelte";
   const {
-    services: { runtime, catalog, jobs, orchestrator },
+    services: { runtime, catalog, jobs },
   } = useApplication();
 
   // The match count used to sit at the right of the field; it lives in the status bar's items
@@ -115,6 +126,36 @@
       icon: TextSearch,
     },
   ];
+  function localIsoDate(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  let exampleDate = $state(localIsoDate(new Date()));
+  const filterExamples = $derived([
+    { label: "Path", token: 'path:"Trips"', prefix: 'path:"Trips"', icon: FolderSearch },
+    {
+      label: "Before",
+      token: `before:${exampleDate}`,
+      prefix: `before:${exampleDate}`,
+      icon: CalendarDays,
+    },
+    {
+      label: "After",
+      token: `after:${exampleDate}`,
+      prefix: `after:${exampleDate}`,
+      icon: CalendarDays,
+    },
+    {
+      label: "During",
+      token: `during:${exampleDate}`,
+      prefix: `during:${exampleDate}`,
+      icon: CalendarDays,
+    },
+    { label: "Type", token: "type:video", prefix: "type:video", icon: Images },
+  ] as const);
 
   /** Wide enough that inline syntax notes read as separate items without a bullet between them.
    * Both places it lands are `white-space: pre`, so the run survives. */
@@ -151,22 +192,18 @@
   // Keep the scope in the serialized query, but outside the editable body. Typed scope
   // operators still override the picker; other operators remain part of the editable text.
   const inputValue = $derived.by(() => {
-    const text = parsed.tokens
-      .filter((token) => token.kind !== "scope")
-      .map((token) => token.raw)
-      .join("");
-    return parsed.scope === "all" ? text : text.replace(/^ /, "");
+    const text = textWithoutScope(parseQuery(textWithoutFolder(parsed.tokens)).tokens);
+    return parsed.scope === "all" ? text : text.replace(/^\s+/, "");
   });
   const inputTokens = $derived(parseQuery(inputValue).tokens);
   function setInputValue(text: string): void {
-    value =
-      parseQuery(text).scope !== "all" || parsed.scope === "all"
-        ? text
-        : `${parsed.scope}: ${text}`;
+    const typed = parseQuery(text);
+    const scoped =
+      typed.scope !== "all" || parsed.scope === "all" ? text : `${parsed.scope}: ${text}`;
+    value = typed.folder || !parsed.folder ? scoped : `in:"${parsed.folder}" ${scoped}`;
   }
   const preparingImages = $derived(
-    (jobs.running || orchestrator.indexing) &&
-      (jobs.root === catalog.libraryRoot || orchestrator.indexRoot === catalog.libraryRoot),
+    catalog.selectedId !== null && jobs.scanState(catalog.selectedId) !== null,
   );
   const imageNotice = $derived(
     parsed.scope === "like" && (catalog.selectedStatus?.imageCoverage?.indexed ?? 0) === 0
@@ -225,8 +262,23 @@
     inputEl?.focus();
   }
 
+  function insertFilter(token: string): void {
+    value = `${value.trimEnd()}${value.trim() ? " " : ""}${token}`;
+    menuOpen = false;
+    void tick().then(() => {
+      inputEl?.focus();
+      const end = inputValue.length;
+      const quoted = token.includes(':"') && token.endsWith('"');
+      inputEl?.setSelectionRange(
+        end - token.length + token.indexOf(":") + 1 + (quoted ? 1 : 0),
+        end - (quoted ? 1 : 0),
+      );
+    });
+  }
+
   function toggleMenu(): void {
     composerOpen = false;
+    if (!menuOpen) exampleDate = localIsoDate(new Date());
     menuOpen = !menuOpen;
   }
 
@@ -299,11 +351,16 @@
     backdropEl.scrollLeft = (event.currentTarget as HTMLInputElement).scrollLeft;
   }
 
-  /** The composer owns only the visual expression. Date terms remain part of the app-wide search
-   * grammar and stay in the text box, so changing a visual term cannot silently widen a date. */
+  /** The composer owns only the visual expression. Filters retain their effect when a visual term changes. */
   function setVisualExpression(expression: string): void {
     const filters = parsed.tokens
-      .filter((token) => token.kind === "date" || token.kind === "media")
+      .filter(
+        (token) =>
+          token.kind === "date" ||
+          token.kind === "media" ||
+          token.kind === "path" ||
+          token.kind === "folder",
+      )
       .map((token) => token.raw)
       .join(" ");
     value = `like:${expression ? ` ${expression}` : ""}${filters ? ` ${filters}` : ""}`;
@@ -350,9 +407,6 @@
           {#if menuOpen}
             <div class="scope-menu" role="menu" aria-label="Search scope">
               {#each scopeOptions as option (option.scope)}
-                {#if option.scope === "ocr"}
-                  <div class="scope-menu-separator" role="separator"></div>
-                {/if}
                 <button
                   type="button"
                   role="menuitemradio"
@@ -366,6 +420,16 @@
                   <option.icon class="scope-menu-icon" size={13} aria-hidden="true" />
                   <span class="scope-menu-label">{option.menuLabel}</span>
                   <span class="scope-menu-prefix">{option.prefix}</span>
+                </button>
+              {/each}
+              <div class="scope-menu-separator" role="separator"></div>
+              <div class="scope-menu-heading">Filters</div>
+              {#each filterExamples as filter (filter.label)}
+                <button type="button" role="menuitem" onclick={() => insertFilter(filter.token)}>
+                  <span class="scope-menu-mark" aria-hidden="true"></span>
+                  <filter.icon class="scope-menu-icon" size={13} aria-hidden="true" />
+                  <span class="scope-menu-label">{filter.label}</span>
+                  <span class="scope-menu-prefix">{filter.prefix}</span>
                 </button>
               {/each}
             </div>
@@ -385,7 +449,7 @@
       <!-- The hint rides a data attribute and a ::after rather than a trailing element: the
            backdrop is `white-space: pre`, so any markup added here prints its own indentation. -->
       <div class="input-backdrop" bind:this={backdropEl} data-hint={scopeHint} aria-hidden="true">
-        {#each inputTokens as token (token)}{#if token.kind === "scope" || token.kind === "date" || token.kind === "media"}<span
+        {#each inputTokens as token (token)}{#if token.kind === "scope" || token.kind === "date" || token.kind === "media" || token.kind === "folder" || token.kind === "path"}<span
               class:token-invalid={token.kind === "date" && !token.valid}
               class="token">{token.raw}</span
             >{:else}{token.raw}{/if}{/each}
@@ -408,6 +472,21 @@
       />
       <span id={hintId} class="search-hint-accessible">{scopeHint.trim()}</span>
     </div>
+
+    {#if parsed.folder}
+      <button
+        class="folder-focus-chip"
+        type="button"
+        title={parsed.folder}
+        aria-label={`Show all folders; remove ${parsed.folder} filter`}
+        onclick={() => (value = withFolder(value, null))}
+      >
+        <FolderSearch size={12} aria-hidden="true" /><span>{folderName(parsed.folder)}</span><X
+          size={11}
+          aria-hidden="true"
+        />
+      </button>
+    {/if}
 
     {#if parsed.scope === "like" && visualReferences.length}
       <button
@@ -480,7 +559,7 @@
       <Info size={12} aria-hidden="true" />
       <span>{imageNotice || ocrNotice || infoNotice}</span>
       {#if imageNotice && !preparingImages}
-        <button class="ui-button" type="button" onclick={onsetuptextsearch}>Open Libraries</button>
+        <button class="ui-button" type="button" onclick={onsetuptextsearch}>Library manager</button>
       {:else if ocrNotice}
         <button class="ui-button" type="button" onclick={onsetuptextsearch}
           >Set up text search</button
@@ -512,6 +591,33 @@
 
   .search-field:focus-within {
     border-color: var(--accent);
+  }
+  .folder-focus-chip {
+    display: inline-flex;
+    flex: none;
+    max-width: 120px;
+    height: 21px;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-1);
+    color: var(--text-secondary);
+    font: inherit;
+  }
+  .folder-focus-chip:hover {
+    background: var(--surface-hover);
+  }
+  .folder-focus-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .folder-focus-chip:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
 
   .search-message {
@@ -760,6 +866,12 @@
     height: 1px;
     margin: var(--space-2) var(--space-2) var(--space-2) 32px;
     background: var(--border-subtle);
+  }
+
+  .scope-menu-heading {
+    padding: var(--space-2) var(--space-6) var(--space-1) 32px;
+    color: var(--text-tertiary);
+    font-size: var(--font-size-sm);
   }
 
   .scope-menu button:hover:not(:disabled) {

@@ -8,3 +8,9 @@ export function rootKey(root: string): string {
 export function rootsMatch(left: string, right: string): boolean {
   return rootKey(left) === rootKey(right);
 }
+
+/** Compare picker and stored folder spellings, including Windows separators and casing. */
+export function sameFolder(left: string, right: string): boolean {
+  const key = (path: string): string => rootKey(path.replace(/\\/g, "/").replace(/\/+$/, "") || "/");
+  return key(left) === key(right);
+}

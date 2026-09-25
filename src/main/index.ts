@@ -7,6 +7,7 @@ import {
   type MenuItemConstructorOptions,
 } from "electron";
 import { mkdir } from "node:fs/promises";
+import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -23,10 +24,17 @@ import { collectDiagnostics, getAppInfo } from "./diagnostics";
 import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
 import { APP_ENTRY_URL } from "./renderer-location";
-import { migrateLegacyRendererStorage } from "./renderer-storage-migration";
 import { startUpdates } from "./updates";
 
 registerCustomSchemes();
+
+// Test runs can isolate Electron preferences alongside the backend databases. Changing only
+// NICEGAL_STATE_DIR leaves saved library IDs and queries in the regular profile.
+const isolatedUserData = process.env["NICEGAL_USER_DATA_DIR"];
+if (isolatedUserData) {
+  mkdirSync(isolatedUserData, { recursive: true });
+  app.setPath("userData", isolatedUserData);
+}
 
 // Match electron-builder.yml so installed shortcuts and the running app share an identity.
 if (process.platform === "win32") app.setAppUserModelId("io.github.nicegal.nicegal");
@@ -147,23 +155,6 @@ function createWindow(): void {
 }
 
 async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
-  if (!isDev) {
-    try {
-      const migrated = await migrateLegacyRendererStorage(
-        mainWindow,
-        join(__dirname, "../renderer"),
-      );
-      if (migrated) console.info("Migrated renderer settings from the legacy file origin");
-    } catch (error) {
-      // Migration is compatibility work, not a reason to prevent the app from opening. It remains
-      // unmarked so a transient profile/storage error can retry on the next launch.
-      console.warn("Could not migrate renderer settings from the legacy file origin", error);
-    }
-  }
-
-  // Install the persistent navigation guard after the hidden, main-process-controlled migration
-  // navigations. The migration must briefly visit the former file: URL to access that origin's
-  // localStorage; guarding the window earlier cancels that load before the values can be read.
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (!isTrustedRendererUrl(url)) event.preventDefault();
   });

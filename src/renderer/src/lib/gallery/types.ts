@@ -1,5 +1,6 @@
 export interface GalleryItem {
   id: string;
+  path: string;
   displayName: string;
   /** File-system extension as written on disk, without its leading dot. */
   extension: string | null;
@@ -50,6 +51,7 @@ export function thumbnailUrlOf(
   renderedWidth: number,
   renderedHeight: number,
   devicePixelRatio: number,
+  sampleTimestampMs?: number,
 ): string {
   const physicalPixels = physicalThumbnailSize(renderedWidth, renderedHeight, devicePixelRatio);
   const query = new URLSearchParams({
@@ -59,6 +61,8 @@ export function thumbnailUrlOf(
     bytes: item.sourceSize,
     refresh: String(item.thumbnailRevision),
   });
+  if (item.mediaKind === "video" && sampleTimestampMs !== undefined)
+    query.set("frame", String(sampleTimestampMs));
   return `thumb://asset/${encodeURIComponent(item.id)}?${query}`;
 }
 

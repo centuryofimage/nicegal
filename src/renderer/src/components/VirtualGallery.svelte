@@ -25,6 +25,8 @@
 -->
 <script lang="ts">
   import Video from "@lucide/svelte/icons/video";
+  import Volume2 from "@lucide/svelte/icons/volume-2";
+  import VolumeX from "@lucide/svelte/icons/volume-x";
   import { tick, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
@@ -87,6 +89,7 @@
     /** Filename/OCR-text snippets for the current search, by item id. A tile with an entry shows an
      * iBooks-style caption strip over its bottom edge so the user can see *why* it matched. */
     snippets,
+    matchTimes,
     /** Raw query text used to highlight matching terms inside the caption. */
     snippetQuery = "",
     /** A changed search starts a new result set, which must begin at the top rather than retain
@@ -126,6 +129,7 @@
     playAnimatedPreviews?: boolean;
     previewSuspended?: boolean;
     snippets?: ReadonlyMap<string, string>;
+    matchTimes?: ReadonlyMap<string, number>;
     snippetQuery?: string;
     searchQuery?: string;
     onScroll?: (state: { scrollTop: number; layout: GalleryLayout }) => void;
@@ -230,6 +234,8 @@
    * `<img>` re-requests thumb:// and picks up the now-generated row. */
   const localRefresh = new SvelteMap<string, number>();
   const thumbnailFailures = new SvelteMap<string, ThumbnailFailure>();
+  /** A missing indexed sample falls back to the normal poster for this result. */
+  const missingMatchFrames = new SvelteMap<string, number>();
   export function getThumbnailFailures(
     catalogItems: readonly GalleryItem[],
   ): (ThumbnailFailure & { name: string })[] {
@@ -309,10 +315,22 @@
 
   function posterSrc(tile: PoolTile): string {
     const bump = localRefresh.get(tile.itemId);
-    return bump ? `${tile.src}&e=${bump}` : tile.src;
+    const base =
+      tile.matchTimestampMs !== undefined &&
+      missingMatchFrames.get(tile.itemId) === tile.matchTimestampMs
+        ? tile.defaultSrc
+        : tile.src;
+    return bump ? `${base}&e=${bump}` : base;
   }
 
   function onPosterError(tile: PoolTile): void {
+    if (
+      tile.matchTimestampMs !== undefined &&
+      missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs
+    ) {
+      missingMatchFrames.set(tile.itemId, tile.matchTimestampMs);
+      return;
+    }
     const queued = thumbnailScheduler.enqueue({
       assetId: tile.itemId,
       width: tile.width,
@@ -384,6 +402,7 @@
     }
     if (searchQuery === previousSearchQuery) return;
     previousSearchQuery = searchQuery;
+    missingMatchFrames.clear();
     viewOffsets.clear();
     anchor = undefined;
     if (!viewport) return;
@@ -487,6 +506,7 @@
       // Filenames use literal substrings, including punctuation and words like "OR" which
       // the OCR highlighter treats as operators. Empty searches still have no captions.
       snippets: snippetTerms.length || filenameQuery ? snippets : undefined,
+      matchTimes,
       snippetTerms,
       snippetTermsKey,
       filenameQuery,
@@ -538,6 +558,10 @@
     return minutes >= 60
       ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}`
       : `${minutes}:${remainder}`;
+  }
+
+  function matchTime(timestampMs: number): string {
+    return videoDuration(timestampMs);
   }
 
   /** Literal body terms worth highlighting in a caption. `parseQuery` removes the scope prefix
@@ -710,6 +734,9 @@
       {@const promoted = promotedIds.has(tile.itemId)}
       {@const showingOriginal = tile.mediaKind === "image" && tile.animated && promoted}
       {@const currentSrc = showingOriginal ? tile.originalSrc : posterSrc(tile)}
+      {@const matchingFrameAvailable =
+        tile.matchTimestampMs !== undefined &&
+        missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs}
       <div
         class={{
           "gallery-frame": true,
@@ -717,12 +744,20 @@
           "is-selected": selectedIds.has(tile.itemId),
         }}
         data-gallery-item-id={tile.itemId}
-        title={tile.snippet && tile.snippet !== tile.alt
-          ? `${tile.alt}\n${tile.snippet}`
-          : tile.alt}
+        title={[
+          tile.alt,
+          tile.snippet && tile.snippet !== tile.alt ? tile.snippet : "",
+          tile.matchTimestampMs === undefined
+            ? ""
+            : `Visual match at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`,
+        ]
+          .filter(Boolean)
+          .join("\n")}
         aria-label={thumbnailFailures.has(tile.itemId)
           ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
-          : tile.alt}
+          : tile.matchTimestampMs === undefined
+            ? tile.alt
+            : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`}
         style={tileStyle(tile)}
         role="button"
         draggable="true"
@@ -769,12 +804,31 @@
                 previewMuted = !previewMuted;
               }}
               onkeydown={(event) => event.stopPropagation()}
-              >{previewMuted ? "Unmute" : "Mute"}</button
             >
+              {#if previewMuted}<VolumeX size={13} aria-hidden="true" />{:else}<Volume2
+                  size={13}
+                  aria-hidden="true"
+                />{/if}
+            </button>
           {/if}
-          <span class="media-badge" title="Video"
-            ><Video size={11} aria-hidden="true" />{videoDuration(tile.durationMs)}</span
-          >
+          {#if previewVideoId !== tile.itemId}
+            <span
+              class="media-badge"
+              class:has-match={matchingFrameAvailable}
+              title={matchingFrameAvailable
+                ? `Matched frame at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`
+                : "Video"}
+            >
+              {#if matchingFrameAvailable}
+                <span class="media-badge-match">Match {matchTime(tile.matchTimestampMs)}</span>
+                <span class="media-badge-length"
+                  ><Video size={10} aria-hidden="true" />{videoDuration(tile.durationMs)}</span
+                >
+              {:else}
+                <Video size={11} aria-hidden="true" />{videoDuration(tile.durationMs)}
+              {/if}
+            </span>
+          {/if}
         {:else if tile.animated && !promoted}
           <span class="media-badge">GIF</span>
         {/if}
@@ -981,22 +1035,32 @@
 
   .video-preview {
     position: absolute;
-    inset: 0;
+    inset: var(--space-2);
+    width: calc(100% - 2 * var(--space-2));
+    height: calc(100% - 2 * var(--space-2));
     pointer-events: none;
   }
 
   .preview-audio {
     position: absolute;
     z-index: 2;
-    top: var(--space-4);
-    right: var(--space-4);
-    padding: var(--space-2) var(--space-4);
-    border: 1px solid var(--border-subtle);
+    bottom: var(--media-badge-inset);
+    right: var(--media-badge-inset);
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
     border-radius: var(--radius-sm);
-    background: var(--surface-caption);
-    color: var(--text-primary);
+    background: var(--media-badge-bg);
+    color: var(--media-badge-fg);
     cursor: pointer;
-    font: inherit;
+  }
+
+  .preview-audio:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: 1px;
   }
 
   /* Small sources fill their tile like any other, but with nearest-neighbour scaling: bilinear
@@ -1032,23 +1096,49 @@
     padding: 0 1px;
   }
 
-  /* Marks video and animated image tiles while their posters are visible. */
+  /* Match time and video length share one corner badge. OCR text results use the separate
+     bottom-edge caption above. */
   .media-badge {
     position: absolute;
-    right: calc(var(--space-2) + var(--space-2));
-    bottom: calc(var(--space-2) + var(--space-2));
+    right: var(--media-badge-inset);
+    bottom: var(--media-badge-inset);
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
     height: var(--space-14);
     padding: 0 var(--space-4);
     border-radius: var(--radius-sm);
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
+    background: var(--media-badge-bg);
+    color: var(--media-badge-fg);
     font-size: 9px;
     font-weight: var(--font-weight-semibold);
     letter-spacing: 0.02em;
+    max-width: calc(100% - 2 * var(--space-4));
+    overflow: hidden;
+    white-space: nowrap;
     pointer-events: none;
+  }
+
+  .media-badge.has-match {
+    height: auto;
+    min-height: var(--space-14);
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0;
+    padding-block: 2px;
+    line-height: 11px;
+  }
+
+  .media-badge-match,
+  .media-badge-length {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .media-badge-length {
+    gap: var(--space-2);
+    font-weight: var(--font-weight-normal);
   }
 
   .gallery-divider {

@@ -166,12 +166,12 @@
           {:else if info.ocrState === "indexed"}
             <p>No text found in this file.</p>
           {:else}
-            <p>Enable text recognition in Libraries to read words in this file.</p>
+            <p>Enable text recognition in Library manager to read words in this file.</p>
           {/if}
         {/if}
         {#if info.decodeFailed}<p>
-            The file could not be decoded during indexing. Use Libraries → Advanced options → Retry
-            failed files after checking the file.
+            The file could not be decoded during indexing. Use Library manager → Retry failed files
+            after checking the file.
           </p>{/if}
         {#if info.asset.mediaKind === "image"}<h3>Camera / EXIF</h3>
           {#if info.file.exif.length}

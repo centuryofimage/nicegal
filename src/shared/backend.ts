@@ -117,10 +117,13 @@ export interface SearchRequest {
   /** IPC-only generation, increasing within this renderer's lifetime. Supply with searchLane. */
   searchSession?: number;
   /** Independent requests in one session may run concurrently; each lane is latest-wins. */
-  searchLane?: "literal" | "meaning" | "visual";
+  searchLane?: "literal" | "files" | "meaning" | "visual";
   query: string;
-  type: "simple" | "match" | "glob" | "vector" | "image";
-  root: string;
+  type: "ocrSimple" | "ocrMatch" | "ocrGlob" | "vector" | "image" | "name" | "path";
+  libraryId: LibraryId;
+  folder?: string;
+  /** Case-insensitive substring of the indexed full path. */
+  pathContains?: string;
   limit?: number;
   before?: string;
   after?: string;
@@ -140,7 +143,7 @@ export interface ImageQuery {
   components: ImageQueryComponent[];
 }
 
-/** OCR-text embedding coverage for one library root — `GET /v1/text-embeddings`. Tells "nothing
+/** OCR-text embedding coverage for one library — `GET /v1/text-embeddings`. Tells "nothing
  * matched" apart from "nothing has been text-embedded yet". */
 export interface TextEmbeddingCoverage {
   indexed: number;
@@ -154,7 +157,7 @@ export interface TextEmbeddingCoverage {
   lastIndexedAt: number | null;
 }
 
-/** Current CLIP coverage for cataloged images under one root, excluding videos. */
+/** Current CLIP coverage for cataloged images and videos in one library. */
 export interface ImageEmbeddingCoverage {
   total: number;
   indexed: number;
@@ -163,6 +166,8 @@ export interface ImageEmbeddingCoverage {
 export interface SearchResult {
   assetId: string;
   snippet: string;
+  /** Winning indexed video frame for a visual-search hit, in milliseconds. */
+  timestampMs?: number;
   /**
    * Position in this mode's own final ranking, from 1 — already reranked server-side, so the
    * response array is in rank order. Absent from an older server, where response order is the
@@ -240,14 +245,17 @@ export interface JobItemError {
 export interface JobSnapshot {
   indexStages?: { ocr: boolean; image: boolean; text: boolean };
   jobId: string;
+  /** The library a library job belongs to; absent for model preparation. */
+  libraryId?: LibraryId;
   type:
     | "ocrModelLoad"
     | "modelPrepare"
-    | "libraryIndex"
-    | "catalogSync"
+    | "libraryScan"
     | "thumbnailGenerate"
     | "pruneMissing"
     | "libraryPurge";
+  /** Per-folder progress of a `libraryScan`, in walk order. */
+  folders?: ScanFolderProgress[];
   status: JobStatus;
   phase: JobPhase;
   progress: JobProgress;
@@ -257,35 +265,93 @@ export interface JobSnapshot {
   error?: string;
 }
 
-export interface IndexSelection {
-  ocr: boolean;
-  image: boolean;
-  indexVideos?: boolean;
+/** A backend library ID, from `GET /v1/libraries`. */
+export type LibraryId = number;
+
+/** Why a folder's latest scan did not finish. */
+export type ScanOutcome = "unavailable" | "incomplete" | "cancelled" | "failed";
+
+/** One included folder of a library — `GET /v1/libraries`. */
+export interface LibraryFolder {
+  path: string;
+  /** An edit revealed more of this folder and no complete scan of it has finished since. */
+  scanPending: boolean;
+  /** Why the latest scan of this folder did not finish; cleared by the next complete scan. */
+  scanOutcome?: ScanOutcome | null;
+  /** Human-readable detail for `scanOutcome`. */
+  scanError: string | null;
+  /** Decimal Unix nanoseconds of the last complete scan. */
+  lastScanCompletedNs: string | null;
 }
 
-export interface LibraryIndexJobRequest {
-  type: "libraryIndex";
+/** A backend library: included folders minus excluded folders. It has no stored name. */
+export interface Library {
+  id: LibraryId;
+  include: LibraryFolder[];
+  exclude: string[];
+  /** Search indexes `libraryScan` maintains for this library. */
+  ocr: boolean;
+  image: boolean;
+}
+
+/** The editable part of a library, as `POST`/`PUT /v1/libraries` accept it. */
+export interface LibraryDefinition {
+  include: string[];
+  exclude: string[];
+  ocr: boolean;
+  image: boolean;
+}
+
+export interface CreateLibraryRequest extends LibraryDefinition {
+  /** Makes creation idempotent, and lets an import keep a currently missing folder. */
+  importKey?: string;
+}
+
+export type ScanFolderState =
+  | "queued"
+  | "scanning"
+  | "scanned"
+  | "completed"
+  | "incomplete"
+  | "unavailable"
+  | "failed"
+  | "cancelled";
+
+export interface ScanFolderProgress {
+  path: string;
+  scanMode?: "full" | "fast";
+  state: ScanFolderState;
+  discovered: number;
+  cataloged: number;
+  failed: number;
+  error: string | null;
+}
+
+/**
+ * A scan of a library's folders. The backend never scans on its own; the frontend requests one
+ * when a library is created, edited, or opened. When the worker is busy the backend queues it:
+ * at most one scan waits, a request for the same library merges into it, and one for another
+ * library replaces it. Video and OCR-model choices come from the backend's runtime settings.
+ */
+export interface LibraryScanJobRequest {
+  type: "libraryScan";
   params: {
-    root: string;
-    /** Select text recognition and image search independently; both default to true. */
-    ocr?: boolean;
-    image?: boolean;
-    indexVideos?: boolean;
-    /** Continue into pending CLIP-image and OCR-text embeddings after OCR (default true backend-side). */
-    embed?: boolean;
-    scan?: {
-      recursive?: boolean;
-      exclude?: string[];
-      /** Re-run OCR on unchanged files and retry cached decode failures (default false). */
-      force?: boolean;
-      /** Retry cached indexing failures while retaining successful current results. */
-      retryFailed?: boolean;
-      cleanup?: false;
-      maxDimensions?: { width: number; height: number };
-      /** Debug cap applied to each indexing phase. */
-      debugLimit?: number;
-    };
+    libraryId: LibraryId;
+    /** Fast checks directory mtimes, with a full walk when the backend decides one is due. */
+    scanMode?: "full" | "fast";
+    /** Walk only folders with `scanPending` set, including ones whose last scan failed. */
+    pendingOnly?: boolean;
+    /** Retry sources whose earlier decode failed. */
+    retryFailed?: boolean;
+    /** Debug cap applied to each folder's walk. */
+    debugLimit?: number;
   };
+}
+
+/** `GET /v1/jobs`: the running job, and every retained or queued job. */
+export interface JobListResponse {
+  activeJobId: string | null;
+  jobs: JobSnapshot[];
 }
 
 export interface OcrModelLoadTarget {
@@ -349,7 +415,7 @@ export interface SearchModelsResponse {
 export interface ThumbnailJobRequest {
   type: "thumbnailGenerate";
   params: {
-    root: string;
+    libraryId: LibraryId;
     buckets?: Array<128 | 256 | 512 | 1024>;
     force?: boolean;
     sweepStale?: boolean;
@@ -358,26 +424,10 @@ export interface ThumbnailJobRequest {
   };
 }
 
-export interface CatalogSyncJobRequest {
-  type: "catalogSync";
-  params: {
-    root: string;
-    /** Embed newly cataloged images in this same job. */
-    image?: boolean;
-    indexVideos?: boolean;
-    scan?: {
-      recursive?: boolean;
-      exclude?: string[];
-      /** Debug-only cap on discovered catalog entries. Omit to scan the complete root. */
-      debugLimit?: number;
-    };
-  };
-}
-
 export interface PruneMissingJobRequest {
   type: "pruneMissing";
   params: {
-    root: string;
+    libraryId: LibraryId;
     dryRun: boolean;
   };
 }
@@ -385,15 +435,16 @@ export interface PruneMissingJobRequest {
 export interface LibraryPurgeJobRequest {
   type: "libraryPurge";
   params: {
-    root: string;
+    libraryId: LibraryId;
+    /** When supplied, remove only indexed files in these former library folders. */
+    folders?: string[];
   };
 }
 
 export type JobRequest =
   | { type: "modelPrepare"; params: Record<string, never> }
   | OcrModelLoadJobRequest
-  | LibraryIndexJobRequest
-  | CatalogSyncJobRequest
+  | LibraryScanJobRequest
   | ThumbnailJobRequest
   | PruneMissingJobRequest
   | LibraryPurgeJobRequest;
@@ -401,7 +452,7 @@ export type JobRequest =
 /**
  * Synchronous on-demand thumbnail generation for a visible-tile batch — `POST /v1/thumbnails`,
  * distinct from the background `thumbnailGenerate` job. Generator version 1 no longer builds
- * thumbnails eagerly during `libraryIndex`; the gallery calls this for whatever is actually on screen.
+ * thumbnails eagerly during `libraryScan`; the gallery calls this for whatever is actually on screen.
  */
 export interface EnsureThumbnailsRequest {
   assetIds: string[];
@@ -424,8 +475,15 @@ export interface BackendBridge {
   getRuntimeStatus(): Promise<RuntimeStatus>;
   setImageModel(model: string): Promise<RuntimeStatus>;
   setExecutionProvider(executionProvider: ExecutionProviderId): Promise<RuntimeStatus>;
-  listAssets(options: { root: string; timeline: Timeline }): Promise<GalleryAsset[]>;
-  countAssets(root: string): Promise<number>;
+  /** Saves whether scans index video frames; applies to scans queued afterwards. */
+  setIndexVideos(indexVideos: boolean): Promise<void>;
+  listLibraries(): Promise<Library[]>;
+  createLibrary(request: CreateLibraryRequest): Promise<Library>;
+  updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library>;
+  deleteLibrary(libraryId: LibraryId): Promise<void>;
+  listAssets(options: { libraryId: LibraryId; timeline: Timeline }): Promise<GalleryAsset[]>;
+  listFolders(libraryId: LibraryId): Promise<string[]>;
+  countAssets(libraryId: LibraryId): Promise<number>;
   getAssetMetadata(assetId: string): Promise<AssetMetadata>;
   getCatalogRevision(): Promise<string>;
   getOcrModels(): Promise<OcrModelsResponse>;
@@ -433,9 +491,10 @@ export interface BackendBridge {
   searchOcr(request: SearchRequest): Promise<SearchResponse>;
   /** Abort all current searches and close their session. The next session must be newer. */
   cancelSearch(): Promise<void>;
-  getTextEmbeddingCoverage(root: string): Promise<TextEmbeddingCoverage>;
-  getImageEmbeddingCoverage(root: string): Promise<ImageEmbeddingCoverage>;
+  getTextEmbeddingCoverage(libraryId: LibraryId): Promise<TextEmbeddingCoverage>;
+  getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage>;
   startJob(request: JobRequest): Promise<JobSnapshot>;
+  listJobs(): Promise<JobListResponse>;
   cancelJob(jobId: string): Promise<JobSnapshot>;
   subscribeJob(
     jobId: string,
@@ -450,7 +509,8 @@ export interface NativeBridge {
   collectDiagnostics(): Promise<string | null>;
   openExternalUrl(url: string): Promise<void>;
   openLicenseInformation(): Promise<void>;
-  chooseDirectory(): Promise<string | null>;
+  /** `defaultPath` opens the picker inside a folder, e.g. an included folder when excluding. */
+  chooseDirectory(defaultPath?: string): Promise<string | null>;
   chooseVisualSearchImage(): Promise<ExternalVisualReference | null>;
   onAddToVisualSearch(listener: (assetIds: string[], replace: boolean) => void): () => void;
   showFileContextMenu(request: NativeFileMenuRequest): Promise<void>;

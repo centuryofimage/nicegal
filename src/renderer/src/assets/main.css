@@ -63,6 +63,13 @@ body {
   font: inherit;
   cursor: pointer;
 }
+/* The libraries pane switch sits at the start edge, mirroring Info at the end. */
+.status-pane-toggle-start {
+  margin-left: 0;
+  margin-right: var(--space-8);
+  border-left-color: transparent;
+  border-right-color: var(--border-subtle);
+}
 .status-pane-toggle:hover {
   border-color: var(--btn-border-hover);
   background: var(--btn-face-hover);

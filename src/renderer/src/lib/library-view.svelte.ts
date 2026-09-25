@@ -2,6 +2,7 @@ import { tick, untrack } from "svelte";
 import { SvelteSet } from "svelte/reactivity";
 import { fromStore } from "svelte/store";
 
+import type { LibraryId } from "../../../shared/backend";
 import type { DetailViewStatus } from "../components/DetailView.svelte";
 import type { ApplicationContext } from "./application.svelte";
 import type { LayoutOptions } from "./gallery/options";
@@ -9,7 +10,6 @@ import type { GalleryLayout } from "./gallery/types";
 import type { GalleryItem } from "./gallery/types";
 import type { SearchView } from "./ocr-search.svelte";
 
-import { rootsMatch } from "./catalog.svelte";
 import { errorMessage } from "./errors";
 import { GalleryScrollState } from "./gallery/scroll-state.svelte";
 import { collapseSearchSections } from "./gallery/search-sections";
@@ -21,7 +21,10 @@ import { layoutOptions, settings } from "./settings.svelte";
 export interface LibraryViewController {
   readonly galleryScroll: GalleryScrollState;
   readonly gallerySelection: GallerySelection;
-  readonly activeDialog: "libraries" | "settings" | null;
+  readonly activeDialog: "manageLibraries" | "settings" | null;
+  /** The library initially selected in management. */
+  readonly editingLibraryId: LibraryId | null;
+  readonly librariesPaneOpen: boolean;
   readonly detailIndex: number | null;
   detailStatus: DetailViewStatus | null;
   readonly searchView: SearchView;
@@ -36,7 +39,11 @@ export interface LibraryViewController {
   toggleSection(key: string): void;
   closeDialog(): void;
   startWelcomeLibraryPicker(): void;
-  openLibrariesDialog(): void;
+  /** Shows the libraries pane, e.g. from a "not ready" notice. */
+  showLibrariesPane(): void;
+  toggleLibrariesPane(): void;
+  openManageLibraries(): void;
+  editLibrary(libraryId: LibraryId): void;
   openSettingsDialog(): void;
   dismissSelectionOrDetail(): void;
   switchToMeaningSearch(): void;
@@ -52,9 +59,10 @@ export interface LibraryViewController {
   showNextDetail(): void;
   handleGalleryScroll(state: { scrollTop: number; layout: GalleryLayout }): void;
   handleSeek(y: number): void;
-  chooseLibraryRoot(): Promise<void>;
-  selectLibrary(root: string): Promise<void>;
-  removeLibrary(root: string, purge: boolean): Promise<void>;
+  /** Picks a folder and creates a library for it. */
+  addLibrary(): Promise<{ status: "created"; id: LibraryId } | { status: "cancelled" } | { status: "error"; message: string }>;
+  selectLibrary(libraryId: LibraryId): Promise<void>;
+  removeLibrary(libraryId: LibraryId, purge: boolean): Promise<boolean>;
   dispose(): void;
 }
 
@@ -82,14 +90,22 @@ export function createLibraryViewController(
   const layoutPreferences = fromStore(layoutOptions);
   const galleryScroll = new GalleryScrollState();
   const searchIdentity = $derived(
-    [catalog.libraryRoot, ocrSearch.query, ocrSearch.visualReferenceRevision].join("\u0000"),
+    [catalog.selectedId, ocrSearch.query, ocrSearch.visualReferenceRevision].join("\u0000"),
   );
   // Progress replaces the active snapshot frequently; searches only care whether a job runs.
   const backendJobRunning = $derived(jobs.running);
   // Retain only the search's catalog snapshot during jobs. Catalog loading, counts and revision
   // polling continue normally. A new query/library/timeline gets a fresh snapshot immediately.
+  // Only a snapshot of a finished load is retained: one taken mid-load (e.g. empty at startup,
+  // while the startup scan runs) would otherwise hide the whole catalog until the job ends.
   let previousSearchCatalog:
-    | { identity: string; timeline: string; items: GalleryItem[]; hasOcr: boolean }
+    | {
+        identity: string;
+        timeline: string;
+        items: GalleryItem[];
+        hasOcr: boolean;
+        settled: boolean;
+      }
     | undefined;
   const searchCatalog = $derived.by(() => {
     const identity = searchIdentity;
@@ -100,11 +116,18 @@ export function createLibraryViewController(
       Boolean(ocrSearch.query.trim() || ocrSearch.visualReferences.length);
     if (
       hold &&
-      previousSearchCatalog?.identity === identity &&
+      previousSearchCatalog?.settled &&
+      previousSearchCatalog.identity === identity &&
       previousSearchCatalog.timeline === timeline
     )
       return previousSearchCatalog;
-    return (previousSearchCatalog = { identity, timeline, items: catalog.items, hasOcr });
+    return (previousSearchCatalog = {
+      identity,
+      timeline,
+      items: catalog.items,
+      hasOcr,
+      settled: !catalog.loading,
+    });
   });
   const gallerySelection = $derived.by(() => {
     void searchIdentity;
@@ -115,7 +138,8 @@ export function createLibraryViewController(
     void searchIdentity;
     return new SvelteSet<string>();
   });
-  let activeDialog = $state<"libraries" | "settings" | null>(null);
+  let activeDialog = $state<"manageLibraries" | "settings" | null>(null);
+  let editingLibraryId = $state<LibraryId | null>(null);
   // Progressive results may move an image between sections. The viewer follows its ID, not
   // whichever image later occupies the index that was clicked.
   let detailId = $derived.by(() => {
@@ -128,7 +152,7 @@ export function createLibraryViewController(
     return index < 0 ? null : index;
   });
   let detailStatus = $state<DetailViewStatus | null>(null);
-  let restoringLibraryView = Boolean(catalog.libraryRoot);
+  let restoringLibraryView = catalog.selectedId !== null;
   let disposed = false;
   let cancelSearchWait: (() => void) | undefined;
   let libraryViewGeneration = 0;
@@ -157,29 +181,23 @@ export function createLibraryViewController(
           ? ocrSearch.pendingLabel
           : undefined,
   );
-  const jobRunning = $derived(jobs.running || application.services.orchestrator.indexing);
-  const indexingRunning = $derived(
-    jobs.active?.type === "libraryIndex" && isActiveJob(jobs.active),
-  );
+  const jobRunning = $derived(jobs.running);
+  const indexingRunning = $derived(jobs.active?.type === "libraryScan" && isActiveJob(jobs.active));
   /** `undefined` (out-of-range index, e.g. the filter changed while open) closes the detail view. */
   const detailItem = $derived(detailIndex !== null ? filteredItems[detailIndex] : undefined);
-  const libraryName = $derived(
-    catalog.libraryRoot
-      ? (catalog.libraryRoot.split(/[\\/]/).pop() ?? catalog.libraryRoot)
-      : "No library",
-  );
+  const libraryName = $derived(catalog.selectedLibrary?.displayName ?? "No library");
   $effect(() => {
-    const root = catalog.libraryRoot;
+    const libraryId = catalog.selectedId;
     const query = ocrSearch.query;
     const visualReferenceRevision = ocrSearch.visualReferenceRevision;
     const scrollTop = untrack(() => galleryScroll.scrollTop);
-    if (!root || restoringLibraryView) return;
+    if (libraryId === null || restoringLibraryView) return;
     void visualReferenceRevision;
-    scheduleLibraryViewState(root, query, scrollTop);
+    scheduleLibraryViewState(libraryId, query, scrollTop);
   });
   $effect(() => {
     void ocrSearch.query;
-    const root = catalog.libraryRoot;
+    const libraryId = catalog.selectedId;
     const { items, hasOcr: ocrAvailable } = searchCatalog;
     const timeline = searchTimeline;
     const visualReferenceRevision = ocrSearch.visualReferenceRevision;
@@ -191,7 +209,14 @@ export function createLibraryViewController(
     const imageTextAvailable = supportsImageTextQueries;
     const imageAvailable = hasImages;
     untrack(() =>
-      ocrSearch.schedule(root, items, timeline, imageTextAvailable, ocrAvailable, imageAvailable),
+      ocrSearch.schedule(
+        libraryId,
+        items,
+        timeline,
+        imageTextAvailable,
+        ocrAvailable,
+        imageAvailable,
+      ),
     );
   });
   $effect(() => {
@@ -203,7 +228,7 @@ export function createLibraryViewController(
     void application.librarySelectionRevision;
     untrack(() => {
       const generation = beginLibraryViewRestore();
-      void restoreLibraryView(catalog.libraryRoot, generation);
+      void restoreLibraryView(catalog.selectedId, generation);
     });
   });
   function toggleSection(key: string): void {
@@ -214,14 +239,36 @@ export function createLibraryViewController(
     gallerySelection.retainCatalogAssets(filteredItems);
   }
   function closeDialog(): void {
+    if (activeDialog === "manageLibraries") commands.endLibraryManagement();
     activeDialog = null;
+    editingLibraryId = null;
   }
   function startWelcomeLibraryPicker(): void {
     commands.dismissWelcome();
-    openLibrariesDialog();
+    showLibrariesPane();
+    void addLibrary();
   }
-  function openLibrariesDialog(): void {
-    activeDialog = "libraries";
+  function setLibrariesPaneOpen(open: boolean): void {
+    settings.update((value) => ({ ...value, librariesPaneOpen: open }));
+    if (open) void catalog.refreshLibraryStatuses();
+  }
+  function showLibrariesPane(): void {
+    setLibrariesPaneOpen(true);
+  }
+  function toggleLibrariesPane(): void {
+    setLibrariesPaneOpen(!preferences.current.librariesPaneOpen);
+  }
+  function editLibrary(libraryId: LibraryId): void {
+    if (activeDialog !== "manageLibraries") commands.beginLibraryManagement();
+    editingLibraryId = libraryId;
+    activeDialog = "manageLibraries";
+    void catalog.loadLibraries();
+  }
+  function openManageLibraries(): void {
+    if (activeDialog !== "manageLibraries") commands.beginLibraryManagement();
+    editingLibraryId = catalog.selectedId;
+    activeDialog = "manageLibraries";
+    void catalog.loadLibraries();
     void catalog.refreshLibraryStatuses();
   }
   function openSettingsDialog(): void {
@@ -301,17 +348,17 @@ export function createLibraryViewController(
   }
   function handleGalleryScroll(state: { scrollTop: number; layout: GalleryLayout }): void {
     galleryScroll.onScroll(state);
-    if (catalog.libraryRoot && !restoringLibraryView)
-      scheduleLibraryViewState(catalog.libraryRoot, ocrSearch.query, galleryScroll.scrollTop);
+    if (catalog.selectedId !== null && !restoringLibraryView)
+      scheduleLibraryViewState(catalog.selectedId, ocrSearch.query, galleryScroll.scrollTop);
   }
   function handleSeek(y: number): void {
     scrollTo(y);
   }
-  function scheduleLibraryViewState(root: string, query: string, scrollTop: number): void {
+  function scheduleLibraryViewState(libraryId: LibraryId, query: string, scrollTop: number): void {
     if (viewStateSaveTimer) clearTimeout(viewStateSaveTimer);
     viewStateSaveTimer = setTimeout(() => {
       viewStateSaveTimer = undefined;
-      catalog.updateLibraryViewState(root, { query, scrollTop });
+      catalog.updateLibraryViewState(libraryId, { query, scrollTop });
     }, 150);
   }
 
@@ -320,8 +367,8 @@ export function createLibraryViewController(
       clearTimeout(viewStateSaveTimer);
       viewStateSaveTimer = undefined;
     }
-    if (!catalog.libraryRoot || restoringLibraryView) return;
-    catalog.updateLibraryViewState(catalog.libraryRoot, {
+    if (catalog.selectedId === null || restoringLibraryView) return;
+    catalog.updateLibraryViewState(catalog.selectedId, {
       query: ocrSearch.query,
       scrollTop: galleryScroll.scrollTop,
     });
@@ -350,20 +397,18 @@ export function createLibraryViewController(
     if (generation === libraryViewGeneration) restoringLibraryView = false;
   }
 
-  function canRestoreLibraryView(root: string, generation: number): boolean {
-    return (
-      !disposed && generation === libraryViewGeneration && rootsMatch(catalog.libraryRoot, root)
-    );
+  function canRestoreLibraryView(libraryId: LibraryId | null, generation: number): boolean {
+    return !disposed && generation === libraryViewGeneration && catalog.selectedId === libraryId;
   }
 
   /** A saved offset belongs to the final search layout, not the empty/debounced result set.
    * The wait is cancelled by a newer library switch, a query edit, or view disposal. */
   function waitForRestoredSearch(
-    root: string,
+    libraryId: LibraryId | null,
     query: string,
     generation: number,
   ): Promise<boolean> {
-    if (!canRestoreLibraryView(root, generation) || ocrSearch.query !== query) {
+    if (!canRestoreLibraryView(libraryId, generation) || ocrSearch.query !== query) {
       return Promise.resolve(false);
     }
     return new Promise((resolve) => {
@@ -377,14 +422,14 @@ export function createLibraryViewController(
       cancelSearchWait = cancel;
       stop = $effect.root(() => {
         $effect(() => {
-          const currentRoot = catalog.libraryRoot;
+          const currentLibraryId = catalog.selectedId;
           const currentQuery = ocrSearch.query;
           const pending = catalog.loading || ocrSearch.pending;
           untrack(() => {
             if (
-              !rootsMatch(currentRoot, root) ||
+              currentLibraryId !== libraryId ||
               currentQuery !== query ||
-              !canRestoreLibraryView(root, generation)
+              !canRestoreLibraryView(libraryId, generation)
             ) {
               finish(false);
             } else if (!pending) {
@@ -396,26 +441,28 @@ export function createLibraryViewController(
     });
   }
 
-  async function restoreLibraryView(root: string, generation: number): Promise<boolean> {
-    if (!canRestoreLibraryView(root, generation)) {
+  async function restoreLibraryView(
+    libraryId: LibraryId | null,
+    generation: number,
+  ): Promise<boolean> {
+    if (!canRestoreLibraryView(libraryId, generation)) {
       abandonLibraryViewRestore(generation);
       return false;
     }
-    const saved = catalog.libraries.find((library) => rootsMatch(library.root, root));
-    const query = saved?.query ?? "";
-    const scrollTop = saved?.scrollTop ?? 0;
+    const { query, scrollTop } =
+      libraryId === null ? { query: "", scrollTop: 0 } : catalog.viewState(libraryId);
     ocrSearch.resetVisualSearch();
     ocrSearch.query = query;
     galleryScroll.prepareRestore(scrollTop);
     preparedLibraryViewRestoreGeneration = generation;
     await tick();
-    if (!(await waitForRestoredSearch(root, query, generation))) {
+    if (!(await waitForRestoredSearch(libraryId, query, generation))) {
       abandonLibraryViewRestore(generation);
       return false;
     }
     await tick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    if (!canRestoreLibraryView(root, generation) || ocrSearch.query !== query) {
+    if (!canRestoreLibraryView(libraryId, generation) || ocrSearch.query !== query) {
       abandonLibraryViewRestore(generation);
       return false;
     }
@@ -424,41 +471,39 @@ export function createLibraryViewController(
     return true;
   }
 
-  async function chooseLibraryRoot(): Promise<void> {
-    if (jobs.running) return;
+  async function addLibrary(): Promise<
+    { status: "created"; id: LibraryId } | { status: "cancelled" } | { status: "error"; message: string }
+  > {
+    const folder = await window.nicegal.native.chooseDirectory();
+    if (!folder) return { status: "cancelled" };
     flushLibraryViewState();
-    const generation = beginLibraryViewRestore();
-    const selected = await catalog.chooseLibraryRoot();
-    if (!selected) {
-      abandonLibraryViewRestore(generation);
-      return;
+    try {
+      // Selection advances `librarySelectionRevision`, whose effect restores the new view.
+      const library = await commands.createLibrary(folder);
+      return { status: "created", id: library.id };
+    } catch (error) {
+      const message = errorMessage(error);
+      if (activeDialog !== "manageLibraries") jobs.error = message;
+      return { status: "error", message };
     }
-    if (!(await restoreLibraryView(selected, generation))) return;
-    await commands.syncNewLibrary(selected);
   }
 
-  async function selectLibrary(root: string): Promise<void> {
-    if (jobs.running || rootsMatch(root, catalog.libraryRoot)) return;
+  async function selectLibrary(libraryId: LibraryId): Promise<void> {
+    if (libraryId === catalog.selectedId) return;
     flushLibraryViewState();
     const generation = beginLibraryViewRestore();
-    if (!(await catalog.selectLibrary(root))) {
+    if (!(await catalog.selectLibrary(libraryId))) {
       abandonLibraryViewRestore(generation);
       return;
     }
-    await restoreLibraryView(root, generation);
+    await restoreLibraryView(libraryId, generation);
   }
-  async function unregisterLibrary(root: string): Promise<void> {
-    const selected = rootsMatch(root, catalog.libraryRoot);
-    const generation = selected ? beginLibraryViewRestore() : null;
-    const removed = await commands.unregisterLibrary(root);
-    if (generation !== null) {
-      if (removed) await restoreLibraryView(catalog.libraryRoot, generation);
-      else abandonLibraryViewRestore(generation);
-    }
-  }
-  async function removeLibrary(root: string, purge: boolean): Promise<void> {
-    if (purge) await commands.removeLibrary(root, true);
-    else await unregisterLibrary(root);
+
+  async function removeLibrary(libraryId: LibraryId, purge: boolean): Promise<boolean> {
+    if (libraryId === catalog.selectedId) flushLibraryViewState();
+    // Deleting the selected library advances `librarySelectionRevision`, which restores the
+    // view of whichever library is selected next.
+    return commands.removeLibrary(libraryId, purge);
   }
 
   return {
@@ -468,6 +513,12 @@ export function createLibraryViewController(
     },
     get activeDialog() {
       return activeDialog;
+    },
+    get editingLibraryId() {
+      return editingLibraryId;
+    },
+    get librariesPaneOpen() {
+      return preferences.current.librariesPaneOpen;
     },
     get detailIndex() {
       return detailIndex;
@@ -508,7 +559,10 @@ export function createLibraryViewController(
     toggleSection,
     closeDialog,
     startWelcomeLibraryPicker,
-    openLibrariesDialog,
+    showLibrariesPane,
+    toggleLibrariesPane,
+    openManageLibraries,
+    editLibrary,
     openSettingsDialog,
     dismissSelectionOrDetail,
     switchToMeaningSearch,
@@ -524,7 +578,7 @@ export function createLibraryViewController(
     showNextDetail,
     handleGalleryScroll,
     handleSeek,
-    chooseLibraryRoot,
+    addLibrary,
     selectLibrary,
     removeLibrary,
     dispose(): void {

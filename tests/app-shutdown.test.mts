@@ -52,7 +52,6 @@ for (const restartForUpdate of [false, true])
         static getAllWindows() { return []; }
         webContents = Object.assign(new EventEmitter(), {
           setWindowOpenHandler() {},
-          executeJavaScript() { return Promise.resolve({ 'nicegal.storageOriginMigration.v1': '1' }); }
         });
         loadURL() { return Promise.resolve(); }
         isDestroyed() { return false; }

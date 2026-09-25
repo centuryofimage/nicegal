@@ -16,6 +16,8 @@ export type PoolTile = GalleryPosition & {
   slot: number;
   itemId: string;
   src: string;
+  defaultSrc: string;
+  matchTimestampMs?: number;
   alt: string;
   /** Source pixel size, carried through so the renderer can spot images it would upscale. */
   naturalWidth: number;
@@ -48,6 +50,8 @@ export interface PoolRequest {
   devicePixelRatio: number;
   /** Search snippets by item id; tiles in range get their caption attached here. */
   snippets?: ReadonlyMap<string, string>;
+  /** Winning indexed frame for visual-search video hits, by asset id. */
+  matchTimes?: ReadonlyMap<string, number>;
   /** Literal content-search terms used to mark matching portions of a snippet. */
   snippetTerms?: readonly string[];
   /** Stable identity of `snippetTerms`, so marks are recomputed only when terms change. */
@@ -70,6 +74,7 @@ export function recyclePool({
   poolSize,
   devicePixelRatio,
   snippets,
+  matchTimes,
   snippetTerms = EMPTY_SNIPPET_TERMS,
   snippetTermsKey = "",
   filenameQuery = "",
@@ -89,9 +94,17 @@ export function recyclePool({
     const occupant = tile.index >= start && tile.index < limit ? items[tile.index] : undefined;
     const position = layout.positions[tile.index];
     const desiredSnippet = occupant ? snippets?.get(occupant.id) || undefined : undefined;
+    const matchTimestampMs =
+      occupant?.mediaKind === "video" ? matchTimes?.get(occupant.id) : undefined;
     const desiredSource =
       occupant && position
-        ? thumbnailUrlOf(occupant, position.width, position.height, devicePixelRatio)
+        ? thumbnailUrlOf(
+            occupant,
+            position.width,
+            position.height,
+            devicePixelRatio,
+            matchTimestampMs,
+          )
         : null;
     if (
       occupant &&
@@ -118,6 +131,7 @@ export function recyclePool({
       continue;
     }
     const item = items[index];
+    const matchTimestampMs = item.mediaKind === "video" ? matchTimes?.get(item.id) : undefined;
     const snippet = snippets?.get(item.id) || undefined;
     const isFilename = Boolean(filenameQuery && snippet === item.displayName);
     next.push({
@@ -137,7 +151,15 @@ export function recyclePool({
               : {}),
           }
         : {}),
-      src: thumbnailUrlOf(item, position.width, position.height, devicePixelRatio),
+      src: thumbnailUrlOf(
+        item,
+        position.width,
+        position.height,
+        devicePixelRatio,
+        matchTimestampMs,
+      ),
+      defaultSrc: thumbnailUrlOf(item, position.width, position.height, devicePixelRatio),
+      matchTimestampMs,
       alt: item.displayName,
       naturalWidth: item.sourceWidth ?? 0,
       naturalHeight: item.sourceHeight ?? 0,

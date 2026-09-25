@@ -45,11 +45,16 @@ export interface GallerySettings {
   playAnimatedPreviews: boolean;
   /** Development-only cap for each indexing phase. Zero indexes the complete library. */
   debugIndexLimit: number;
+  /** Per-root search types from before the backend owned libraries. Read only by the one-time
+   * v2 import; the backend stores each library's `ocr`/`image` choice now. */
   libraryIndexing: Record<string, { ocr: boolean; image: boolean }>;
+  /** Search types a newly created library starts with. */
   indexOcr: boolean;
   indexImage: boolean;
   /** Include video frames in image search indexing. Videos remain in the catalog. */
   indexVideos: boolean;
+  /** Whether the left libraries pane is shown. */
+  librariesPaneOpen: boolean;
 }
 
 const defaults: GallerySettings = {
@@ -69,6 +74,7 @@ const defaults: GallerySettings = {
   indexOcr: false,
   indexImage: true,
   indexVideos: true,
+  librariesPaneOpen: false,
 };
 
 export const settingsDefaults: Readonly<GallerySettings> = defaults;
@@ -168,6 +174,8 @@ function loadInitial(): GallerySettings {
       indexOcr: typeof parsed.indexOcr === "boolean" ? parsed.indexOcr : true,
       indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : true,
       indexVideos: typeof parsed.indexVideos === "boolean" ? parsed.indexVideos : true,
+      librariesPaneOpen:
+        typeof parsed.librariesPaneOpen === "boolean" ? parsed.librariesPaneOpen : false,
     });
   } catch {
     return defaults;
@@ -188,21 +196,12 @@ function createSettingsStore(): Writable<GallerySettings> {
 
 export const settings = createSettingsStore();
 
+/** The search types a v2 root used, for its one-time import into a backend library. */
 export function libraryIndexing(
   value: GallerySettings,
   root: string,
 ): { ocr: boolean; image: boolean } {
   return value.libraryIndexing[rootKey(root)] ?? { ocr: value.indexOcr, image: value.indexImage };
-}
-
-export function setLibraryIndexing(
-  root: string,
-  selection: { ocr: boolean; image: boolean },
-): void {
-  settings.update((value) => ({
-    ...value,
-    libraryIndexing: { ...value.libraryIndexing, [rootKey(root)]: selection },
-  }));
 }
 
 /** Maps the user-facing knobs onto the layout engine's options. */

@@ -65,15 +65,6 @@ async function handleAppRequest(request: Request, rendererDirectory: string): Pr
   try {
     const url = new URL(request.url);
     if (request.method !== "GET" || url.host !== APP_HOST) return notFound();
-    if (url.pathname === "/.storage-migration") {
-      return new Response("<!doctype html><title>Nicegal storage migration</title>", {
-        headers: {
-          "cache-control": "no-store",
-          "content-type": "text/html; charset=utf-8",
-        },
-      });
-    }
-
     const assetPath = resolveProtocolAssetPath(rendererDirectory, url.pathname);
     if (!assetPath) return notFound();
     return await net.fetch(pathToFileURL(assetPath).toString());
@@ -92,6 +83,8 @@ function handleThumbnailRequest(
     const assetId = url.pathname.slice(1);
     const size = Number(url.searchParams.get("size"));
     const generatorVersion = Number(url.searchParams.get("v"));
+    const frameText = url.searchParams.get("frame");
+    const frameTimestampMs = frameText === null ? null : Number(frameText);
     const modifiedNs = url.searchParams.get("mtime") ?? "";
     const sourceSize = url.searchParams.get("bytes") ?? "";
     if (
@@ -102,6 +95,8 @@ function handleThumbnailRequest(
       size > 1024 ||
       !Number.isInteger(generatorVersion) ||
       generatorVersion < 1 ||
+      (frameText !== null &&
+        (!/^\d+$/.test(frameText) || !Number.isSafeInteger(frameTimestampMs))) ||
       !/^-?\d+$/.test(modifiedNs) ||
       !/^\d+$/.test(sourceSize)
     ) {
@@ -110,7 +105,12 @@ function handleThumbnailRequest(
 
     const reader = getThumbnails();
     if (!reader) return new Response("Thumbnail service is starting", { status: 503 });
-    const thumbnail = reader.get(assetId, generatorVersion, modifiedNs, sourceSize, size);
+    const thumbnail =
+      frameTimestampMs === null
+        ? reader.get(assetId, generatorVersion, modifiedNs, sourceSize, size)
+        : generatorVersion === 3
+          ? reader.getVideoSample(assetId, frameTimestampMs, modifiedNs, sourceSize, size)
+          : null;
     if (!thumbnail) return new Response("Thumbnail not found", { status: 404 });
     return new Response(thumbnail.data as unknown as BodyInit, {
       status: 200,

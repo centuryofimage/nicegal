@@ -58,7 +58,7 @@ function fixture(): Fixture {
   const search = (metadata: Record<string, unknown> = {}): Promise<unknown> =>
     handlers.get("backend:search")!(
       { sender },
-      { query: "cat", type: "simple", root: process.cwd(), ...metadata },
+      { query: "cat", type: "ocrSimple", libraryId: 1, ...metadata },
     );
   const cancel = (): Promise<unknown> => handlers.get("backend:cancel-search")!({ sender });
   return { calls, sender, search, cancel };
@@ -123,8 +123,9 @@ test("invalid transport metadata cannot cancel a valid active search", async () 
   await active;
 });
 
-test("index selections cross IPC intact and invalid selections are rejected", async () => {
+test("library scan and library requests cross IPC with only their documented fields", async () => {
   const requests: unknown[] = [];
+  const updates: unknown[][] = [];
   registerBackendIpc({
     status: { ready: true, error: null },
     isTrustedSender: () => true,
@@ -133,32 +134,37 @@ test("index selections cross IPC intact and invalid selections are rejected", as
         requests.push(request);
         return request;
       },
+      updateLibrary: async (...args: unknown[]) => {
+        updates.push(args);
+        return {};
+      },
     },
   });
   const start = (params: Record<string, unknown>): Promise<unknown> =>
     Promise.resolve().then(() =>
-      handlers.get("backend:start-job")!(
-        {},
-        {
-          type: "libraryIndex",
-          params: { root: process.cwd(), ...params },
-        },
-      ),
+      handlers.get("backend:start-job")!({}, { type: "libraryScan", params }),
     );
-  for (const selection of [
-    { ocr: true, image: false },
-    { ocr: false, image: true },
-    { ocr: false, image: true, indexVideos: false },
-  ]) {
-    await start(selection);
-    assert.deepEqual(requests.at(-1), {
-      type: "libraryIndex",
-      params: { root: process.cwd(), ...selection },
-    });
+  for (const params of [{ libraryId: 3 }, { libraryId: 3, retryFailed: true }]) {
+    await start(params);
+    assert.deepEqual(requests.at(-1), { type: "libraryScan", params });
   }
-  await assert.rejects(start({ ocr: false, image: false }), /Select/);
-  await assert.rejects(start({ ocr: "false" }), /Invalid/);
-  await assert.rejects(start({ image: 1 }), /Invalid/);
-  await assert.rejects(start({ indexVideos: "false" }), /Invalid/);
-  assert.equal(requests.length, 3);
+  await assert.rejects(start({ libraryId: "3" }), /Invalid library ID/);
+  await assert.rejects(start({ libraryId: 0 }), /Invalid library ID/);
+  await assert.rejects(start({ libraryId: 3, retryFailed: "yes" }), /Invalid/);
+  await assert.rejects(start({ libraryId: 3, indexVideos: false }), /Invalid/);
+  assert.equal(requests.length, 2);
+
+  const update = (definition: unknown): Promise<unknown> =>
+    Promise.resolve().then(() => handlers.get("backend:update-library")!({}, 3, definition));
+  const root = process.cwd();
+  await update({ include: [root], exclude: [], ocr: false, image: true });
+  assert.deepEqual(updates.at(-1), [3, { include: [root], exclude: [], ocr: false, image: true }]);
+  await assert.rejects(update({ include: [], exclude: [], ocr: false, image: true }), /absolute/);
+  await assert.rejects(update({ include: ["relative"], ocr: false, image: true }), /absolute/);
+  await assert.rejects(update({ include: [root], exclude: [], ocr: 1, image: true }), /search/);
+  await assert.rejects(
+    update({ include: [root], exclude: [], ocr: false, image: true, name: "x" }),
+    /definition/,
+  );
+  assert.equal(updates.length, 1);
 });

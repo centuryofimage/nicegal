@@ -14,7 +14,7 @@ it supports searching the text inside images with optical character recognition 
 - find exact words, related text (vecsearch), visual concepts, or similar images.
 - combine descriptions and image references in one search
 
-<img src="docs/images/gallery-all-search.png" width="888">
+<img src="docs/images/gallery-all-search.jpg" width="888">
 
 ### Search modes:
 
@@ -23,7 +23,7 @@ it supports searching the text inside images with optical character recognition 
 - **Related text `meaning:`** - Text with a similar meaning to your query.
 - **Visual search `like:`** - Appearance, concepts, and similarity to another image or video.
 
-<img src="docs/images/gallery-search-menu.png" width="888">
+<img src="docs/images/gallery-search-menu.jpg" width="888">
 
 ## Get Nicegal
 

@@ -62,7 +62,7 @@
     jobs.active &&
       (jobs.active.type === "modelPrepare" ||
         jobs.active.type === "ocrModelLoad" ||
-        jobs.active.type === "libraryIndex")
+        jobs.active.type === "libraryScan")
       ? jobs.active
       : null,
   );
@@ -76,7 +76,7 @@
   );
   const currentSetupModel = $derived.by((): string | null => {
     const job = setupJob;
-    if (!settingUp || !job || download || job.type === "libraryIndex") return null;
+    if (!settingUp || !job || download || job.type === "libraryScan") return null;
     if (job.type === "ocrModelLoad") {
       return job.phase === "downloadingModels" || job.phase === "loadingModels"
         ? "PaddleOCR v6 small detector and recognizer"
@@ -218,7 +218,7 @@
       {#if setupJob?.status === "cancelling"}<p>
           Stopping… Completed downloads and search data will be kept.
         </p>{/if}
-      {#if failed || stopped}<p>Open Libraries to resume preparing search for your folder.</p>{/if}
+      {#if failed || stopped}<p>Use Library manager → Rescan library to resume preparing search.</p>{/if}
       <div class="model-actions">
         {#if settingUp}
           <button

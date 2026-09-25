@@ -20,7 +20,7 @@
 
   let {
     libraryName,
-    libraryRoot,
+    libraryTitle,
     hasLibrary,
     matchedCount,
     totalCount,
@@ -36,7 +36,8 @@
     onsettings,
   }: {
     libraryName: string;
-    libraryRoot: string;
+    /** Tooltip for the library name: its included folders. */
+    libraryTitle: string;
     /** No library selected means no counts to show; the layout switch disables rather than hides. */
     hasLibrary: boolean;
     matchedCount: number;
@@ -115,7 +116,7 @@
   const rateText = $derived(job ? jobRateText(job) : "");
 </script>
 
-<span class="status-segment library" title={libraryRoot || undefined}>{libraryName}</span>
+<span class="status-segment library" title={libraryTitle || undefined}>{libraryName}</span>
 {#if hasLibrary}
   <span class="status-segment count" role="status" title={itemsTitle}>{itemsText}</span>
   {#if selectedCount > 0}

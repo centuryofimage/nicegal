@@ -9,6 +9,7 @@ import {
 } from "electron";
 import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 
 import type { AppInfo } from "../../shared/diagnostics";
 import type { NicegalServerClient } from "../backend/nicegal-server-client";
@@ -118,12 +119,24 @@ export function registerNativeIpc(context: NativeIpcContext): void {
       if (error) throw new Error(error);
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.native.chooseDirectory, context.isTrustedSender, async (event) => {
-    const owner = BrowserWindow.fromWebContents(event.sender);
-    if (!owner) throw new Error("Directory picker requires an owning application window");
-    const result = await dialog.showOpenDialog(owner, { properties: ["openDirectory"] });
-    return result.canceled ? null : (result.filePaths[0] ?? null);
-  });
+  handleTrustedIpc(
+    IPC_CHANNELS.native.chooseDirectory,
+    context.isTrustedSender,
+    async (event, defaultPath: unknown) => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      if (!owner) throw new Error("Directory picker requires an owning application window");
+      if (
+        defaultPath !== undefined &&
+        (typeof defaultPath !== "string" || !isAbsolute(defaultPath))
+      )
+        throw new TypeError("Invalid directory picker start folder");
+      const result = await dialog.showOpenDialog(owner, {
+        properties: ["openDirectory"],
+        ...(defaultPath === undefined ? {} : { defaultPath }),
+      });
+      return result.canceled ? null : (result.filePaths[0] ?? null);
+    },
+  );
 
   handleTrustedIpc(
     IPC_CHANNELS.native.chooseVisualSearchImage,
