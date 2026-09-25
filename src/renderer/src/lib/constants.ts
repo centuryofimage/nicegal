@@ -15,3 +15,6 @@ export const ONBOARDING_DISMISSED_STORAGE_KEY = "nicegal.onboardingDismissed.v1"
 
 /** Pending resumable-job intent, retained across an interrupted indexing job. */
 export const JOB_RESUME_STORAGE_KEY = "nicegal.jobResume.v1";
+
+/** File errors acknowledged by dismissing a job, so the same errors do not raise it again. */
+export const ACKNOWLEDGED_JOB_ERRORS_STORAGE_KEY = "nicegal.acknowledgedJobErrors.v1";

@@ -14,3 +14,9 @@ export function sameFolder(left: string, right: string): boolean {
   const key = (path: string): string => rootKey(path.replace(/\\/g, "/").replace(/\/+$/, "") || "/");
   return key(left) === key(right);
 }
+
+/** The last path segment, which names a folder in the tree and the search chip. */
+export function folderName(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  return trimmed.split(/[\\/]/).pop() || path;
+}

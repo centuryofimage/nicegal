@@ -4,6 +4,7 @@ import type {
   TextEmbeddingCoverage,
   ImageEmbeddingCoverage,
   GalleryAsset,
+  FolderEntry,
   AssetMetadata,
   CreateLibraryRequest,
   Library,
@@ -74,10 +75,10 @@ export class NicegalServerClient {
     return this.requestJson<GalleryAsset[]>(url, { method: "GET" });
   }
 
-  async listFolders(libraryId: LibraryId): Promise<string[]> {
+  async listFolders(libraryId: LibraryId): Promise<FolderEntry[]> {
     const url = new URL("/v1/catalog/folders", this.endpoint);
     url.searchParams.set("libraryId", String(libraryId));
-    return this.requestJson<string[]>(url, { method: "GET" });
+    return this.requestJson<FolderEntry[]>(url, { method: "GET" });
   }
 
   async countAssets(libraryId: LibraryId): Promise<number> {

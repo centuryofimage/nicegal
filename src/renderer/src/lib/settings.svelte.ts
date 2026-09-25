@@ -8,6 +8,8 @@ import { SETTINGS_STORAGE_KEY } from "./constants";
 import { rootKey } from "./library-root";
 
 export type GalleryTheme = "seven-a" | "seven-b";
+/** Sibling order in the libraries pane folder tree. */
+export type FolderSort = "name" | "newest";
 
 /**
  * User preferences for how the gallery is arranged and grouped. Persisted to localStorage and
@@ -53,8 +55,11 @@ export interface GallerySettings {
   indexImage: boolean;
   /** Include video frames in image search indexing. Videos remain in the catalog. */
   indexVideos: boolean;
-  /** Whether the left libraries pane is shown. */
+  /** Whether the left libraries pane is shown. Open on first run, then remembered. */
   librariesPaneOpen: boolean;
+  /** Libraries pane width in CSS pixels, set by dragging its edge. */
+  librariesPaneWidth: number;
+  folderSort: FolderSort;
 }
 
 const defaults: GallerySettings = {
@@ -74,7 +79,9 @@ const defaults: GallerySettings = {
   indexOcr: false,
   indexImage: true,
   indexVideos: true,
-  librariesPaneOpen: false,
+  librariesPaneOpen: true,
+  librariesPaneWidth: 200,
+  folderSort: "name",
 };
 
 export const settingsDefaults: Readonly<GallerySettings> = defaults;
@@ -86,6 +93,7 @@ export const settingsLimits = {
   gridColumns: { min: 0, max: 24, step: 1 },
   gridCellWidth: { min: 60, max: 400, step: 10 },
   gap: { min: 0, max: 40, step: 1 },
+  librariesPaneWidth: { min: 150, max: 480, step: 10 },
   debugIndexLimit: { min: 0, max: Number.MAX_SAFE_INTEGER, step: 1 },
 } as const satisfies Record<string, { min: number; max: number; step: number }>;
 
@@ -175,7 +183,8 @@ function loadInitial(): GallerySettings {
       indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : true,
       indexVideos: typeof parsed.indexVideos === "boolean" ? parsed.indexVideos : true,
       librariesPaneOpen:
-        typeof parsed.librariesPaneOpen === "boolean" ? parsed.librariesPaneOpen : false,
+        typeof parsed.librariesPaneOpen === "boolean" ? parsed.librariesPaneOpen : true,
+      folderSort: parsed.folderSort === "newest" ? "newest" : "name",
     });
   } catch {
     return defaults;

@@ -12,7 +12,6 @@
 
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { settings, settingsLimits } from "../lib/settings.svelte";
-  import SliderRow from "./SliderRow.svelte";
   let {
     layoutMode = $bindable(),
     sortField = $bindable(),
@@ -65,22 +64,6 @@
     { value: "video", label: "Videos" },
   ];
   let openMenu = $state(false);
-  const sizeKey = $derived(
-    layoutMode === "justified"
-      ? "targetRowHeight"
-      : layoutMode === "masonry"
-        ? "masonryColumnWidth"
-        : "gridCellWidth",
-  );
-  const sizeTitle = $derived(
-    layoutMode === "grid" && $settings.gridColumns > 0
-      ? "Image size: adjusting returns to automatic columns"
-      : "Image size",
-  );
-  function setSize(value: number): void {
-    $settings[sizeKey] = value;
-    if (layoutMode === "grid") $settings.gridColumns = 0;
-  }
   function chooseLayout(mode: LayoutMode): void {
     layoutMode = mode;
   }
@@ -178,17 +161,7 @@
     </div>
   </div>
 {/snippet}
-{#snippet imageSize(compact = false)}
-  <SliderRow
-    label="Image size"
-    {compact}
-    title={sizeTitle}
-    bind:value={() => $settings[sizeKey], setSize}
-    {...settingsLimits[sizeKey]}
-  />
-{/snippet}
 <div class="view-controls" {@attach popoverDismiss(openMenu, () => (openMenu = false))}>
-  <div class="toolbar-size">{@render imageSize(true)}</div>
   <button
     class={[
       "app-toolbar-button",
@@ -205,7 +178,6 @@
   >
   {#if openMenu}
     <div class="view-menu" role="dialog" aria-label="View options">
-      <div class="menu-size">{@render imageSize()}</div>
       <section>
         <h2>Layout</h2>
         {@render layoutChoices()}
@@ -363,12 +335,6 @@
     box-shadow: var(--bevel-sunken);
     color: var(--text-primary);
   }
-  .toolbar-size {
-    width: var(--gallery-size-control-width);
-  }
-  .menu-size {
-    display: none;
-  }
   .numeric-options {
     display: grid;
     gap: var(--space-6);
@@ -394,13 +360,5 @@
     margin: 0;
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
-  }
-  @media (max-width: 720px) {
-    .toolbar-size {
-      display: none;
-    }
-    .menu-size {
-      display: block;
-    }
   }
 </style>

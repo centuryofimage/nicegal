@@ -1,36 +1,64 @@
 <script lang="ts">
   import Check from "@lucide/svelte/icons/check";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
-  import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import Folder from "@lucide/svelte/icons/folder";
   import Folders from "@lucide/svelte/icons/folders";
+  import { tick } from "svelte";
 
-  import type { LibraryId } from "../../../shared/backend";
+  import type { FolderEntry, LibraryId } from "../../../shared/backend";
 
   import { useApplication } from "../lib/application.svelte";
-  import { folderName } from "../lib/catalog.svelte";
+  import {
+    buildFolderTree,
+    formatFolderDate,
+    isInside,
+    visibleFolderRows,
+    type FolderRow,
+  } from "../lib/folder-tree";
   import { folderStatus, libraryOptionsSummary } from "../lib/library-status";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { parseQuery, withFolder } from "../lib/search-query";
+  import {
+    settings,
+    settingsDefaults,
+    settingsLimits,
+    type FolderSort,
+  } from "../lib/settings.svelte";
+  import SegmentedControl from "./SegmentedControl.svelte";
 
   let {
+    hidden = false,
     onselect,
     onmanage,
     onscan,
   }: {
+    /** Kept mounted but out of the layout, e.g. while the image viewer is open. */
+    hidden?: boolean;
     onselect: (libraryId: LibraryId) => void;
     onmanage: () => void;
     onscan: () => void;
   } = $props();
 
+  const SORT_OPTIONS: ReadonlyArray<{ value: FolderSort; label: string; title: string }> = [
+    { value: "name", label: "Name", title: "Sort folders by name" },
+    { value: "newest", label: "Newest", title: "Most recently changed folders first" },
+  ];
+  /** The "All folders" row's place in the keyboard cursor, beside real folder paths. */
+  const ALL = "";
+
   const { catalog, ocrSearch, jobs } = useApplication().services;
   const selected = $derived(catalog.selectedLibrary);
   const ready = $derived(catalog.backendStatus.ready);
   let menuOpen = $state(false);
-  let folders = $state.raw<string[]>([]);
+  let folders = $state.raw<FolderEntry[]>([]);
   let folderError = $state("");
   let expanded = $state<Record<string, boolean>>({});
+  let filter = $state("");
+  let cursor = $state(ALL);
+  let filterInput = $state<HTMLInputElement>();
+  let treeElement = $state<HTMLElement>();
   const focused = $derived(parseQuery(ocrSearch.query).folder);
+  const filtering = $derived(filter.trim() !== "");
 
   $effect(() => {
     const libraryId = catalog.selectedId;
@@ -42,9 +70,9 @@
     let current = true;
     void window.nicegal.backend
       .listFolders(libraryId)
-      .then((paths) => {
+      .then((entries) => {
         if (current) {
-          folders = paths;
+          folders = entries;
           folderError = "";
         }
       })
@@ -56,48 +84,164 @@
     };
   });
 
-  function parentOf(path: string): string | null {
-    const trimmed = path.replace(/[\\/]+$/, "");
-    const index = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
-    return index < 0 ? null : trimmed.slice(0, index);
-  }
+  const roots = $derived(selected?.include.map((folder) => folder.path) ?? []);
+  const tree = $derived(buildFolderTree(roots, folders, $settings.folderSort));
+  const rows = $derived(visibleFolderRows(tree, expanded, focused, filter));
+  /** Cursor order: the All folders row, then every visible folder. */
+  const order = $derived([ALL, ...rows.map((row) => row.node.path)]);
+  const cursorIndex = $derived(Math.max(0, order.indexOf(cursor)));
 
-  type FolderRow = { path: string; depth: number; children: boolean };
-  const rows = $derived.by((): FolderRow[] => {
-    const paths = [
-      ...new Set([...(selected?.include.map((folder) => folder.path) ?? []), ...folders]),
-    ];
-    const set = new Set(paths);
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- temporary lookup rebuilt by this derived calculation
-    const children = new Map<string | null, string[]>();
-    for (const path of paths) {
-      let parent = parentOf(path);
-      while (parent && !set.has(parent)) parent = parentOf(parent);
-      const siblings = children.get(parent) ?? [];
-      siblings.push(path);
-      children.set(parent, siblings);
-    }
-    const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
-    for (const siblings of children.values())
-      siblings.sort((a, b) => collator.compare(folderName(a), folderName(b)));
-    const visible: FolderRow[] = [];
-    const visit = (parent: string | null, depth: number): void => {
-      for (const path of children.get(parent) ?? []) {
-        const hasChildren = Boolean(children.get(path)?.length);
-        visible.push({ path, depth, children: hasChildren });
-        const onFocusedBranch =
-          focused?.startsWith(`${path.replace(/[\\/]+$/, "")}/`) ||
-          focused?.startsWith(`${path.replace(/[\\/]+$/, "")}\\`);
-        if (hasChildren && (expanded[path] ?? (depth === 0 || Boolean(onFocusedBranch))))
-          visit(path, depth + 1);
-      }
-    };
-    visit(null, 0);
-    return visible;
-  });
+  function rowId(index: number): string {
+    return `folder-row-${index}`;
+  }
 
   function focus(path: string | null): void {
     ocrSearch.query = withFolder(ocrSearch.query, path);
+  }
+
+  function activate(path: string): void {
+    cursor = path;
+    focus(path === ALL ? null : path);
+  }
+
+  function setExpanded(row: FolderRow, open: boolean): void {
+    if (filtering || !row.node.children.length) return;
+    expanded = { ...expanded, [row.node.path]: open };
+  }
+
+  async function moveCursor(index: number): Promise<void> {
+    cursor = order[Math.min(Math.max(index, 0), order.length - 1)];
+    await tick();
+    document.getElementById(rowId(cursorIndex))?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** The row under a pointer event, by its position in the cursor order; -1 when between rows. */
+  function rowAt(event: MouseEvent): number {
+    const item = (event.target as Element).closest<HTMLElement>("[role=treeitem]");
+    return item ? Number(item.dataset.index) : -1;
+  }
+
+  function onTreeClick(event: MouseEvent): void {
+    const index = rowAt(event);
+    if (index < 0) return;
+    const row: FolderRow | undefined = rows[index - 1];
+    if (row && (event.target as Element).closest(".expander")) {
+      cursor = row.node.path;
+      setExpanded(row, !row.expanded);
+    } else activate(order[index]);
+  }
+
+  function onTreeDblclick(event: MouseEvent): void {
+    const row: FolderRow | undefined = rows[rowAt(event) - 1];
+    if (row && !(event.target as Element).closest(".expander")) setExpanded(row, !row.expanded);
+  }
+
+  function onTreeKeydown(event: KeyboardEvent): void {
+    const row: FolderRow | undefined = rows[cursorIndex - 1];
+    switch (event.key) {
+      case "ArrowDown":
+        void moveCursor(cursorIndex + 1);
+        break;
+      case "ArrowUp":
+        void moveCursor(cursorIndex - 1);
+        break;
+      case "Home":
+        void moveCursor(0);
+        break;
+      case "End":
+        void moveCursor(order.length - 1);
+        break;
+      case "ArrowRight":
+        if (!row?.node.children.length) break;
+        if (row.expanded) void moveCursor(cursorIndex + 1);
+        else setExpanded(row, true);
+        break;
+      case "ArrowLeft":
+        if (!row) break;
+        if (row.expanded && !filtering) setExpanded(row, false);
+        else {
+          let parent = cursorIndex - 1;
+          while (parent > 0 && rows[parent - 1].depth >= row.depth) parent--;
+          void moveCursor(parent);
+        }
+        break;
+      case "Enter":
+      case " ":
+        activate(order[cursorIndex]);
+        break;
+      default:
+        // Typing in the tree starts a filter, as type-to-find does in Explorer.
+        if (event.key.length !== 1 || event.ctrlKey || event.altKey || event.metaKey) return;
+        filter += event.key;
+        filterInput?.focus();
+    }
+    event.preventDefault();
+  }
+
+  function onFilterKeydown(event: KeyboardEvent): void {
+    if (event.key === "Escape" && filter) clearFilter();
+    else if (event.key === "ArrowDown" || event.key === "Enter") {
+      const first = rows.find((row) => row.match);
+      if (!first) return;
+      if (event.key === "Enter") activate(first.node.path);
+      else cursor = first.node.path;
+      treeElement?.focus();
+    } else return;
+    event.preventDefault();
+  }
+
+  /** Leaves the filter with the chosen folder in view, reopening any branch hiding it. */
+  function clearFilter(): void {
+    filter = "";
+    if (focused) {
+      const reopened = { ...expanded };
+      for (const path of Object.keys(reopened)) if (isInside(focused, path)) delete reopened[path];
+      expanded = reopened;
+      cursor = focused;
+    }
+    void moveCursor(order.indexOf(cursor));
+  }
+
+  const WIDTH = settingsLimits.librariesPaneWidth;
+  /** Width while the edge is dragged; saved to settings once, when the drag ends. */
+  let dragWidth = $state<number | null>(null);
+  let dragStart: { x: number; width: number } | null = null;
+  const width = $derived(dragWidth ?? $settings.librariesPaneWidth);
+
+  function saveWidth(value: number): void {
+    const librariesPaneWidth = Math.round(Math.min(WIDTH.max, Math.max(WIDTH.min, value)));
+    settings.update((current) => ({ ...current, librariesPaneWidth }));
+  }
+
+  function onSplitterPointerdown(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    dragStart = { x: event.clientX, width };
+    event.preventDefault();
+  }
+
+  function onSplitterPointermove(event: PointerEvent): void {
+    if (!dragStart) return;
+    const next = dragStart.width + event.clientX - dragStart.x;
+    dragWidth = Math.min(WIDTH.max, Math.max(WIDTH.min, next));
+  }
+
+  function onSplitterRelease(): void {
+    if (dragWidth !== null) saveWidth(dragWidth);
+    dragStart = null;
+    dragWidth = null;
+  }
+
+  function onSplitterKeydown(event: KeyboardEvent): void {
+    const next = {
+      ArrowLeft: width - WIDTH.step,
+      ArrowRight: width + WIDTH.step,
+      Home: WIDTH.min,
+      End: WIDTH.max,
+    }[event.key];
+    if (next === undefined) return;
+    saveWidth(next);
+    event.preventDefault();
   }
 
   function choose(action: () => void): void {
@@ -106,7 +250,13 @@
   }
 </script>
 
-<aside id="libraries-pane" class="libraries-pane" aria-label="Libraries">
+<aside
+  id="libraries-pane"
+  class="libraries-pane"
+  aria-label="Libraries"
+  {hidden}
+  style:--libraries-pane-width={`${width}px`}
+>
   <header {@attach popoverDismiss(menuOpen, () => (menuOpen = false))}>
     <button
       class="library-menu-button"
@@ -152,68 +302,144 @@
     {/if}
   </header>
 
-  <div class="folders themed-scrollbar" aria-label="Folders">
+  {#if selected}
+    <div class="folder-tools">
+      <input
+        bind:this={filterInput}
+        bind:value={filter}
+        class="folder-filter"
+        type="search"
+        placeholder="Filter"
+        aria-label="Filter folders"
+        spellcheck="false"
+        onkeydown={onFilterKeydown}
+      />
+      <SegmentedControl
+        bind:value={
+          () => $settings.folderSort,
+          (folderSort) => settings.update((value) => ({ ...value, folderSort }))
+        }
+        options={SORT_OPTIONS}
+        label="Sort folders"
+        --segment-height="var(--tree-row-height)"
+      />
+    </div>
+  {/if}
+
+  <div
+    bind:this={treeElement}
+    class="folders themed-scrollbar"
+    role="tree"
+    aria-label="Folders"
+    tabindex="0"
+    aria-activedescendant={selected ? rowId(cursorIndex) : undefined}
+    onkeydown={onTreeKeydown}
+    onclick={onTreeClick}
+    ondblclick={onTreeDblclick}
+  >
     {#if selected}
-      <button
-        class="tree-row"
-        class:active={focused === null}
-        aria-current={focused === null ? "page" : undefined}
-        onclick={() => focus(null)}
+      <div
+        id={rowId(0)}
+        class={["tree-row", { selected: focused === null, cursor: cursorIndex === 0 }]}
+        role="treeitem"
+        aria-level={1}
+        aria-selected={focused === null}
+        tabindex="-1"
+        data-index={0}
       >
-        <span class="expander"></span><Folders size={14} aria-hidden="true" /><span
-          class="folder-name">All folders</span
-        >
-      </button>
-      {#each rows as row (row.path)}
-        {@const root = selected.include.find((folder) => folder.path === row.path)}
+        <span class="expander"></span>
+        <span class="root-icon"><Folders size={14} aria-hidden="true" /></span>
+        <span class="folder-name">All folders</span>
+      </div>
+      {#each rows as row, index (row.node.path)}
+        {@const root = selected.include.find((folder) => folder.path === row.node.path)}
         {@const status = root ? folderStatus(root) : null}
         <div
-          class="tree-row"
-          class:active={focused === row.path}
-          style:padding-left={`calc(var(--space-4) + ${row.depth * 14}px)`}
-          title={[row.path, status?.detail].filter(Boolean).join("\n")}
-        >
-          {#if row.children}
-            <button
-              class="expander"
-              aria-label={`${(expanded[row.path] ?? row.depth === 0) ? "Collapse" : "Expand"} ${folderName(row.path)}`}
-              aria-expanded={expanded[row.path] ?? row.depth === 0}
-              onclick={() =>
-                (expanded = { ...expanded, [row.path]: !(expanded[row.path] ?? row.depth === 0) })}
-            >
-              {#if expanded[row.path] ?? row.depth === 0}<ChevronDown
-                  size={12}
-                />{:else}<ChevronRight size={12} />{/if}
-            </button>
-          {:else}<span class="expander"></span>{/if}
-          <button
-            class="folder-action"
-            aria-current={focused === row.path ? "page" : undefined}
-            onclick={() => focus(row.path)}
+          id={rowId(index + 1)}
+          class={[
+            "tree-row",
+            {
+              selected: focused === row.node.path,
+              cursor: cursorIndex === index + 1,
+              context: filtering && !row.match,
+            },
+          ]}
+          style:--depth={row.depth}
+          role="treeitem"
+          aria-level={row.depth + 2}
+          aria-expanded={row.node.children.length ? row.expanded : undefined}
+          aria-selected={focused === row.node.path}
+          tabindex="-1"
+          title={[row.node.path, status?.detail].filter(Boolean).join("\n")}
+          data-index={index + 1}
           >
-            <Folder size={14} aria-hidden="true" /><span class="folder-name"
-              >{folderName(row.path)}</span
-            >
-            {#if status?.text}<span class={["status", status.tone]}>{status.text}</span>{/if}
-          </button>
+          <span class="expander" aria-hidden="true">
+            {#if !row.node.children.length}
+              <span class="leaf"></span>
+            {:else if row.expanded}
+              <svg width="9" height="9" viewBox="0 0 9 9"
+                ><path d="M7.5 2v5.5H2z" fill="currentColor" /></svg
+              >
+            {:else}
+              <svg width="9" height="9" viewBox="0 0 9 9"
+                ><path d="M2.5 1.5 6.5 4.5l-4 3z" fill="none" stroke="currentColor" /></svg
+              >
+            {/if}
+          </span>
+          {#if root}<span class="root-icon"><Folder size={14} aria-hidden="true" /></span>{/if}
+          <span class="folder-name"
+            >{#if row.match}{row.node.name.slice(0, row.match.start)}<mark
+                >{row.node.name.slice(row.match.start, row.match.end)}</mark
+              >{row.node.name.slice(row.match.end)}{:else}{row.node.name}{/if}</span
+          >
+          {#if status?.text}
+            <span class={["meta", status.tone]}>{status.text}</span>
+          {:else if $settings.folderSort === "newest" && row.node.newestMs !== null}
+            <span class="meta">{formatFolderDate(row.node.newestMs)}</span>
+          {/if}
         </div>
       {/each}
-      {#if jobs.scanState(selected.id) && rows.length <= selected.include.length}
-        <p class="folder-error" role="status">Discovering folders…</p>
+      {#if filtering && !rows.length}
+        <p class="folder-note" role="status">No folders match.</p>
       {/if}
-      {#if folderError}<p class="folder-error" role="status">{folderError}</p>{/if}
+      {#if jobs.scanState(selected.id) && folders.length <= selected.include.length}
+        <p class="folder-note" role="status">Discovering folders…</p>
+      {/if}
+      {#if folderError}<p class="folder-note" role="status">{folderError}</p>{/if}
     {:else if catalog.librariesLoaded}
-      <p class="folder-error">
+      <p class="folder-note">
         {catalog.librariesError
           ? "Libraries could not be loaded."
           : "Use Library manager to add a folder."}
       </p>
     {/if}
   </div>
+  <!-- A focusable separator is the ARIA window-splitter widget; Svelte treats the role as static. -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+  <div
+    class={["splitter", { dragging: dragWidth !== null }]}
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize libraries pane"
+    aria-valuenow={width}
+    aria-valuemin={WIDTH.min}
+    aria-valuemax={WIDTH.max}
+    tabindex="0"
+    title="Drag to resize. Double-click to reset."
+    onpointerdown={onSplitterPointerdown}
+    onpointermove={onSplitterPointermove}
+    onlostpointercapture={onSplitterRelease}
+    ondblclick={() => saveWidth(settingsDefaults.librariesPaneWidth)}
+    onkeydown={onSplitterKeydown}
+  ></div>
 </aside>
 
 <style>
+  .libraries-pane[hidden] {
+    display: none;
+  }
   .libraries-pane {
+    position: relative;
     display: flex;
     flex-direction: column;
     flex: 0 0 var(--libraries-pane-width);
@@ -330,90 +556,155 @@
     margin: var(--space-2) var(--space-2) var(--space-2) 21px;
     background: var(--border-subtle);
   }
+  .folder-tools {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .folder-filter {
+    flex: 1;
+    min-width: 0;
+    height: var(--tree-row-height);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font: inherit;
+  }
+  .folder-filter::placeholder {
+    color: var(--text-tertiary);
+  }
+  .folder-filter:focus {
+    border-color: var(--btn-border-hover);
+    outline: none;
+  }
   .folders {
     flex: 1;
     min-height: 0;
     overflow: auto;
     margin: 0;
-    padding: var(--space-3) 0;
+    padding: var(--space-2) var(--space-2);
+    outline: none;
   }
   .tree-row {
     display: flex;
     align-items: center;
-    gap: var(--space-4);
+    gap: var(--space-3);
     min-width: 0;
-    height: 22px;
-    width: 100%;
-    padding: 0 var(--space-4);
-    color: var(--text-secondary);
-    border: 0;
-    background: transparent;
-    font: inherit;
-    text-align: left;
+    height: var(--tree-row-height);
+    padding: 0 var(--space-3) 0 calc(var(--space-1) + var(--depth, 0) * var(--tree-indent));
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    cursor: default;
   }
-  .tree-row:hover,
-  .tree-row.active {
-    background: var(--surface-hover);
+  .tree-row:hover {
+    border-color: var(--tree-hover-border);
+    background: var(--tree-hover-face);
   }
-  .tree-row.active {
-    color: var(--accent-active);
+  .tree-row.selected {
+    border-color: var(--tree-selected-border);
+    background: var(--tree-selected-face);
+  }
+  /* Keyboard position, shown only while the tree has focus: an edge on an unselected row, the
+     dotted focus rectangle inside a selected one. */
+  .folders:focus .tree-row.cursor:not(.selected) {
+    border-color: var(--tree-cursor-border);
+  }
+  .folders:focus-visible .tree-row.cursor {
+    outline: var(--focus-ring);
+    outline-offset: -3px;
+  }
+  .tree-row.context {
+    color: var(--text-tertiary);
   }
   .expander {
     display: inline-flex;
     flex: none;
-    width: 16px;
-    height: 20px;
+    width: 11px;
+    height: 100%;
     align-items: center;
     justify-content: center;
-    border: 0;
-    background: transparent;
-    color: inherit;
-    padding: 0;
+    color: var(--tree-glyph);
   }
-  .folder-action {
-    display: flex;
-    flex: 1;
-    min-width: 0;
-    height: 22px;
-    align-items: center;
-    gap: var(--space-4);
-    border: 0;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    padding: 0;
+  .tree-row[aria-expanded="true"] .expander {
+    color: var(--tree-glyph-open);
   }
-  .tree-row button:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: var(--focus-ring-offset);
+  .tree-row[aria-expanded] .expander:hover {
+    color: var(--tree-glyph-hover);
   }
-  .folder-error {
-    padding: var(--space-4) var(--space-8);
+  .leaf {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: var(--tree-leaf);
+  }
+  .root-icon {
+    display: inline-flex;
+    flex: none;
+    color: var(--tree-root-icon);
+  }
+  .root-icon :global(svg) {
+    fill: var(--tree-root-icon-fill);
+  }
+  .folder-note {
+    margin: 0;
+    padding: var(--space-4) var(--space-6);
     color: var(--text-secondary);
   }
   .folder-name {
     flex: 1;
     min-width: 0;
     overflow: hidden;
-    color: var(--text-primary);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .status {
+  mark {
+    background: var(--search-highlight-bg);
+    color: var(--search-highlight-fg);
+  }
+  .meta {
     flex: none;
     max-width: 50%;
     overflow: hidden;
+    color: var(--text-tertiary);
     font-size: var(--font-size-sm);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .status.attention {
+  .meta.attention {
     color: var(--danger);
   }
   .library-menu-button:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
+  }
+  /* Win32 splitters are invisible until used: a few pixels straddling the pane's edge. */
+  .splitter {
+    position: absolute;
+    top: 0;
+    right: -3px;
+    bottom: 0;
+    z-index: var(--z-raised);
+    width: 6px;
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .splitter.dragging {
+    background: linear-gradient(
+      to right,
+      transparent 2px,
+      var(--border-strong) 2px,
+      var(--border-strong) 4px,
+      transparent 4px
+    );
+  }
+  .splitter:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: -1px;
   }
   @media (max-width: 600px) {
     .libraries-pane {

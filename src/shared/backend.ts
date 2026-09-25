@@ -59,6 +59,13 @@ export interface GalleryAsset {
   durationMs: number | null;
 }
 
+/** A folder in a library's tree: a configured root or a directory from a completed scan. */
+export interface FolderEntry {
+  path: string;
+  /** Directory modification time at its latest completed scan, or null before one. */
+  modifiedNs: string | null;
+}
+
 export interface AssetMetadata {
   asset: GalleryAsset;
   file: {
@@ -482,7 +489,7 @@ export interface BackendBridge {
   updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library>;
   deleteLibrary(libraryId: LibraryId): Promise<void>;
   listAssets(options: { libraryId: LibraryId; timeline: Timeline }): Promise<GalleryAsset[]>;
-  listFolders(libraryId: LibraryId): Promise<string[]>;
+  listFolders(libraryId: LibraryId): Promise<FolderEntry[]>;
   countAssets(libraryId: LibraryId): Promise<number>;
   getAssetMetadata(assetId: string): Promise<AssetMetadata>;
   getCatalogRevision(): Promise<string>;

@@ -107,6 +107,9 @@
   --space-12: 14px;
   --space-14: 16px;
   --space-16: 18px;
+  --tree-row-height: 19px;
+  --tree-hover-border: #a9c9ee;
+  --tree-selected-border: #6f96c4;
   --focus-ring: 1px dotted #1c5e9e;
   --focus-ring-offset: -3px;
 }
@@ -131,6 +134,9 @@
   /* Resolve aliases on the themed element, not :root, so each theme supplies its own colors. */
   --search-section-text: var(--text-primary);
   --search-section-rule: var(--border);
+  --size-slider-fill: var(--accent);
+  --size-slider-rail: var(--border);
+  --size-slider-thumb-border: var(--border-strong);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);

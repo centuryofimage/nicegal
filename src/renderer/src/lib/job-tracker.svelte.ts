@@ -1,6 +1,7 @@
 import type { JobRequest, JobSnapshot, LibraryId } from "../../../shared/backend";
 
 import { cleanDiagnostic, errorMessage } from "./errors";
+import { acknowledgeJobErrors, newJobErrors } from "./job-error-history";
 import { summarizeCompletion } from "./job-format";
 import { isTerminalJobStatus } from "./job-state";
 
@@ -30,7 +31,6 @@ export class JobTracker {
   private currentJobId: string | null = null;
   private generation = 0;
   private cancelRequested = false;
-  private hideCompletedJob = false;
 
   constructor(
     private readonly onCatalogRefresh: (delay: number) => void,
@@ -66,7 +66,7 @@ export class JobTracker {
    * queues it (or merges it into the library's queued scan) and this tracker lists it in
    * `queued` until it becomes the active job.
    */
-  async start(request: JobRequest, hideCompletedJob = false): Promise<JobSnapshot | null> {
+  async start(request: JobRequest): Promise<JobSnapshot | null> {
     if (this.running) {
       if (request.type !== "libraryScan") return null;
       try {
@@ -80,7 +80,6 @@ export class JobTracker {
       }
     }
     const generation = ++this.generation;
-    this.hideCompletedJob = hideCompletedJob;
     this.cancelRequested = false;
     this.error = "";
     this.connectionError = null;
@@ -146,7 +145,6 @@ export class JobTracker {
     ) {
       this.error = "";
       this.completionMessage = "";
-      this.hideCompletedJob = false;
       this.attach(active, ++this.generation);
     }
   }
@@ -215,7 +213,8 @@ export class JobTracker {
   }
 
   /**
-   * Acknowledges a terminal result or an operation error.
+   * Acknowledges a terminal result or an operation error. Its file errors are remembered, so a
+   * later job that meets only those again reports them in the status bar instead.
    */
   dismiss(): void {
     this.error = "";
@@ -226,6 +225,7 @@ export class JobTracker {
     }
     if (!this.active || !isTerminalJobStatus(this.active.status)) return;
 
+    acknowledgeJobErrors(this.active.errors);
     this.active = null;
   }
 
@@ -288,16 +288,22 @@ export class JobTracker {
       this.unsubscribe?.();
       this.unsubscribe = null;
       this.onTerminal(snapshot);
-      // A terminal result that needs a destructive confirmation or acknowledgement stays in the
-      // canonical job indicator until dismissed. Otherwise fold it into the status bar and free
-      // the toolbar space.
+      // A failure or a file error not acknowledged before stays in the canonical job indicator
+      // until dismissed. Anything else, including a startup rescan meeting the same unreadable
+      // files again, folds into the status bar and frees the toolbar space.
       const needsAttention =
-        snapshot.status === "failed" || Boolean(snapshot.error) || snapshot.errors.length > 0;
+        snapshot.status === "failed" ||
+        Boolean(snapshot.error) ||
+        newJobErrors(snapshot.errors).length > 0;
       if (!needsAttention) {
-        this.completionMessage = summarizeCompletion(snapshot);
-        // Keep successful work in the toolbar until the user opens then closes its progress card.
-        // Fast jobs otherwise mount and unmount between paints, making completion invisible.
-        if (snapshot.status !== "completed" || this.hideCompletedJob) this.active = null;
+        const known = snapshot.errors.length;
+        this.completionMessage = [
+          summarizeCompletion(snapshot),
+          known ? `${known.toLocaleString()} known file error${known === 1 ? "" : "s"}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+        this.active = null;
         this.completionTimer = setTimeout(() => {
           this.completionMessage = "";
           this.completionTimer = null;

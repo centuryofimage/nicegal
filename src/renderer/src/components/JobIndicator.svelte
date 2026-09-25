@@ -58,33 +58,29 @@
       ? `${job.status === "cancelling" ? "Cancelling" : "Downloading"}${phaseProgress.ratio !== null ? ` ${Math.floor(phaseProgress.ratio * 100)}%` : "…"}`
       : `${displayLabel}${count ? ` · ${count}` : ""}`,
   );
-  const dismissOnClose = $derived(job.status === "completed" && !needsAttention);
   let cardPinned = $state(false);
   let hiddenAttentionJob = $state<string | null>(null);
   let reviewingErrors = $state(false);
   const cardOpen = $derived(cardPinned || (needsAttention && hiddenAttentionJob !== job.jobId));
 
-  function hideCard(): void {
+  /** Closing a clean result acknowledges it. Failures and file errors stay until dismissed. */
+  function closeCard(): void {
+    if (!running && !needsAttention) {
+      ondismiss();
+      return;
+    }
     cardPinned = false;
     hiddenAttentionJob = job.jobId;
   }
 
-  function closeCard(event: KeyboardEvent): void {
+  function onIndicatorKeydown(event: KeyboardEvent): void {
     if (event.key !== "Escape") return;
-    if (cardPinned && dismissOnClose) {
-      ondismiss();
-      return;
-    }
-    hideCard();
+    closeCard();
     (event.currentTarget as HTMLElement).blur();
   }
 
   function toggleCard(): void {
-    if (cardPinned && dismissOnClose) {
-      ondismiss();
-      return;
-    }
-    if (cardOpen) hideCard();
+    if (cardOpen) closeCard();
     else cardPinned = true;
   }
 </script>
@@ -93,7 +89,7 @@
   class:pinned={cardOpen}
   class:needs-attention={needsAttention}
   class="job-anchor"
-  {@attach popoverDismiss(cardOpen && !reviewingErrors, hideCard)}
+  {@attach popoverDismiss(cardOpen && !reviewingErrors, closeCard)}
 >
   <button
     class:has-cancel={running}
@@ -103,7 +99,7 @@
     aria-expanded={cardOpen}
     aria-label="Show {displayLabel.toLowerCase()} progress"
     onclick={toggleCard}
-    onkeydown={closeCard}
+    onkeydown={onIndicatorKeydown}
   >
     <span class="job-spinner" class:running>
       {#if running}

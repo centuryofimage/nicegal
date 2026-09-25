@@ -7,6 +7,7 @@
   import AppShell from "./components/AppShell.svelte";
   import DetailView from "./components/DetailView.svelte";
   import GalleryDialogs from "./components/GalleryDialogs.svelte";
+  import GallerySizeSlider from "./components/GallerySizeSlider.svelte";
   import GalleryToolbar from "./components/GalleryToolbar.svelte";
   import LibrariesPane from "./components/LibrariesPane.svelte";
   import MetadataPanel from "./components/MetadataPanel.svelte";
@@ -95,7 +96,10 @@
 {#snippet workspace()}
   <div class="workspace-row">
     {#if view.librariesPaneOpen}
+      <!-- Hidden, not unmounted, while viewing: the viewer then spans the window like the search
+           toolbar does, and the tree keeps its filter, expansion and scroll for the return. -->
       <LibrariesPane
+        hidden={Boolean(view.detailItem)}
         onselect={view.selectLibrary}
         onmanage={view.openManageLibraries}
         onscan={() => catalog.selectedId !== null && commands.scanLibrary(catalog.selectedId)}
@@ -240,6 +244,7 @@
     class="status-pane-toggle status-pane-toggle-start"
     aria-controls="libraries-pane"
     aria-pressed={view.librariesPaneOpen}
+    disabled={Boolean(view.detailItem)}
     title="Show or hide libraries"
     onclick={view.toggleLibrariesPane}
   >
@@ -286,6 +291,7 @@
       {/if}
     {/if}
   </div>
+  {#if !view.detailItem}<GallerySizeSlider />{/if}
   <button
     bind:this={infoButton}
     class="status-pane-toggle"

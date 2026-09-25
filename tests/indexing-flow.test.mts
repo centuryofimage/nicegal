@@ -233,6 +233,44 @@ test("a scan requested while a job runs is listed as queued, not followed", asyn
   tracker.dispose();
 });
 
+test("only failures and new file errors keep a finished job in the toolbar", async () => {
+  let send: (snapshot: JobSnapshot) => void = () => {};
+  let nextId = 0;
+  trackerBackend({
+    startJob: async () => snapshot("libraryScan", "running", String(++nextId), 3),
+    subscribeJob: (_id: string, onSnapshot: (snapshot: JobSnapshot) => void) => {
+      send = onSnapshot;
+      return () => {};
+    },
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  const finish = async (errors: JobSnapshot["errors"]): Promise<void> => {
+    await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+    send({ ...snapshot("libraryScan", "completed", String(nextId), 3), errors });
+  };
+  const unreadable = [{ path: "D:\\a.jpg", message: "unreadable" }];
+
+  await finish([]);
+  assert.equal(tracker.active, null, "a clean result goes straight to the status bar");
+  assert.match(tracker.completionMessage, /^Scanned/);
+
+  await finish(unreadable);
+  assert.equal(tracker.active?.errors.length, 1, "a new file error stays until dismissed");
+  tracker.dismiss();
+
+  await finish(unreadable);
+  assert.equal(tracker.active, null, "the same error after dismissal does not return");
+  assert.match(tracker.completionMessage, /1 known file error$/);
+
+  await finish([...unreadable, { path: "D:\\b.jpg", message: "unreadable" }]);
+  assert.equal(tracker.active?.errors.length, 2, "one new error brings the job back");
+  tracker.dispose();
+});
+
 test("sync follows a scan the backend started and refreshes the queue", async () => {
   let list: JobListResponse = {
     activeJobId: "7",

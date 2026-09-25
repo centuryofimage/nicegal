@@ -15,7 +15,7 @@
   import { tick } from "svelte";
 
   import { useApplication } from "../lib/application.svelte";
-  import { folderName } from "../lib/catalog.svelte";
+  import { folderName } from "../lib/library-root";
   import { isQuerySyntaxError } from "../lib/errors";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import {

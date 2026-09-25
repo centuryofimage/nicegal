@@ -18,7 +18,7 @@ import {
 } from "./constants";
 import { errorMessage } from "./errors";
 import { aspectRatioOf, type GalleryItem } from "./gallery/types";
-import { rootKey, rootsMatch } from "./library-root";
+import { folderName, rootKey, rootsMatch } from "./library-root";
 import { libraryIndexing, settings, type GallerySettings } from "./settings.svelte";
 
 /** Frontend preferences for one backend library: its optional name and restorable view. */
@@ -109,11 +109,6 @@ function normalizeTextEmbeddingCoverage(
         ? coverage.lastIndexedAt
         : null,
   };
-}
-
-export function folderName(path: string): string {
-  const trimmed = path.replace(/[\\/]+$/, "");
-  return trimmed.split(/[\\/]/).pop() || path;
 }
 
 /** The label shown when the user has not named a library: its first folder, plus a count. */

@@ -12,6 +12,7 @@ import type {
   EnsureThumbnailsRequest,
   EnsureThumbnailsResponse,
   ExecutionProviderId,
+  FolderEntry,
   GalleryAsset,
   JobListResponse,
   JobRequest,
@@ -80,7 +81,7 @@ const backend: NicegalBridge["backend"] = {
   listAssets(options: { libraryId: LibraryId; timeline: Timeline }): Promise<GalleryAsset[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.listAssets, options);
   },
-  listFolders(libraryId: LibraryId): Promise<string[]> {
+  listFolders(libraryId: LibraryId): Promise<FolderEntry[]> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.listFolders, libraryId);
   },
   getAssetMetadata(assetId: string): Promise<AssetMetadata> {

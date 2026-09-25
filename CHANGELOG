@@ -1,10 +1,6 @@
-- fixed video thumbnail squaring
-- improved video player and ui
-- added multiple folders to library and library exclusions
-- added in:, path:, and other path search operators
-  - search operator reference is in the search type dropdown
-- added file tree (experimental)
-- sped up video scanning by skipping deep metadata probing
+- make the file tree look better
+- fix library pane
+- speed fixes and ui cleanups
 
 This is a big refactor, if there are problems you should revert to the old one and delete your database
 MacOS: Open finder Cmd+Shift+G, type `~/Library/Application Support/nicegal`, delete the folder

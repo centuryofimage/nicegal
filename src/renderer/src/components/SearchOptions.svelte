@@ -180,7 +180,7 @@
     white-space: nowrap;
   }
 
-  /* A Win32 trackbar, same construction as SliderRow's: a tick ruler over a sunken groove with a
+  /* A Win32 trackbar: a tick ruler over a sunken groove with a
      tall rectangular thumb. The ruler is shortened to fit a toolbar strip rather than dropped —
      the ticks are what show the control snaps, and where its middle is. */
   /* Flex centring would centre the ruler-plus-track stack, which drops the groove below the

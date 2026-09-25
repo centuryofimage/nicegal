@@ -70,7 +70,7 @@ body {
   border-left-color: transparent;
   border-right-color: var(--border-subtle);
 }
-.status-pane-toggle:hover {
+.status-pane-toggle:hover:not(:disabled) {
   border-color: var(--btn-border-hover);
   background: var(--btn-face-hover);
   color: var(--text-primary);
@@ -81,6 +81,15 @@ body {
   background: var(--btn-face-active);
   color: var(--accent-active);
   box-shadow: var(--bevel-sunken);
+}
+/* Unavailable while the image viewer is open; drawn flat whatever its saved state. */
+.status-pane-toggle-start:disabled {
+  border-color: transparent;
+  border-right-color: var(--border-subtle);
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  cursor: default;
 }
 .status-pane-toggle:focus-visible {
   outline: var(--focus-ring);

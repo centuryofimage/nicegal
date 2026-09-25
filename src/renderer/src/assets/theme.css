@@ -6,7 +6,6 @@
 
 :root {
   --metadata-panel-width: 280px;
-  --libraries-pane-width: 200px;
   /* Playlist-style search groups: content-colored background, plain heading and a fine rule. */
   --search-section-height: 26px;
   --search-section-gap: 6px;
@@ -64,6 +63,23 @@
   --semantic-tab-link: #765500;
   --semantic-tab-link-hover: #4d3700;
 
+  /* Folder tree, after the Win7 Explorer navigation pane: rows carry no fill until hovered or
+     selected, then take a pale blue face with a matching edge. Expanders are an outlined triangle
+     when closed and a filled, down-right one when open; leaf folders get a small dot instead. */
+  --tree-row-height: 20px;
+  --tree-indent: 16px;
+  --tree-hover-face: linear-gradient(#f5fafe, #e6f2fc);
+  --tree-hover-border: #b8d6fb;
+  --tree-selected-face: linear-gradient(#e3f0fc, #cbe3f8);
+  --tree-selected-border: #7da2ce;
+  --tree-cursor-border: #a7c4e6;
+  --tree-glyph: #8a8a8a;
+  --tree-glyph-open: #454545;
+  --tree-glyph-hover: #1e9ad6;
+  --tree-leaf: #b4b4b4;
+  --tree-root-icon: #d9a520;
+  --tree-root-icon-fill: #f6d77b;
+
   /* Overlay shadow: the single crisp offset shadow every popover/context-menu/overlay uses —
      a real Windows context menu, not soft multi-layer elevation. */
   --shadow-overlay: 1px 2px 6px rgba(0, 0, 0, 0.3);
@@ -95,7 +111,10 @@
   /* The search row is its own, roomier toolbar. Its field, text buttons, and icon controls use
      this one metric so chrome stays aligned as a theme changes its toolbar density. */
   --toolbar-control-height: 32px;
-  --gallery-size-control-width: 160px;
+  /* Status bar image size slider: a thin filled rail and a small round thumb. */
+  --size-slider-width: 110px;
+  --size-slider-track: 2px;
+  --size-slider-thumb: 11px;
   --statusbar-height: 22px;
   --radius-sm: 2px;
   --radius-md: 2px;
