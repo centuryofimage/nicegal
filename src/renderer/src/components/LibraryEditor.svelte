@@ -96,16 +96,20 @@
   );
 
   async function addFolder(): Promise<void> {
-    const folder = await window.nicegal.native.chooseDirectory();
-    if (!folder) return;
-    error = "";
-    if (include.some((path) => isWithin(path, folder) && isWithin(folder, path))) return;
-    if (exclude.some((path) => isWithin(folder, path))) {
-      error = "That folder is excluded. Include it again instead.";
-      return;
+    try {
+      const folder = await window.nicegal.native.chooseDirectory();
+      if (!folder) return;
+      error = "";
+      if (include.some((path) => isWithin(path, folder) && isWithin(folder, path))) return;
+      if (exclude.some((path) => isWithin(folder, path))) {
+        error = "That folder is excluded. Include it again instead.";
+        return;
+      }
+      include = [...include, folder];
+      purgeFolders = purgeFolders.filter((path) => path !== folder);
+    } catch (cause) {
+      error = errorMessage(cause);
     }
-    include = [...include, folder];
-    purgeFolders = purgeFolders.filter((path) => path !== folder);
   }
 
   function removeFolder(path: string, deleteIndexedData: boolean): void {
@@ -118,14 +122,18 @@
   }
 
   async function excludeFolder(): Promise<void> {
-    const folder = await window.nicegal.native.chooseDirectory(include[0]);
-    if (!folder) return;
-    error = "";
-    if (!include.some((path) => isWithin(folder, path) && !isWithin(path, folder))) {
-      error = "Choose a subfolder of one of this library's folders.";
-      return;
+    try {
+      const folder = await window.nicegal.native.chooseDirectory(include[0]);
+      if (!folder) return;
+      error = "";
+      if (!include.some((path) => isWithin(folder, path) && !isWithin(path, folder))) {
+        error = "Choose a subfolder of one of this library's folders.";
+        return;
+      }
+      if (!exclude.some((path) => isWithin(folder, path))) exclude = [...exclude, folder];
+    } catch (cause) {
+      error = errorMessage(cause);
     }
-    if (!exclude.some((path) => isWithin(folder, path))) exclude = [...exclude, folder];
   }
 
   async function apply(): Promise<boolean> {

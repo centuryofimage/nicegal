@@ -18,7 +18,10 @@ body {
 /* Opt-in shared desktop control. New feature surfaces should use this rather than
    recreate hover, pressed, disabled and keyboard-focus styling in each component. */
 .ui-button {
+  display: inline-flex;
   min-height: var(--control-height);
+  align-items: center;
+  justify-content: center;
   padding: var(--space-3) var(--space-9);
   border: 1px solid var(--btn-border);
   border-radius: var(--radius-sm);
@@ -44,6 +47,16 @@ body {
 .ui-button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* Default dialog action: a selected desktop control, with the same chrome as its peers. */
+.ui-button-primary {
+  border-color: var(--btn-border-active);
+  background: var(--btn-face-active);
+}
+.ui-button-primary:hover:not(:disabled) {
+  border-color: var(--btn-border-hover);
+  background: var(--btn-face-hover);
 }
 
 /* Persistent pane switches belong to the status edge, apart from toolbar commands. */

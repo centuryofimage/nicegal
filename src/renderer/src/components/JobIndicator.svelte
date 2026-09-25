@@ -143,7 +143,9 @@
   {/if}
 
   <div id="job-progress-card" class="job-card" inert={!cardOpen}>
-    <JobProgress {job} />
+    {#key job.jobId}
+      <JobProgress {job} />
+    {/key}
     {#if job.error}
       <AppMessage
         title="Job failed"

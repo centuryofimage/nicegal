@@ -1,5 +1,5 @@
 name: Set up desktop build tools
-description: Set up Rust, uv, Node, pnpm, and the electron-builder cache.
+description: Set up Rust, uv, Node, pnpm, and the Electron download caches.
 
 inputs:
   platform:
@@ -28,6 +28,18 @@ runs:
       with:
         node-version: 24
 
+    # Electron's install script uses @electron/get, whose cache is separate from
+    # electron-builder's cache for packaging tools such as NSIS and 7zip.
+    - name: Restore Electron download caches
+      uses: actions/cache@v6
+      with:
+        key: electron-${{ inputs.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          electron-${{ inputs.platform }}-
+        path: |
+          ${{ runner.os == 'Windows' && '~\AppData\Local\electron\Cache' || runner.os == 'macOS' && '~/Library/Caches/electron' || '~/.cache/electron' }}
+          ${{ runner.os == 'Windows' && '~\AppData\Local\electron-builder\Cache' || runner.os == 'macOS' && '~/Library/Caches/electron-builder' || '~/.cache/electron-builder' }}
+
     - name: Setup pnpm
       if: inputs.platform != 'macos-intel'
       uses: pnpm/setup@v2.1.0
@@ -43,9 +55,3 @@ runs:
         npm install -g pnpm@11.27.1
         echo "PATH=$HOME/.local/share/pnpm:$PATH" >> "$GITHUB_ENV"
         pnpm ci
-
-    - name: Restore electron-builder cache
-      uses: actions/cache@v6
-      with:
-        key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-        path: ${{ runner.os == 'Windows' && '~\AppData\Local\electron-builder\Cache' || '~/.cache/electron-builder' }}

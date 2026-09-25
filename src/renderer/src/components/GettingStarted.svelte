@@ -79,8 +79,10 @@
   </ol>
   <div class="welcome-splash-actions">
     <span>Reopen this guide from <b>Settings → Getting started</b>.</span>
-    <button type="button" onclick={onclose}>Close</button>
-    <button class="primary" type="button" onclick={onadd}>Add a folder</button>
+    <button class="ui-button ui-button-compact" type="button" onclick={onclose}>Close</button>
+    <button class="ui-button ui-button-compact ui-button-primary" type="button" onclick={onadd}
+      >Add a folder</button
+    >
   </div>
 </div>
 
@@ -220,34 +222,5 @@
     justify-content: flex-end;
     gap: var(--space-6);
     margin-top: var(--space-16);
-  }
-  .welcome-splash-actions button {
-    height: var(--toolbar-control-height);
-    padding: 0 var(--space-9);
-    border: 1px solid var(--btn-border);
-    border-radius: var(--radius-sm);
-    background: var(--btn-face);
-    box-shadow: var(--bevel-raised);
-    color: var(--text-primary);
-    font: inherit;
-    font-size: var(--font-size-md);
-    cursor: pointer;
-  }
-  .welcome-splash-actions button:hover {
-    border-color: var(--btn-border-hover);
-    background: var(--btn-face-hover);
-  }
-  .welcome-splash-actions button:active {
-    border-color: var(--btn-border-active);
-    background: var(--btn-face-active);
-    box-shadow: var(--bevel-sunken);
-  }
-  .welcome-splash-actions .primary {
-    border-color: var(--btn-border-active);
-    background: var(--btn-face-active);
-  }
-  .welcome-splash-actions button:focus-visible {
-    outline: var(--focus-ring);
-    outline-offset: var(--focus-ring-offset);
   }
 </style>

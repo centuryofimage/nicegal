@@ -301,6 +301,32 @@ test("sync follows a scan the backend started and refreshes the queue", async ()
   tracker.dispose();
 });
 
+test("sync follows a restarted server job that reuses a completed job ID", async () => {
+  let list: JobListResponse = {
+    activeJobId: "1",
+    jobs: [snapshot("libraryScan", "running", "1", 3)],
+  };
+  const subscribed: string[] = [];
+  trackerBackend({
+    listJobs: async () => list,
+    subscribeJob: (id: string) => {
+      subscribed.push(id);
+      return () => {};
+    },
+  });
+  const tracker = new Tracker(() => {}, () => {}, () => {});
+  await tracker.sync();
+  list = { activeJobId: null, jobs: [snapshot("libraryScan", "completed", "1", 3)] };
+  await tracker.sync();
+
+  tracker.backendDisconnected(true);
+  list = { activeJobId: "1", jobs: [snapshot("libraryScan", "running", "1", 3)] };
+  await tracker.sync();
+  assert.deepEqual(subscribed, ["1", "1"]);
+  assert.equal(tracker.active?.status, "running");
+  tracker.dispose();
+});
+
 test("leaving a library cancels its running and queued scans only", async () => {
   const cancelled: string[] = [];
   trackerBackend({

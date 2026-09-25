@@ -1,3 +1,42 @@
+/* Where Segoe UI / Tahoma are missing (Linux), stand in with an Arial-metric face shaped like the
+   Windows font: size-adjust matches its x-height, and the overrides reproduce its
+   usWinAscent/usWinDescent (divided by size-adjust, which Chromium also applies to them). Arial's own
+   shorter ascent places every line's glyphs ~1px higher, which reads as text riding high in controls. */
+@font-face {
+  font-family: "Segoe UI Fallback";
+  src: local("Liberation Sans"), local("Arimo"), local("Arial");
+  size-adjust: 96.3%;
+  ascent-override: 112.06%;
+  descent-override: 26.06%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Segoe UI Fallback";
+  font-weight: 600 900;
+  src: local("Liberation Sans Bold"), local("Arimo Bold"), local("Arial Bold");
+  size-adjust: 96.3%;
+  ascent-override: 112.06%;
+  descent-override: 26.06%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Tahoma Fallback";
+  src: local("Liberation Sans"), local("Arimo"), local("Arial");
+  size-adjust: 105%;
+  ascent-override: 95.29%;
+  descent-override: 19.67%;
+  line-gap-override: 0%;
+}
+@font-face {
+  font-family: "Tahoma Fallback";
+  font-weight: 600 900;
+  src: local("Liberation Sans Bold"), local("Arimo Bold"), local("Arial Bold");
+  size-adjust: 105%;
+  ascent-override: 95.29%;
+  descent-override: 19.67%;
+  line-gap-override: 0%;
+}
+
 /* Central theme tokens: Windows 7 desktop-app chrome, the flat "Basic" theme throughout — no
    glass, no translucency, no blur, no gloss, on the title bar OR on the buttons/menus/trackbars.
    Rendered as if hosted on Windows 11 — hence a selection/accent blue distinct from the old Win7
@@ -128,7 +167,7 @@
   --tick-mark-major: #6e6e6e;
 
   /* Type — Segoe UI: this is a Windows-native app, not a cross-platform web app. */
-  --font-ui: "Segoe UI", system-ui, -apple-system, Roboto, Ubuntu, sans-serif;
+  --font-ui: "Segoe UI", "Segoe UI Fallback", sans-serif;
   --font-size-sm: 11px;
   --font-size-md: 12px;
   --font-weight-normal: 400;

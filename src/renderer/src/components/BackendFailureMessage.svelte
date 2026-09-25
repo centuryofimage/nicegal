@@ -63,7 +63,7 @@
 
 <AppMessage
   title="Backend unavailable"
-  guidance="The gallery service could not start or stopped unexpectedly. Try restarting the service. If it fails again, restart the app. If an app update made the index incompatible, preserve the index until migration or rebuilding is chosen."
+  guidance="The gallery service could not start or stopped unexpectedly. Try restarting the service. If it fails again, restart the app."
   message={`${error}\n\nRecent backend log lines:\n${recentLog}`}
   placement="overlay"
 >

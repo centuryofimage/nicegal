@@ -474,10 +474,10 @@ export function createLibraryViewController(
   async function addLibrary(): Promise<
     { status: "created"; id: LibraryId } | { status: "cancelled" } | { status: "error"; message: string }
   > {
-    const folder = await window.nicegal.native.chooseDirectory();
-    if (!folder) return { status: "cancelled" };
-    flushLibraryViewState();
     try {
+      const folder = await window.nicegal.native.chooseDirectory();
+      if (!folder) return { status: "cancelled" };
+      flushLibraryViewState();
       // Selection advances `librarySelectionRevision`, whose effect restores the new view.
       const library = await commands.createLibrary(folder);
       return { status: "created", id: library.id };

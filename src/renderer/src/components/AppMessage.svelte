@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+
   import { cleanDiagnostic } from "../lib/errors";
   let {
     title,
@@ -53,7 +54,7 @@
     <span>{diagnostic}</span>
   {/if}
   {#if actionLabel}
-    <button class="message-action" type="button" onclick={onaction}>{actionLabel}</button>
+    <button class="ui-button message-action" type="button" onclick={onaction}>{actionLabel}</button>
   {/if}
   {#if children}{@render children()}{/if}
 </div>
@@ -123,22 +124,5 @@
 
   .message-action {
     align-self: center;
-    padding: var(--space-4) var(--space-14);
-    border: 1px solid var(--btn-border);
-    border-radius: var(--radius-sm);
-    background: var(--surface-0);
-    color: var(--text-primary);
-    font-size: var(--font-size-sm);
-    cursor: pointer;
-  }
-
-  .message-action:hover {
-    border-color: var(--btn-border-hover);
-    background: var(--btn-face-hover);
-  }
-
-  .message-action:active {
-    border-color: var(--btn-border-active);
-    background: var(--btn-face-active);
   }
 </style>

@@ -21,6 +21,10 @@
   const currentLabel = $derived(jobLabel(job));
   const phaseProgress = $derived(jobPhaseProgress(job));
   const activeAssetPaths = $derived(job.activeAssetPaths ?? []);
+  let hasShownActiveAssets = $state(false);
+  $effect(() => {
+    if (activeAssetPaths.length > 0) hasShownActiveAssets = true;
+  });
   const hasMeaningfulTotal = $derived(phaseProgress.ratio !== null);
   const phasePercent = $derived(hasMeaningfulTotal ? Math.round(phaseProgress.ratio! * 100) : 0);
   const contextMetrics = $derived.by((): ContextMetric[] => {
@@ -108,7 +112,7 @@
     </section>
   {/if}
 
-  {#if activeAssetPaths.length}
+  {#if activeAssetPaths.length || (hasShownActiveAssets && !isTerminalJobStatus(job.status))}
     <section class="active-assets" aria-label="Files being processed">
       <span class="active-assets-label"
         >Processing{activeAssetPaths.length > 1 ? ` · ${activeAssetPaths.length} files` : ""}</span
@@ -117,6 +121,9 @@
         {#each activeAssetPaths as path (path)}
           <li title={path}>{path.split(/[\\/]/).pop() || path}</li>
         {/each}
+        {#if activeAssetPaths.length === 0}
+          <li class="active-assets-idle">Waiting for the next file…</li>
+        {/if}
       </ul>
     </section>
   {/if}
@@ -152,6 +159,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     color: var(--text-primary);
+  }
+
+  .active-assets li.active-assets-idle {
+    color: var(--text-secondary);
   }
 
   .job-progress,

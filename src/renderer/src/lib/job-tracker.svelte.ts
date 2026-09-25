@@ -136,6 +136,12 @@ export class JobTracker {
       queued.some((job, index) => job.jobId !== this.queued[index].jobId)
     )
       this.queued = queued;
+    // A subscription may miss its last event. Deliver that result before following the next
+    // queued job, so its completion callback can finish the old job's bookkeeping.
+    if (this.currentJobId && this.currentJobId !== this.completedJobId) {
+      const current = list.jobs.find((job) => job.jobId === this.currentJobId);
+      if (current && isTerminalJobStatus(current.status)) this.handleSnapshot(current);
+    }
     const active = list.jobs.find((job) => job.jobId === list.activeJobId);
     if (
       active &&
@@ -146,6 +152,10 @@ export class JobTracker {
       this.error = "";
       this.completionMessage = "";
       this.attach(active, ++this.generation);
+    } else if (active?.jobId === this.currentJobId) {
+      // The event stream can disconnect or miss its final event. Keep the visible job current
+      // from the same poll that discovers newly active jobs.
+      this.handleSnapshot(active);
     }
   }
 
@@ -241,6 +251,11 @@ export class JobTracker {
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.currentJobId = null;
+    // The replacement server starts allocating job IDs from the beginning. An ID from the old
+    // process must not suppress the new server's active job or thumbnail refresh.
+    this.completedJobId = null;
+    this.refreshedThumbnailJobId = null;
+    this.previousPhase = null;
     this.active = null;
     this.queued = [];
     this.starting = false;

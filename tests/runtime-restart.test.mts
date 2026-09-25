@@ -126,3 +126,30 @@ test("image model write invalidates an older runtime read", async () => {
   assert.equal(runtime.status?.imageModel.selectedModel, "new");
   assert.equal(runtime.loading, false);
 });
+
+test("model refresh clears startup loading when it supersedes the first runtime read", async () => {
+  const firstRead = Promise.withResolvers<object>();
+  const modelRead = Promise.withResolvers<object>();
+  let reads = 0;
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        getRuntimeStatus: () => (++reads === 1 ? firstRead.promise : modelRead.promise),
+        getSearchModels: async () => ({}),
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+
+  const runtime = new RuntimeController();
+  const initial = runtime.refresh();
+  const models = runtime.refreshModels();
+  await Promise.resolve();
+  const latest = { configuredExecutionProvider: "webgpu" };
+  modelRead.resolve(latest);
+  await models;
+  firstRead.resolve({ configuredExecutionProvider: "cpu" });
+  await initial;
+
+  assert.equal(runtime.status, latest);
+  assert.equal(runtime.loading, false);
+});

@@ -60,7 +60,11 @@
         >Later</button
       >
       {#if installReady}
-        <button class="ui-button ui-button-compact primary" onclick={restart} disabled={restarting}>
+        <button
+          class="ui-button ui-button-compact ui-button-primary"
+          onclick={restart}
+          disabled={restarting}
+        >
           {restarting ? "Restarting…" : "Restart and install"}
         </button>
       {/if}
@@ -102,15 +106,5 @@
     justify-content: flex-end;
     gap: var(--space-5);
     margin-top: var(--space-16);
-  }
-
-  .primary {
-    border-color: var(--btn-border-active);
-    background: var(--update-ready-background);
-    color: var(--update-ready-text);
-  }
-
-  .primary:hover:not(:disabled) {
-    background: var(--update-ready-hover);
   }
 </style>

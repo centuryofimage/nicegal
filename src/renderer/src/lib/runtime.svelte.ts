@@ -74,6 +74,9 @@ export class RuntimeController {
         this.status = status;
     } catch (error) {
       if (generation === this.statusGeneration) this.modelError = errorMessage(error);
+    } finally {
+      // This read may supersede an initial refresh, whose finally block then cannot clear loading.
+      if (generation === this.statusGeneration) this.loading = false;
     }
   }
 

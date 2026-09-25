@@ -171,6 +171,7 @@ async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
 
 function installApplicationMenu(): void {
   const mac = process.platform === "darwin";
+  const linux = process.platform === "linux";
   const viewItems: MenuItemConstructorOptions[] = [
     {
       label: "Toggle Developer &Tools",
@@ -184,6 +185,26 @@ function installApplicationMenu(): void {
   }
   const template: MenuItemConstructorOptions[] = [];
   if (mac) template.push({ role: "appMenu" }, { role: "editMenu" });
+  template.push({
+    label: mac ? "File" : "&File",
+    submenu: [
+      {
+        label: "Close Window",
+        accelerator: "CommandOrControl+W",
+        click: () => BrowserWindow.getFocusedWindow()?.close(),
+      },
+      ...(linux
+        ? [
+            { type: "separator" as const },
+            {
+              label: "Quit",
+              accelerator: "Control+Q",
+              click: () => app.quit(),
+            },
+          ]
+        : []),
+    ],
+  });
   template.push({ label: mac ? "View" : "&View", submenu: viewItems });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }

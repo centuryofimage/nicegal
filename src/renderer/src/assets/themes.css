@@ -39,7 +39,7 @@
   --thumb-height: 19px;
   --tick-mark: #aaa;
   --tick-mark-major: #676767;
-  --font-ui: "Segoe UI", Tahoma, Arial, sans-serif;
+  --font-ui: "Segoe UI", "Segoe UI Fallback", sans-serif;
   --font-size-sm: 12px;
   --font-size-md: 13px;
   --line-height-tight: 1.2;
@@ -88,7 +88,7 @@
   --thumb-height: 16px;
   --tick-mark: #88919b;
   --tick-mark-major: #4f5964;
-  --font-ui: Tahoma, "MS Sans Serif", sans-serif;
+  --font-ui: Tahoma, "Tahoma Fallback", sans-serif;
   --font-size-sm: 11px;
   --font-size-md: 12px;
   --font-weight-semibold: 700;
