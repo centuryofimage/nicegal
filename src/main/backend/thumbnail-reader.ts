@@ -21,7 +21,7 @@ interface ThumbnailRow {
 
 const THUMBNAIL_SCHEMA_VERSION = 4n;
 // Keep in sync with nicegal-core's video::SAMPLING_VERSION.
-const VIDEO_SAMPLING_VERSION = 3n;
+const VIDEO_SAMPLING_VERSION = 4n;
 
 export class ThumbnailReader {
   private readonly database: DatabaseSync;

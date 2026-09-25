@@ -113,7 +113,7 @@ test("thumbnail reader returns the exact indexed sample and keeps the poster sep
     Buffer.from("poster"),
   );
   db.prepare(
-    "INSERT INTO video_thumbnails VALUES (7, 13000, 256, 3, 10, 20, 256, 144, 'image/jpeg', ?)",
+    "INSERT INTO video_thumbnails VALUES (7, 13000, 256, 4, 10, 20, 256, 144, 'image/jpeg', ?)",
   ).run(Buffer.from("matched frame"));
   db.close();
 

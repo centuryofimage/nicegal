@@ -1,3 +1,8 @@
+- Rebuild video thumbnailing and CLIP scanning
+  - Now based on length of video
+  - long videos might show up when searching more
+  - Dont generate all thumbnail sizes to save space and time
+  - Will require a vid thumbnail db rebuild.
 - Fix linux fonts
 - Fix backend restarting and fallbacks
 - add a few kbd shortcuts
