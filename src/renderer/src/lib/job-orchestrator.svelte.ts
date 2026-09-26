@@ -2,38 +2,27 @@ import { get } from "svelte/store";
 
 import type { JobTracker } from "./job-tracker.svelte";
 
-import {
-  DEFAULT_OCR_MODEL_LOAD_REQUEST,
-  type JobRequest,
-  type JobSnapshot,
-  type LibraryId,
-} from "../../../shared/backend";
-import { errorMessage } from "./errors";
+import { type JobRequest, type JobSnapshot, type LibraryId } from "../../../shared/backend";
 import { clearPendingJob, loadPendingJob, savePendingJob } from "./job-resume";
 import { isTerminalJobStatus } from "./job-state";
 import { settings } from "./settings.svelte";
 
 /**
- * Coordinates the multi-job intents the backend does not own: scan requests, model preparation,
- * library purge, and resuming an interrupted thumbnail backfill. The backend never scans on its
+ * Coordinates the multi-job intents the backend does not own: scan requests, library purge,
+ * and resuming an interrupted thumbnail backfill. The backend never scans on its
  * own; it only queues a requested scan behind a busy worker. JobTracker follows whichever job
  * runs.
  */
 export class JobOrchestrator {
-  preparingSearchModels = $state(false);
   /** A scan was interrupted by a deliberate provider fallback. Cleared once the backend is ready
    * again, when the application requests the selected library's pending folders. */
   restartingIndex = $state(false);
 
-  private generation = 0;
   /** A purge deletes its library only after that exact job completes. `jobId` is null while
    * `JobTracker.start` receives the first snapshot, so an immediately-terminal job still counts. */
   private libraryPurge: { libraryId: LibraryId; jobId: string | null } | null = null;
   /** Job backed by the persisted resume record; only its terminal snapshot clears that record. */
   private resumeTrackedJobId: string | null = null;
-  /** Callers waiting for a job to finish, keyed by job ID. */
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- private bookkeeping, never rendered
-  private readonly terminalWaiters = new Map<string, (snapshot: JobSnapshot | null) => void>();
 
   constructor(
     private readonly jobs: JobTracker,
@@ -57,7 +46,8 @@ export class JobOrchestrator {
         scanMode: options.scanMode ?? "fast",
         ...(options.pendingOnly ? { pendingOnly: true } : {}),
         ...(options.retryFailed ? { retryFailed: true } : {}),
-        ...(debugIndexLimit > 0 ? { debugLimit: debugIndexLimit } : {}),
+        // The control is dev-only; a value saved by a dev build must not cap release scans.
+        ...(import.meta.env.DEV && debugIndexLimit > 0 ? { debugLimit: debugIndexLimit } : {}),
       },
     });
   }
@@ -65,22 +55,18 @@ export class JobOrchestrator {
   /** Stops the running job and every queued scan. The backend does not retry a cancelled
    * folder on its own, so the scan resumes only when requested again. */
   async cancel(): Promise<void> {
-    this.generation += 1;
     this.restartingIndex = false;
     clearPendingJob();
     await this.jobs.cancelAll();
   }
 
   backendDisconnected(providerFallback = false): boolean {
-    this.generation += 1;
     this.restartingIndex =
       providerFallback &&
       this.jobs.active?.type === "libraryScan" &&
       !isTerminalJobStatus(this.jobs.active.status);
     this.libraryPurge = null;
     this.resumeTrackedJobId = null;
-    for (const resolve of this.terminalWaiters.values()) resolve(null);
-    this.terminalWaiters.clear();
     return this.restartingIndex;
   }
 
@@ -117,28 +103,11 @@ export class JobOrchestrator {
   /** Removes indexed data for folders no longer covered by this library. */
   async purgeRemovedFolders(libraryId: LibraryId, folders: string[]): Promise<boolean> {
     if (!folders.length) return true;
-    const snapshot = await this.jobs.start({ type: "libraryPurge", params: { libraryId, folders } });
+    const snapshot = await this.jobs.start({
+      type: "libraryPurge",
+      params: { libraryId, folders },
+    });
     return snapshot !== null;
-  }
-
-  /** One user-facing setup action: OCR models, then the text and image search models. */
-  async prepareSearchModels(): Promise<void> {
-    if (this.preparingSearchModels || this.jobs.running) return;
-    this.preparingSearchModels = true;
-    const generation = this.generation;
-    try {
-      const models = await window.nicegal.backend.getOcrModels();
-      if (generation !== this.generation) return;
-      if (!models.loaded) {
-        const loaded = await this.runToCompletion(DEFAULT_OCR_MODEL_LOAD_REQUEST);
-        if (generation !== this.generation || loaded?.status !== "completed") return;
-      }
-      await this.runToCompletion({ type: "modelPrepare", params: {} });
-    } catch (error) {
-      if (generation === this.generation) this.jobs.error = errorMessage(error);
-    } finally {
-      this.preparingSearchModels = false;
-    }
   }
 
   /** Replays an interrupted thumbnail job for the selected library. */
@@ -146,22 +115,6 @@ export class JobOrchestrator {
     if (libraryId === null || this.jobs.running) return;
     const pending = loadPendingJob(libraryId);
     if (pending) await this.startResumableJob(pending);
-  }
-
-  /** Starts `request` and resolves with its terminal snapshot. When the backend is busy with
-   * another job, waits for that job first, then starts `request` once more. */
-  private async runToCompletion(request: JobRequest): Promise<JobSnapshot | null> {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const snapshot = await this.jobs.start(request);
-      if (!snapshot) return null;
-      const terminal = isTerminalJobStatus(snapshot.status)
-        ? snapshot
-        : await new Promise<JobSnapshot | null>((resolve) =>
-            this.terminalWaiters.set(snapshot.jobId, resolve),
-          );
-      if (!terminal || snapshot.type === request.type) return terminal;
-    }
-    return null;
   }
 
   /** The single place a terminal `JobSnapshot` is interpreted against whichever intent it belongs
@@ -180,8 +133,5 @@ export class JobOrchestrator {
       this.libraryPurge = null;
       if (snapshot.status === "completed") void this.onLibraryPurged(purge.libraryId);
     }
-    const waiter = this.terminalWaiters.get(snapshot.jobId);
-    this.terminalWaiters.delete(snapshot.jobId);
-    waiter?.(snapshot);
   }
 }

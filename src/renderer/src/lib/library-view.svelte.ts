@@ -9,6 +9,7 @@ import type { LayoutOptions } from "./gallery/options";
 import type { GalleryLayout } from "./gallery/types";
 import type { GalleryItem } from "./gallery/types";
 import type { SearchView } from "./ocr-search.svelte";
+import type { SearchIssue } from "./search-issue";
 
 import { errorMessage } from "./errors";
 import { GalleryScrollState } from "./gallery/scroll-state.svelte";
@@ -18,10 +19,16 @@ import { isActiveJob } from "./job-state";
 import { withScope } from "./search-query";
 import { layoutOptions, settings } from "./settings.svelte";
 
+export type SettingsPage = "gallery" | "search" | "about";
+export type ActiveDialog = "manageLibraries" | "settings" | "searchProblem" | null;
+
 export interface LibraryViewController {
   readonly galleryScroll: GalleryScrollState;
   readonly gallerySelection: GallerySelection;
-  readonly activeDialog: "manageLibraries" | "settings" | null;
+  readonly activeDialog: ActiveDialog;
+  settingsPage: SettingsPage;
+  /** The search problem shown by the search problem dialog, as it was when opened. */
+  readonly searchProblem: SearchIssue | null;
   /** The library initially selected in management. */
   readonly editingLibraryId: LibraryId | null;
   readonly librariesPaneOpen: boolean;
@@ -44,7 +51,9 @@ export interface LibraryViewController {
   toggleLibrariesPane(): void;
   openManageLibraries(): void;
   editLibrary(libraryId: LibraryId): void;
-  openSettingsDialog(): void;
+  /** Opens Settings, on `page` when given. Also switches straight from Library manager. */
+  openSettingsDialog(page?: SettingsPage): void;
+  openSearchProblem(issue: SearchIssue): void;
   dismissSelectionOrDetail(): void;
   switchToMeaningSearch(): void;
   openDetail(index: number): void;
@@ -138,7 +147,23 @@ export function createLibraryViewController(
     void searchIdentity;
     return new SvelteSet<string>();
   });
-  let activeDialog = $state<"manageLibraries" | "settings" | null>(null);
+  let activeDialog = $state<ActiveDialog>(null);
+  let settingsPage = $state<SettingsPage>("gallery");
+  let searchProblem = $state.raw<SearchIssue | null>(null);
+  /** Library manager and Settings edit what a scan does, so scans wait until neither is open.
+   * Switching between them keeps the hold. */
+  function setActiveDialog(next: ActiveDialog): void {
+    const holdsScans = (dialog: ActiveDialog): boolean =>
+      dialog === "manageLibraries" || dialog === "settings";
+    if (!holdsScans(activeDialog) && holdsScans(next)) commands.beginDeferringScans();
+    if (holdsScans(activeDialog) && !holdsScans(next)) commands.endDeferringScans();
+    activeDialog = next;
+  }
+  function openSearchProblem(issue: SearchIssue): void {
+    searchProblem = issue;
+    editingLibraryId = null;
+    setActiveDialog("searchProblem");
+  }
   let editingLibraryId = $state<LibraryId | null>(null);
   // Progressive results may move an image between sections. The viewer follows its ID, not
   // whichever image later occupies the index that was clicked.
@@ -172,14 +197,26 @@ export function createLibraryViewController(
       ? { ...layoutPreferences.current, granularity: "none" as const }
       : layoutPreferences.current,
   );
+  /** A short failure of a gallery action (file menu, drag out), cleared after a few seconds. */
+  let actionNotice = $state("");
+  let actionNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+  function showActionNotice(text: string): void {
+    actionNotice = text;
+    if (actionNoticeTimer) clearTimeout(actionNoticeTimer);
+    actionNoticeTimer = setTimeout(() => {
+      actionNotice = "";
+      actionNoticeTimer = null;
+    }, 8_000);
+  }
   const statusMessage = $derived(
-    jobs.completionMessage
-      ? jobs.completionMessage
-      : catalog.loading
-        ? "Loading catalog…"
-        : ocrSearch.pending
-          ? ocrSearch.pendingLabel
-          : undefined,
+    actionNotice ||
+      (jobs.completionMessage
+        ? jobs.completionMessage
+        : catalog.loading
+          ? "Loading catalog…"
+          : ocrSearch.pending
+            ? ocrSearch.pendingLabel
+            : undefined),
   );
   const jobRunning = $derived(jobs.running);
   const indexingRunning = $derived(jobs.active?.type === "libraryScan" && isActiveJob(jobs.active));
@@ -239,8 +276,7 @@ export function createLibraryViewController(
     gallerySelection.retainCatalogAssets(filteredItems);
   }
   function closeDialog(): void {
-    if (activeDialog === "manageLibraries") commands.endLibraryManagement();
-    activeDialog = null;
+    setActiveDialog(null);
     editingLibraryId = null;
   }
   function startWelcomeLibraryPicker(): void {
@@ -259,20 +295,20 @@ export function createLibraryViewController(
     setLibrariesPaneOpen(!preferences.current.librariesPaneOpen);
   }
   function editLibrary(libraryId: LibraryId): void {
-    if (activeDialog !== "manageLibraries") commands.beginLibraryManagement();
     editingLibraryId = libraryId;
-    activeDialog = "manageLibraries";
+    setActiveDialog("manageLibraries");
     void catalog.loadLibraries();
   }
   function openManageLibraries(): void {
-    if (activeDialog !== "manageLibraries") commands.beginLibraryManagement();
     editingLibraryId = catalog.selectedId;
-    activeDialog = "manageLibraries";
+    setActiveDialog("manageLibraries");
     void catalog.loadLibraries();
     void catalog.refreshLibraryStatuses();
   }
-  function openSettingsDialog(): void {
-    activeDialog = "settings";
+  function openSettingsDialog(page?: SettingsPage): void {
+    if (page) settingsPage = page;
+    editingLibraryId = null;
+    setActiveDialog("settings");
     if (catalog.backendStatus.ready && !runtime.status && !runtime.loading) void runtime.refresh();
   }
   function dismissSelectionOrDetail(): void {
@@ -297,7 +333,7 @@ export function createLibraryViewController(
       ...filteredItemIds.filter((id) => id !== item.id && gallerySelection.ids.has(id)),
     ];
     void commands.showFileContextMenu(assetIds).catch((error: unknown) => {
-      jobs.error = errorMessage(error);
+      showActionNotice(`Couldn't show file actions: ${errorMessage(error)}`);
     });
   }
   function selectGalleryItem(index: number, modifiers: SelectionModifiers): void {
@@ -318,7 +354,7 @@ export function createLibraryViewController(
     const canStart = (): boolean =>
       isCurrent() && gallerySelection === selection && filteredItemIds === visibleIds;
     void commands.startFileDrag(assetIds, canStart).catch((error: unknown) => {
-      if (canStart()) jobs.error = errorMessage(error);
+      if (canStart()) showActionNotice(`Couldn't drag the files: ${errorMessage(error)}`);
     });
   }
   function beginGalleryMarquee(modifiers: SelectionModifiers): void {
@@ -483,7 +519,12 @@ export function createLibraryViewController(
       return { status: "created", id: library.id };
     } catch (error) {
       const message = errorMessage(error);
-      if (activeDialog !== "manageLibraries") jobs.error = message;
+      if (activeDialog !== "manageLibraries")
+        commands.showProblem({
+          title: "Couldn't add the folder",
+          guidance: "Check that the folder exists and can be opened, then try again.",
+          message,
+        });
       return { status: "error", message };
     }
   }
@@ -513,6 +554,15 @@ export function createLibraryViewController(
     },
     get activeDialog() {
       return activeDialog;
+    },
+    get settingsPage() {
+      return settingsPage;
+    },
+    get searchProblem() {
+      return searchProblem;
+    },
+    set settingsPage(value: SettingsPage) {
+      settingsPage = value;
     },
     get editingLibraryId() {
       return editingLibraryId;
@@ -564,6 +614,7 @@ export function createLibraryViewController(
     openManageLibraries,
     editLibrary,
     openSettingsDialog,
+    openSearchProblem,
     dismissSelectionOrDetail,
     switchToMeaningSearch,
     openDetail,
@@ -587,6 +638,7 @@ export function createLibraryViewController(
       cancelSearchWait?.();
       libraryViewGeneration += 1;
       galleryScroll.finishRestore();
+      if (actionNoticeTimer) clearTimeout(actionNoticeTimer);
     },
   };
 }

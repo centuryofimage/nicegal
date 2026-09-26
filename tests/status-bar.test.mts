@@ -35,6 +35,8 @@ function statusMarkup(
   phase: JobSnapshot["phase"] = "imageEmbedding",
   matchedCount = 100,
   filtering = false,
+  runtime: Record<string, unknown> = {},
+  dismissedSetupErrorKey: string | null = null,
 ): string {
   return render(StatusBar, {
     props: {
@@ -50,16 +52,50 @@ function statusMarkup(
       message: undefined,
       backendReady: true,
       backendError: null,
-      runtime: {},
+      runtime,
       job: {
         status: indexingRunning ? "running" : "completed",
         phase,
         progress: { itemsPerSecond: indexRate },
       },
-      onsettings: () => {},
+      onsearchproblem: () => {},
+      dismissedSetupErrorKey,
+      ondismisssetup: () => {},
     },
   }).body;
 }
+
+test("a dismissed search warning stays hidden until the failure changes", () => {
+  const first = statusMarkup(undefined, null, false, "imageEmbedding", 100, false, {
+    error: "Could not change provider",
+  });
+  assert.match(first, /Search settings problem/);
+  assert.match(first, /Dismiss this search warning/);
+
+  const dismissed = statusMarkup(
+    undefined,
+    null,
+    false,
+    "imageEmbedding",
+    100,
+    false,
+    { error: "Could not change provider" },
+    "runtime:Could not change provider",
+  );
+  assert.doesNotMatch(dismissed, /Search settings problem/);
+
+  const changed = statusMarkup(
+    undefined,
+    null,
+    false,
+    "imageEmbedding",
+    100,
+    false,
+    { error: "Could not load provider" },
+    "runtime:Could not change provider",
+  );
+  assert.match(changed, /Search settings problem/);
+});
 
 test("item count omits a redundant matches fraction when every item matches", () => {
   const allMatch = statusMarkup(undefined, null, false, "imageEmbedding", 100, true);

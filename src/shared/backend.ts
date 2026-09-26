@@ -8,7 +8,7 @@ export interface BackendStatus {
 }
 
 /** See `nicegal_core::runtime::ExecutionProvider`. */
-export type ExecutionProviderId = "cpu" | "directml" | "openvino" | "webgpu" | "coreml";
+export type ExecutionProviderId = "cpu" | "directml" | "openvino" | "cuda" | "webgpu" | "coreml";
 
 export interface ImageModelStatus {
   activeModel: string;
@@ -300,6 +300,8 @@ export interface Library {
   /** Search indexes `libraryScan` maintains for this library. */
   ocr: boolean;
   image: boolean;
+  /** Whether image search includes video frames. Videos are listed either way. */
+  videos: boolean;
 }
 
 /** The editable part of a library, as `POST`/`PUT /v1/libraries` accept it. */
@@ -308,9 +310,12 @@ export interface LibraryDefinition {
   exclude: string[];
   ocr: boolean;
   image: boolean;
+  videos: boolean;
 }
 
-export interface CreateLibraryRequest extends LibraryDefinition {
+export interface CreateLibraryRequest extends Omit<LibraryDefinition, "videos"> {
+  /** Defaults to true. */
+  videos?: boolean;
   /** Makes creation idempotent, and lets an import keep a currently missing folder. */
   importKey?: string;
 }
@@ -483,8 +488,6 @@ export interface BackendBridge {
   getRuntimeStatus(): Promise<RuntimeStatus>;
   setImageModel(model: string): Promise<RuntimeStatus>;
   setExecutionProvider(executionProvider: ExecutionProviderId): Promise<RuntimeStatus>;
-  /** Saves whether scans index video frames; applies to scans queued afterwards. */
-  setIndexVideos(indexVideos: boolean): Promise<void>;
   listLibraries(): Promise<Library[]>;
   createLibrary(request: CreateLibraryRequest): Promise<Library>;
   updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library>;

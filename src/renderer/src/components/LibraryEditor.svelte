@@ -15,6 +15,7 @@
     type ThumbnailBackfillOptions,
   } from "../lib/job-params";
   import { folderStatus, isWithin } from "../lib/library-status";
+  import TechnicalDetails from "./TechnicalDetails.svelte";
   import ThumbnailFailures from "./ThumbnailFailures.svelte";
 
   let {
@@ -22,11 +23,13 @@
     embedded = false,
     thumbnailFailures = [],
     onretrythumbnails,
+    onopensearchsettings,
   }: {
     libraryId: LibraryId;
     embedded?: boolean;
     thumbnailFailures?: readonly (ThumbnailFailure & { name?: string })[];
     onretrythumbnails: () => void;
+    onopensearchsettings: () => void;
   } = $props();
 
   const { services, commands } = useApplication();
@@ -42,9 +45,9 @@
   let exclude = $state.raw<string[]>([]);
   let ocr = $state(false);
   let image = $state(true);
+  let videos = $state(true);
   let saving = $state(false);
   let error = $state("");
-  let copyStatus = $state("");
   let removingFolder = $state<string | null>(null);
   let purgeFolders = $state.raw<string[]>([]);
 
@@ -55,6 +58,7 @@
     exclude = [...library.exclude];
     ocr = library.ocr;
     image = library.image;
+    videos = library.videos;
     removingFolder = null;
     purgeFolders = [];
   }
@@ -71,6 +75,7 @@
       added(exclude, library.exclude) +
       Number(ocr !== library.ocr) +
       Number(image !== library.image) +
+      Number(videos !== library.videos) +
       Number((name.trim() || null) !== library.name)
     );
   });
@@ -157,11 +162,12 @@
           exclude: exclude.filter((path) => include.some((root) => isWithin(path, root))),
           ocr,
           image,
+          videos,
         },
         name.trim() || null,
       );
       if (purgeFolders.length && !(await orchestrator.purgeRemovedFolders(libraryId, purgeFolders))) {
-        error = "The folder was removed, but deleting its indexed data could not start. Try saving again.";
+        error = "The folder was removed, but deleting its indexed data couldn't start. Try saving again.";
         return false;
       }
       resetDraft();
@@ -199,15 +205,6 @@
       toNs: limitToRange ? localDateToExclusiveNs(toDate) : undefined,
     };
     void commands.startThumbnailBackfill(libraryId, options);
-  }
-
-  async function copyDetails(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(diagnostic);
-      copyStatus = "Copied";
-    } catch {
-      copyStatus = "Select the details and copy them manually.";
-    }
   }
 </script>
 
@@ -333,6 +330,9 @@
       <fieldset>
         <legend>Search</legend>
         <label class="check"><input type="checkbox" bind:checked={image} /> Image search</label>
+        <label class="check indent"
+          ><input type="checkbox" bind:checked={videos} disabled={!image} /> Include videos</label
+        >
         <label class="check"
           ><input type="checkbox" bind:checked={ocr} aria-describedby={hintId} /> Text recognition</label
         >
@@ -340,6 +340,12 @@
           About 10× slower than image search, but good for precise text searches. Models download
           automatically; pictures stay on your computer.
         </p>
+        <div class="list-actions">
+          <button class="ui-button ui-button-compact" onclick={onopensearchsettings}
+            >Search settings…</button
+          >
+          <span class="hint">Image model and execution provider apply to all libraries.</span>
+        </div>
       </fieldset>
 
       <details>
@@ -379,13 +385,7 @@
           </section>
           <ThumbnailFailures failures={thumbnailFailures} onretry={onretrythumbnails} />
           {#if diagnostic}
-            <details class="diagnostics">
-              <summary>Scan error details</summary>
-              <textarea aria-label="Scan error details" readonly value={diagnostic}></textarea>
-              <button class="ui-button ui-button-compact" onclick={copyDetails}>Copy details</button
-              >
-              <span role="status">{copyStatus}</span>
-            </details>
+            <TechnicalDetails text={diagnostic} summary="Scan error details" />
           {/if}
         </div>
       </details>
@@ -608,22 +608,6 @@
     display: grid;
     gap: var(--space-4);
     justify-items: start;
-  }
-  textarea {
-    display: block;
-    box-sizing: border-box;
-    width: 100%;
-    height: min(180px, 30vh);
-    margin-block: var(--space-6);
-    resize: none;
-    overflow: auto;
-    border: 1px solid var(--border);
-    background: var(--surface-1);
-    color: var(--text-primary);
-    font-size: var(--font-size-sm);
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
   }
   footer {
     display: flex;

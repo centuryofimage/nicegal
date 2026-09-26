@@ -72,7 +72,7 @@
               ? "This file has changed. Update the library to refresh its catalog details."
               : info.file.sourceState === "missing"
                 ? "This file is missing. Showing saved catalog details."
-                : "This file could not be read. Showing saved catalog details."}
+                : "Couldn't read this file. Showing saved catalog details."}
           </p>
         {/if}
         <dl>
@@ -197,7 +197,7 @@
           </details>
         {/if}
       {:catch error}
-        <p role="alert">Could not load file details. Refresh to try again.</p>
+        <p role="alert">Couldn't load file details. Refresh to try again.</p>
         <details>
           <summary>Technical details</summary>
           <pre>{errorMessage(error)}</pre>

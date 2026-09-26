@@ -77,7 +77,7 @@
         }
       })
       .catch(() => {
-        if (current) folderError = "Folders could not be loaded.";
+        if (current) folderError = "Couldn't load folders.";
       });
     return () => {
       current = false;
@@ -85,7 +85,10 @@
   });
 
   const roots = $derived(selected?.include.map((folder) => folder.path) ?? []);
-  const tree = $derived(buildFolderTree(roots, folders, $settings.folderSort));
+  const imagePaths = $derived(
+    catalog.items.filter((item) => item.mediaKind === "image").map((item) => item.path),
+  );
+  const tree = $derived(buildFolderTree(roots, folders, $settings.folderSort, imagePaths));
   const rows = $derived(visibleFolderRows(tree, expanded, focused, filter));
   /** Cursor order: the All folders row, then every visible folder. */
   const order = $derived([ALL, ...rows.map((row) => row.node.path)]);
@@ -409,7 +412,7 @@
     {:else if catalog.librariesLoaded}
       <p class="folder-note">
         {catalog.librariesError
-          ? "Libraries could not be loaded."
+          ? "Couldn't load libraries."
           : "Use Library manager to add a folder."}
       </p>
     {/if}

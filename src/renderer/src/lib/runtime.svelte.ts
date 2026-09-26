@@ -22,8 +22,9 @@ export class RuntimeController {
   error = $state<string | null>(null);
   models = $state<SearchModelsResponse | null>(null);
   modelError = $state<string | null>(null);
+  private imageModelBeforeRestart: ImageModelStatus | null = null;
   get imageModel(): ImageModelStatus | null {
-    return this.status?.imageModel ?? null;
+    return this.status?.imageModel ?? (this.imageModelSaving ? this.imageModelBeforeRestart : null);
   }
   get supportsImageTextQueries(): boolean {
     return this.imageModel?.supportsTextQueries ?? true;
@@ -36,6 +37,7 @@ export class RuntimeController {
   reset(): void {
     this.statusGeneration += 1;
     this.modelGeneration += 1;
+    this.imageModelBeforeRestart = this.imageModelSaving ? this.imageModel : null;
     this.status = null;
     this.models = null;
     this.loading = true;
@@ -105,6 +107,7 @@ export class RuntimeController {
       this.imageModelError = errorMessage(error);
     } finally {
       this.imageModelSaving = false;
+      this.imageModelBeforeRestart = null;
       this.loading = false;
     }
   }

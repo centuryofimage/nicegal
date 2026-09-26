@@ -127,6 +127,36 @@ test("image model write invalidates an older runtime read", async () => {
   assert.equal(runtime.loading, false);
 });
 
+test("image model options remain available while a model change restarts the backend", async () => {
+  const changed = Promise.withResolvers<object>();
+  const previous = {
+    imageModel: { activeModel: "old", models: [{ id: "old" }, { id: "new" }] },
+  };
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        setImageModel: () => changed.promise,
+        getSearchModels: async () => ({}),
+        getRuntimeStatus: async () => previous,
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+  const runtime = new RuntimeController();
+  runtime.status = previous as typeof runtime.status;
+
+  const switching = runtime.setImageModel("new");
+  runtime.reset();
+  assert.equal(runtime.status, null);
+  assert.equal(runtime.imageModel, previous.imageModel);
+  assert.equal(runtime.imageModelSaving, true);
+
+  const next = { imageModel: { activeModel: "new", models: previous.imageModel.models } };
+  changed.resolve(next);
+  await switching;
+  assert.equal(runtime.imageModel, next.imageModel);
+  assert.equal(runtime.imageModelSaving, false);
+});
+
 test("model refresh clears startup loading when it supersedes the first runtime read", async () => {
   const firstRead = Promise.withResolvers<object>();
   const modelRead = Promise.withResolvers<object>();

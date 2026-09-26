@@ -44,7 +44,9 @@
   );
   let toolbarControls = $state<GalleryToolbar>();
   const thumbnailFailures = $derived(gallery?.getThumbnailFailures(catalog.items) ?? []);
-  let settingsPage = $state<"gallery" | "search" | "about">("gallery");
+  // Keep a dismissed warning hidden while moving between the gallery and viewer. A different
+  // failure gets a different key and is shown again.
+  let dismissedSetupErrorKey = $state<string | null>(null);
   const view = createLibraryViewController(application, (y) => gallery?.scrollTo(y));
   const inspectedAsset = $derived(
     view.detailItem ??
@@ -143,7 +145,14 @@
           onSeek={view.handleSeek}
         />
       </div>
-      {#if !catalog.backendStatus.ready && !catalog.backendStatus.error}<AppMessage
+      {#if application.problem}<AppMessage
+          title={application.problem.title}
+          guidance={application.problem.guidance}
+          message={application.problem.message}
+          placement="overlay"
+          actionLabel={application.problem.retry ? "Try again" : "Dismiss"}
+          onaction={application.problem.retry ? commands.retryStartup : commands.dismissProblem}
+        />{:else if !catalog.backendStatus.ready && !catalog.backendStatus.error}<AppMessage
           title="Starting gallery…"
           message="Opening your local catalog."
           placement="overlay"
@@ -151,17 +160,17 @@
         />{:else if !catalog.backendStatus.ready && catalog.backendStatus.error}<BackendFailureMessage
           error={catalog.backendStatus.error}
         />{:else if catalog.loadError}<AppMessage
-          title="Catalog read failed"
-          guidance="The library could not be read. Check that its drive is connected and accessible, then retry."
-          actionLabel="Retry"
+          title="Couldn't read the library"
+          guidance="Check that its drive is connected, then try again."
+          actionLabel="Try again"
           onaction={() => catalog.refresh()}
           message={catalog.loadError}
           placement="overlay"
         />{:else if offline.length}<AppMessage
           title={offline.length === 1 ? "Folder not connected" : "Folders not connected"}
           message={offline.map((folder) => folder.path).join(", ")}
-          guidance="This library's photos can't be shown while its folders are unavailable. Connect the drive or restore the folder, then retry."
-          actionLabel="Retry"
+          guidance="Connect the drive or restore the folder, then try again."
+          actionLabel="Try again"
           onaction={() =>
             catalog.selectedId !== null &&
             commands.scanLibrary(catalog.selectedId, { pendingOnly: true })}
@@ -174,7 +183,7 @@
           actionLabel="Choose media folder…"
           onaction={view.addLibrary}
         />{:else if !catalog.loading && catalog.items.length === 0 && catalog.selectedLibrary}<AppMessage
-          title="The catalog is empty."
+          title="No photos or videos"
           message={jobs.scanState(catalog.selectedLibrary.id)
             ? "Scanning this library's folders…"
             : "No photos or videos were found in this library's folders. Add a folder, or check its exclusions."}
@@ -183,10 +192,11 @@
           actionLabel="Edit library…"
           onaction={() => view.editLibrary(catalog.selectedLibrary!.id)}
         />{/if}
-      {#if jobs.error && catalog.backendStatus.ready && !catalog.loadError}
+      {#if jobs.failure && catalog.backendStatus.ready && !catalog.loadError && !application.problem}
         <AppMessage
-          title="Job error"
-          message={jobs.error}
+          title={jobs.failure.title}
+          guidance={jobs.failure.guidance}
+          message={jobs.failure.message}
           placement="overlay"
           actionLabel="Dismiss"
           onaction={() => jobs.dismiss()}
@@ -195,7 +205,7 @@
         <AppMessage
           title="Progress updates interrupted"
           message={jobs.connectionError}
-          guidance="The job may still be running. Nicegal is reconnecting; its last reported progress is retained."
+          guidance="The job may still be running. Reconnecting…"
           placement="overlay"
         />
       {/if}
@@ -266,10 +276,9 @@
         backendReady={catalog.backendStatus.ready}
         backendError={catalog.backendStatus.error}
         {runtime}
-        onsettings={() => {
-          settingsPage = "search";
-          view.openSettingsDialog();
-        }}
+        {dismissedSetupErrorKey}
+        ondismisssetup={(key) => (dismissedSetupErrorKey = key)}
+        onsearchproblem={view.openSearchProblem}
       />
     {:else}
       <span class="status-segment viewer-name" title={view.detailItem.displayName}>
@@ -305,7 +314,6 @@
 {#snippet modals()}
   <GalleryDialogs
     {view}
-    bind:settingsPage
     {thumbnailFailures}
     onretrythumbnails={() =>
       gallery?.retryThumbnails(thumbnailFailures.map((failure) => failure.assetId))}

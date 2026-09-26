@@ -49,8 +49,25 @@ export interface ApplicationCommands {
   readonly removeLibrary: (libraryId: LibraryId, purge: boolean) => Promise<boolean>;
   readonly dismissWelcome: () => void;
   readonly showWelcome: () => void;
-  readonly beginLibraryManagement: () => void;
-  readonly endLibraryManagement: () => void;
+  /** Holds scans that library or search settings changes would start until the dialog closes,
+   * then runs one scan of the selected library. */
+  readonly beginDeferringScans: () => void;
+  readonly endDeferringScans: () => void;
+  /** Shows a failure that is not a job's, such as adding a folder, in the gallery overlay. */
+  readonly showProblem: (problem: AppProblem) => void;
+  readonly dismissProblem: () => void;
+  /** Reruns startup after `problem.retry` was offered. */
+  readonly retryStartup: () => void;
+}
+
+/** A failure outside any job, shown over the gallery until dismissed or retried. */
+export interface AppProblem {
+  title: string;
+  guidance: string;
+  /** Technical text for copying. */
+  message: string;
+  /** Startup failures offer Retry, which reruns startup, instead of Dismiss. */
+  retry?: boolean;
 }
 
 export interface ApplicationContext {
@@ -59,22 +76,22 @@ export interface ApplicationContext {
   readonly initialized: boolean;
   readonly librarySelectionRevision: number;
   readonly welcomeVisible: boolean;
+  readonly problem: AppProblem | null;
 }
 
 class Application implements ApplicationContext {
   readonly services: ApplicationServices;
   readonly commands: ApplicationCommands;
   initialized = $state(false);
+  problem = $state.raw<AppProblem | null>(null);
   librarySelectionRevision = $state(0);
   welcomeVisible = $state(false);
 
   private started = false;
   private backendInitialized = false;
-  private managingLibraries = false;
-  private deferredScanId: LibraryId | null = null;
-  /** The video-indexing choice last saved to the backend, so unrelated settings changes do not
-   * resend it. */
-  private savedIndexVideos: boolean | null = null;
+  private deferringScans = false;
+  /** The scan held while a settings dialog is open; `full` after a backend restart. */
+  private deferredScan: { libraryId: LibraryId; full: boolean } | null = null;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
@@ -115,7 +132,7 @@ class Application implements ApplicationContext {
         libraryId: LibraryId,
         options: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean } = {},
       ) => {
-        if (this.deferredScanId === libraryId) this.deferredScanId = null;
+        if (this.deferredScan?.libraryId === libraryId) this.deferredScan = null;
         void orchestrator.scan(libraryId, { scanMode: "full", ...options });
       },
       startThumbnailBackfill: (libraryId: LibraryId, options: ThumbnailBackfillOptions) =>
@@ -126,12 +143,25 @@ class Application implements ApplicationContext {
       showWelcome: () => {
         this.welcomeVisible = true;
       },
-      beginLibraryManagement: () => { this.managingLibraries = true; },
-      endLibraryManagement: () => {
-        this.managingLibraries = false;
-        const id = this.deferredScanId;
-        this.deferredScanId = null;
-        if (id !== null && id === catalog.selectedId) void orchestrator.scan(id);
+      beginDeferringScans: () => {
+        this.deferringScans = true;
+      },
+      showProblem: (problem: AppProblem) => {
+        this.problem = problem;
+      },
+      dismissProblem: () => {
+        this.problem = null;
+      },
+      retryStartup: () => {
+        this.problem = null;
+        void this.initialize();
+      },
+      endDeferringScans: () => {
+        this.deferringScans = false;
+        const scan = this.deferredScan;
+        this.deferredScan = null;
+        if (scan && scan.libraryId === catalog.selectedId)
+          void orchestrator.scan(scan.libraryId, scan.full ? { scanMode: "full" } : {});
       },
     });
   }
@@ -143,7 +173,6 @@ class Application implements ApplicationContext {
     const { catalog, runtime, orchestrator, jobs } = this.services;
     const unsubscribeSettings = settings.subscribe((value) => {
       catalog.onSettingsChange(value);
-      this.saveIndexVideos(value.indexVideos);
     });
     const unsubscribeVisualSearch = window.nicegal.native.onAddToVisualSearch(
       (assetIds, replace) => {
@@ -195,14 +224,19 @@ class Application implements ApplicationContext {
   }
 
   private async initialize(): Promise<void> {
-    const { catalog, jobs } = this.services;
+    const { catalog } = this.services;
     try {
       await catalog.initialize();
       this.initialized = true;
       if (catalog.backendStatus.ready) await this.initializeReadyBackend();
     } catch (error) {
       this.initialized = true;
-      jobs.error = errorMessage(error);
+      this.problem = {
+        title: "Couldn't open the gallery",
+        guidance: "Nicegal couldn't reach its gallery service. Try again, or restart the app.",
+        message: errorMessage(error),
+        retry: true,
+      };
     }
   }
 
@@ -211,13 +245,13 @@ class Application implements ApplicationContext {
     await this.initializeReadyBackend();
     const { catalog, orchestrator, jobs } = this.services;
     orchestrator.backendReady();
-    this.savedIndexVideos = null;
-    this.saveIndexVideos(get(settings).indexVideos);
     await jobs.sync();
     // A restart drops running and queued scans. A routine scan may have started with no
     // pending folder flag, and a fast scan skips unchanged directories. Revisit every asset.
-    if (catalog.selectedId !== null)
-      await orchestrator.scan(catalog.selectedId, { scanMode: "full" });
+    // A restart from Settings (model or provider change) waits until the dialog closes.
+    if (catalog.selectedId === null) return;
+    if (this.deferringScans) this.deferredScan = { libraryId: catalog.selectedId, full: true };
+    else await orchestrator.scan(catalog.selectedId, { scanMode: "full" });
   }
 
   private async initializeReadyBackend(): Promise<void> {
@@ -229,7 +263,6 @@ class Application implements ApplicationContext {
     void catalog.refreshLibraryStatuses();
     void runtime.refresh();
     void runtime.refreshModels();
-    this.saveIndexVideos(get(settings).indexVideos);
     try {
       // Follow whatever the backend is already running or has queued from its last session.
       await jobs.sync();
@@ -237,33 +270,29 @@ class Application implements ApplicationContext {
       // Opening the app checks the selected library; the backend runs a full walk when due.
       if (catalog.selectedId !== null) await orchestrator.scan(catalog.selectedId);
     } catch (error) {
-      jobs.error = errorMessage(error);
+      this.problem = {
+        title: "Couldn't check the library for changes",
+        guidance: "Rescan the library to try again.",
+        message: errorMessage(error),
+      };
     }
   }
 
   /** Called after every terminal job: library state may have moved, and the backend may have
    * started the next queued scan. */
   private async afterJob(): Promise<void> {
-    const { catalog, jobs } = this.services;
+    const { catalog, jobs, runtime } = this.services;
+    // A scan may have prepared a model or failed to; the status bar's search warning reads this.
+    void runtime.refreshModels();
     await catalog.loadLibraries();
     void catalog.refreshLibraryStatuses();
     await jobs.sync();
   }
 
-  /** Scans read the video choice from the backend's runtime settings, so keep it saved there. */
-  private saveIndexVideos(indexVideos: boolean): void {
-    if (!this.services.catalog.backendStatus.ready || this.savedIndexVideos === indexVideos) return;
-    this.savedIndexVideos = indexVideos;
-    void window.nicegal.backend.setIndexVideos(indexVideos).catch((error: unknown) => {
-      this.savedIndexVideos = null;
-      this.services.jobs.error = errorMessage(error);
-    });
-  }
-
   private async createLibrary(folder: string): Promise<LibraryRecord> {
     const { catalog } = this.services;
     await catalog.loadLibraries();
-    if (catalog.librariesError) throw new Error(`Could not check existing libraries: ${catalog.librariesError}`);
+    if (catalog.librariesError) throw new Error(`Couldn't check existing libraries: ${catalog.librariesError}`);
     const existing = catalog.libraries.find((library) =>
       library.include.some((included) => sameFolder(included.path, folder)),
     );
@@ -286,7 +315,7 @@ class Application implements ApplicationContext {
     if (current && definitionChanged(current, definition)) {
       const updated = await catalog.updateLibrary(libraryId, definition);
       catalog.updateLibraryViewState(libraryId, { name });
-      if (this.managingLibraries || updated.include.some((folder) => folder.scanPending))
+      if (this.deferringScans || updated.include.some((folder) => folder.scanPending))
         this.requestPendingScan(libraryId);
     } else {
       catalog.updateLibraryViewState(libraryId, { name });
@@ -294,7 +323,11 @@ class Application implements ApplicationContext {
   }
 
   private requestPendingScan(libraryId: LibraryId): void {
-    if (this.managingLibraries) this.deferredScanId = libraryId;
+    if (this.deferringScans)
+      this.deferredScan = {
+        libraryId,
+        full: this.deferredScan?.libraryId === libraryId && this.deferredScan.full,
+      };
     else void this.services.orchestrator.scan(libraryId, { pendingOnly: true });
   }
 
@@ -364,12 +397,13 @@ function sameFolders(left: readonly string[], right: readonly string[]): boolean
 }
 
 function definitionChanged(
-  current: { include: { path: string }[]; exclude: string[]; ocr: boolean; image: boolean },
+  current: Omit<LibraryDefinition, "include"> & { include: { path: string }[] },
   next: LibraryDefinition,
 ): boolean {
   return (
     current.ocr !== next.ocr ||
     current.image !== next.image ||
+    current.videos !== next.videos ||
     !sameFolders(
       current.include.map((folder) => folder.path),
       next.include,

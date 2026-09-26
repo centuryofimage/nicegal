@@ -12,11 +12,14 @@
   segment disappears only when its eligible-image total also duplicates the library count.
 -->
 <script lang="ts">
+  import X from "@lucide/svelte/icons/x";
+
   import type { JobSnapshot } from "../../../shared/backend";
   import type { LibraryRowStatus } from "../lib/catalog.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
   import { jobRateText } from "../lib/job-format";
+  import { searchIssue, type SearchIssue } from "../lib/search-issue";
 
   let {
     libraryName,
@@ -33,7 +36,9 @@
     backendError,
     runtime,
     job = null,
-    onsettings,
+    onsearchproblem,
+    dismissedSetupErrorKey,
+    ondismisssetup,
   }: {
     libraryName: string;
     /** Tooltip for the library name: its included folders. */
@@ -52,12 +57,16 @@
     backendError: string | null;
     runtime: RuntimeController;
     job?: JobSnapshot | null;
-    onsettings: () => void;
+    /** Opens the search problem dialog for the warning shown. */
+    onsearchproblem: (issue: SearchIssue) => void;
+    dismissedSetupErrorKey: string | null;
+    ondismisssetup: (key: string) => void;
   } = $props();
 
   const providerLabels: Record<string, string> = {
     cpu: "CPU",
     directml: "DirectML",
+    cuda: "CUDA",
     openvino: "OpenVINO",
     webgpu: "WebGPU",
     coreml: "CoreML",
@@ -69,11 +78,7 @@
           (runtime.status?.restartRequired ? " ⟳" : "")
       : "",
   );
-  const modelFailure = $derived(
-    runtime.modelError ||
-      (runtime.models &&
-        Object.values(runtime.models).find((model) => model.state === "failed")?.error),
-  );
+  const setupIssue = $derived(searchIssue(runtime));
   // Loaded indexing models share one provider. Before they load, show the launch choice.
   const providerTitle = $derived.by(() => {
     const active = runtime.activeProvider;
@@ -129,12 +134,18 @@
 {:else if runtime.activeProvider}
   <span class="status-segment provider" title={providerTitle}>{providerText}</span>
 {/if}
-{#if runtime.error || modelFailure}
-  <button
-    class="status-segment status-action"
-    onclick={onsettings}
-    title="Open Settings to review the error">Search setup needs attention</button
-  >
+{#if setupIssue && setupIssue.key !== dismissedSetupErrorKey}
+  <span class="status-segment setup-issue">
+    <button class="status-action" onclick={() => onsearchproblem(setupIssue)}
+      >{setupIssue.label}</button
+    >
+    <button
+      class="dismiss-setup"
+      onclick={() => ondismisssetup(setupIssue.key)}
+      title="Dismiss this search warning"
+      aria-label="Dismiss this search warning"
+    ><X size={11} aria-hidden="true" /></button>
+  </span>
 {/if}
 <span class="status-segment message" role="status">
   {#if searching}<span class="index-activity-indicator active" aria-hidden="true"
@@ -211,6 +222,33 @@
     font: inherit;
     text-decoration: underline;
     cursor: pointer;
+  }
+
+  .setup-issue {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .dismiss-setup {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+  }
+
+  .status-action:focus-visible,
+  .dismiss-setup:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
   }
 
   .message {

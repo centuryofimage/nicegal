@@ -6,21 +6,20 @@
   import GettingStarted from "./GettingStarted.svelte";
   import LibrariesManager from "./LibrariesManager.svelte";
   import Modal from "./Modal.svelte";
+  import SearchProblemDialog from "./SearchProblemDialog.svelte";
   import SettingsPanel from "./SettingsPanel.svelte";
 
   let {
     view,
-    settingsPage = $bindable("gallery"),
     thumbnailFailures,
     onretrythumbnails,
   }: {
     view: LibraryViewController;
-    settingsPage?: "gallery" | "search" | "about";
     thumbnailFailures: readonly (ThumbnailFailure & { name?: string })[];
     onretrythumbnails: () => void;
   } = $props();
   const application = useApplication();
-  const { runtime } = application.services;
+  const { runtime, catalog } = application.services;
   const commands = application.commands;
   let manager = $state.raw<LibrariesManager>();
 </script>
@@ -51,8 +50,9 @@
     <div class="settings-dialog">
       <SettingsPanel
         {runtime}
-        bind:page={settingsPage}
+        bind:page={view.settingsPage}
         onclose={view.closeDialog}
+        onmanagelibraries={view.openManageLibraries}
         onshowintro={() => {
           view.closeDialog();
           commands.showWelcome();
@@ -60,6 +60,21 @@
       />
     </div>
   </Modal>
+{:else if view.activeDialog === "searchProblem" && view.searchProblem}
+  <SearchProblemDialog
+    issue={view.searchProblem}
+    canRescan={catalog.selectedId !== null && catalog.backendStatus.ready}
+    onrescan={() => {
+      if (catalog.selectedId !== null) commands.scanLibrary(catalog.selectedId);
+      view.closeDialog();
+    }}
+    onsettings={() => view.openSettingsDialog("search")}
+    onretry={() => {
+      void runtime.refreshModels();
+      view.closeDialog();
+    }}
+    onclose={view.closeDialog}
+  />
 {/if}
 
 <style>

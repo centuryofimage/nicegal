@@ -5,7 +5,7 @@ import type { ExternalVisualReference } from "../../../shared/backend";
 import type { CatalogController } from "./catalog.svelte";
 import type { GallerySection } from "./gallery/types";
 
-import { isQuerySyntaxError, searchErrorMessage } from "./errors";
+import { errorCode, errorMessage } from "./errors";
 import { localDateToExclusiveNs, localDateToNs } from "./job-params";
 import { parseQuery, withScope, type DateFilter, type SearchScope } from "./search-query";
 import {
@@ -138,6 +138,8 @@ export class OcrSearchController {
     visual: { results: [], total: 0 },
   });
   private broadErrors = $state({ meaning: "", visual: "" });
+  /** An All-mode lane whose search index is not ready: a setup notice, not a failure. */
+  private broadSetup = $state({ meaning: "", visual: "" });
   private broadTimer: ReturnType<typeof setTimeout> | undefined;
   private interacting = false;
   private deferredResults: Array<() => void> = [];
@@ -183,9 +185,9 @@ export class OcrSearchController {
   get sliderLabel(): string {
     return this.parsed.scope === "meaning" ? "Match quality" : "Visual similarity";
   }
-  get allNotice(): string {
+  get allError(): string {
     return [
-      this.error || this.indexNotice ? `Names and text: ${this.error || this.indexNotice}` : "",
+      this.error ? `Names and text: ${this.error}` : "",
       this.broadErrors.meaning ? `Related text: ${this.broadErrors.meaning}` : "",
       this.broadErrors.visual ? `Visual results: ${this.broadErrors.visual}` : "",
     ]
@@ -193,7 +195,26 @@ export class OcrSearchController {
       .join(" · ");
   }
   error = $state("");
-  indexNotice = $state("");
+  /** The backend rejected `error`'s query syntax, so retyping fixes it and syntax help applies. */
+  querySyntaxError = $state(false);
+  /** Search is not ready for this library: shown with a Library manager action. */
+  setupNotice = $state("");
+  /** The backend capped the results; narrowing the search shows the rest. */
+  limitNotice = $state("");
+  /** Either notice; result logic treats both as "this search is incomplete". */
+  get indexNotice(): string {
+    return this.setupNotice || this.limitNotice;
+  }
+  /** The setup notice for the search bar, per lane in All mode. */
+  get setupMessage(): string {
+    if (!this.allMode) return this.setupNotice;
+    return [
+      this.broadSetup.meaning ? `Related text: ${this.broadSetup.meaning}` : "",
+      this.broadSetup.visual ? `Visual results: ${this.broadSetup.visual}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  }
   textSetupRequired = $state(false);
   imageSetupRequired = $state(false);
   /** Set only after the current query's coverage check confirms a semantic search can run. */
@@ -410,6 +431,11 @@ export class OcrSearchController {
     }
   }
 
+  private setQueryError(error: unknown): void {
+    this.error = errorMessage(error);
+    this.querySyntaxError = errorCode(error) === "query_syntax";
+  }
+
   get queryHint(): string {
     return this.parsed.dates.some((date) => !date.valid) ? "Unrecognized date" : "";
   }
@@ -435,6 +461,7 @@ export class OcrSearchController {
     this.broadPending = { meaning: false, visual: false };
     this.broadResults = { meaning: { results: [], total: 0 }, visual: { results: [], total: 0 } };
     this.broadErrors = { meaning: "", visual: "" };
+    this.broadSetup = { meaning: "", visual: "" };
     // Sort mode and the percentile cutoff describe one library's result set, so they reset with
     // the library and survive edits to the query within it.
     if (libraryId !== this.lastLibraryId) {
@@ -444,13 +471,15 @@ export class OcrSearchController {
       this.clipMatchQuality = DEFAULT_CLIP_MATCH_QUALITY;
     }
     const generation = ++this.generation;
-    const { scope, body: rawBody, dates, ocrMode, folder, path } = this.parsed;
+    const { scope, body: rawBody, dates, ocrMode, folder, path, media } = this.parsed;
     const body = normalizeSearchBody(scope, rawBody);
     const references = scope === "like" ? this.visualReferences : [];
     const composedVisual = scope === "like" && (isVisualComposition(body) || references.length > 0);
     const visualTerms = composedVisual ? parseVisualTextTerms(body) : [];
     this.error = "";
-    this.indexNotice = "";
+    this.querySyntaxError = false;
+    this.setupNotice = "";
+    this.limitNotice = "";
     this.textSetupRequired = false;
     this.imageSetupRequired = false;
     this.semanticAvailable = false;
@@ -464,6 +493,13 @@ export class OcrSearchController {
     this.filenameMatches = new Set<string>();
     this.filenameOrderedIds = [];
     this.matches = new Set<string>();
+
+    // Media filtering uses the loaded catalog. With no eligible assets, every backend lane
+    // would produce an empty displayed result, so avoid loading models just to discard hits.
+    if (media && !items.some((item) => item.mediaKind === media)) {
+      this.total = 0;
+      return;
+    }
 
     if (scope === "like" && body && !supportsImageTextQueries) {
       this.total = 0;
@@ -523,12 +559,12 @@ export class OcrSearchController {
               }
               this.total = response.total;
               if (response.total > response.results.length)
-                this.indexNotice = "Result limit reached; narrow the search by date.";
+                this.limitNotice = "Result limit reached; narrow the search by date.";
             }),
           )
           .catch((error: unknown) =>
             this.publish(generation, () => {
-              this.error = searchErrorMessage(error);
+              this.setQueryError(error);
             }),
           )
           .finally(() =>
@@ -542,7 +578,7 @@ export class OcrSearchController {
 
     if (scope === "like" && !hasImages) {
       this.imageSetupRequired = true;
-      this.indexNotice = "Visual search is not ready for this library yet.";
+      this.setupNotice = "Visual search isn't ready for this library yet.";
       this.total = 0;
       return;
     }
@@ -578,17 +614,23 @@ export class OcrSearchController {
                 if (generation !== this.generation) return;
                 this.broadResults = { ...this.broadResults, [lane]: response };
                 if (lane === "visual" && response.total > response.results.length)
-                  this.broadErrors[lane] = "Result limit reached; narrow the search by date.";
+                  this.limitNotice = "Result limit reached; narrow the search by date.";
               }),
             )
             .catch((error: unknown) =>
               this.publish(generation, () => {
                 if (generation !== this.generation) return;
                 console.warn(`${lane} search failed`, error);
-                this.broadErrors[lane] =
-                  lane === "visual"
-                    ? "Visual search unavailable. Try again."
-                    : "Related text unavailable. Try again.";
+                const message = errorMessage(error);
+                const modelNotReady = errorCode(error) === "models_not_ready";
+                if (modelNotReady && lane === "visual") this.imageSetupRequired = true;
+                if (modelNotReady && lane === "meaning") this.textSetupRequired = true;
+                if (modelNotReady)
+                  this.broadSetup[lane] =
+                    lane === "visual"
+                      ? "Visual search isn't ready for this library yet."
+                      : "Related text search isn't set up for this library.";
+                else this.broadErrors[lane] = message;
               }),
             )
             .finally(() =>
@@ -627,12 +669,12 @@ export class OcrSearchController {
                   );
                   if (scope === "all" && !hasOcr) this.total = response.total;
                   if (response.total > response.results.length)
-                    this.indexNotice = "Result limit reached; narrow the search by date.";
+                    this.limitNotice = "Result limit reached; narrow the search by date.";
                 }),
               )
               .catch((error: unknown) =>
                 this.publish(generation, () => {
-                  this.error = searchErrorMessage(error);
+                  this.setQueryError(error);
                 }),
               )
               .finally(() =>
@@ -735,21 +777,22 @@ export class OcrSearchController {
                 if (scope === "like") this.dedicatedFrameTimes = frameTimes(response.results);
                 this.total = response.total;
                 if (response.total > response.results.length)
-                  this.indexNotice = "Result limit reached; narrow the search by date.";
+                  this.limitNotice = "Result limit reached; narrow the search by date.";
               }),
             )
             .catch((error: unknown) =>
               this.publish(generation, () => {
                 if (generation !== this.generation) return;
-                const message = searchErrorMessage(error);
                 console.warn("Search failed", error);
-                this.error =
-                  scope === "like" &&
-                  /model.*not ready|prepare.*search|prepar.*model/i.test(message)
-                    ? "Visual search needs preparation. Open Library manager and rescan the library."
-                    : scope === "all" && !isQuerySyntaxError(message)
-                      ? "Text search unavailable. Try again."
-                      : message;
+                const modelNotReady = errorCode(error) === "models_not_ready";
+                if (modelNotReady && scope === "like") this.imageSetupRequired = true;
+                if (modelNotReady && scope === "meaning") this.textSetupRequired = true;
+                if (modelNotReady)
+                  this.setupNotice =
+                    scope === "like"
+                      ? "Visual search isn't ready for this library yet."
+                      : "Text search isn't set up for this library.";
+                else this.setQueryError(error);
               }),
             )
             .finally(() =>
@@ -777,7 +820,7 @@ export class OcrSearchController {
               scope === "meaning" ? response.embedded === 0 : response.indexed === 0;
             if (notIndexed) {
               this.textSetupRequired = true;
-              this.indexNotice = "Text search hasn’t been set up for this library.";
+              this.setupNotice = "Text search isn't set up for this library.";
               this.matches = new Set<string>();
               this.snippets = new Map<string, string>();
               this.total = this.filenameMatches?.size ?? 0;
@@ -869,7 +912,7 @@ export class OcrSearchController {
       [
         this.literalPending || this.broadPending.meaning ? "Searching…" : "",
         this.error || this.indexNotice,
-        this.broadErrors.meaning,
+        this.broadErrors.meaning || this.broadSetup.meaning,
       ]
         .filter(Boolean)
         .join(" · "),
@@ -878,7 +921,7 @@ export class OcrSearchController {
       "visual",
       "Visual results",
       visual.map((hit) => hit.assetId),
-      this.broadPending.visual ? "Searching…" : this.broadErrors.visual,
+      this.broadPending.visual ? "Searching…" : this.broadErrors.visual || this.broadSetup.visual,
     );
     return {
       items: this.sortMode === "date" ? items.filter((item) => sources.has(item.id)) : combined,
@@ -969,6 +1012,7 @@ export class OcrSearchController {
     this.pending = false;
     this.filePending = false;
     this.error = "";
+    this.querySyntaxError = false;
   }
 }
 

@@ -58,12 +58,13 @@
       bind:this={searchBar}
       bind:value={ocrSearch.query}
       bind:composerOpen={ocrSearch.composerOpen}
-      message={ocrSearch.queryHint || (ocrSearch.allMode ? "" : ocrSearch.error)}
-      infoNotice={ocrSearch.allMode ? "" : ocrSearch.indexNotice}
-      textSetupRequired={ocrSearch.textSetupRequired}
+      message={ocrSearch.queryHint || (ocrSearch.allMode ? ocrSearch.allError : ocrSearch.error)}
+      querySyntaxError={!ocrSearch.queryHint && !ocrSearch.allMode && ocrSearch.querySyntaxError}
+      setupNotice={ocrSearch.setupMessage}
+      limitNotice={ocrSearch.limitNotice}
       semanticSuggestion={ocrSearch.shouldSuggestSemantic}
       onsemanticsearch={view.switchToMeaningSearch}
-      onsetuptextsearch={() => catalog.selectedId !== null && view.editLibrary(catalog.selectedId)}
+      onopenlibrarymanager={() => catalog.selectedId !== null && view.editLibrary(catalog.selectedId)}
       visualReferences={ocrSearch.visualReferences}
       onvisualreferenceschange={(references) => ocrSearch.setVisualReferences(references)}
       onchoosevisualfile={() => void chooseVisualFile(ocrSearch)}
@@ -105,7 +106,7 @@
     <button
       class="app-toolbar-button app-toolbar-text-button"
       class:active={view.activeDialog === "settings"}
-      onclick={view.openSettingsDialog}
+      onclick={() => view.openSettingsDialog()}
       title="Settings"
       aria-label="Settings"
       aria-haspopup="dialog"
@@ -127,7 +128,6 @@
       sliderLabel={ocrSearch.sliderLabel}
       sections={view.searchView.sections}
       {onsection}
-      notice={ocrSearch.allMode && ocrSearch.sortMode === "date" ? ocrSearch.allNotice : ""}
     />
   {/if}
 {/if}

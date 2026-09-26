@@ -273,15 +273,6 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleTrustedIpc(IPC_CHANNELS.backend.listJobs, context.isTrustedSender, () =>
     requireBackend().listJobs(),
   );
-  // Scan options are not a runtime restart: the backend saves them for later scans.
-  handleTrustedIpc(
-    IPC_CHANNELS.backend.setIndexVideos,
-    context.isTrustedSender,
-    (_event, value: unknown) => {
-      if (typeof value !== "boolean") throw new TypeError("Invalid video indexing choice");
-      return requireBackend().setIndexVideos(value);
-    },
-  );
   handleTrustedIpc(IPC_CHANNELS.backend.cancelJob, context.isTrustedSender, (_event, value) => {
     return requireBackend().cancelJob(validateJobId(value));
   });
@@ -373,25 +364,37 @@ function validateFolderList(value: unknown, allowEmpty: boolean): string[] {
 }
 
 function validateLibraryDefinition(value: unknown): LibraryDefinition {
-  if (!isRecord(value) || !hasOnlyFields(value, ["include", "exclude", "ocr", "image"]))
-    throw new TypeError("Invalid library definition");
-  if (typeof value.ocr !== "boolean" || typeof value.image !== "boolean")
-    throw new TypeError("Invalid library search options");
-  return {
-    include: validateFolderList(value.include, false),
-    exclude: validateFolderList(value.exclude, true),
-    ocr: value.ocr,
-    image: value.image,
-  };
+  const { videos, ...definition } = validateLibraryFields(value, []);
+  if (videos === undefined) throw new TypeError("Invalid library search options");
+  return { ...definition, videos };
 }
 
 function validateCreateLibrary(value: unknown): CreateLibraryRequest {
-  if (!isRecord(value)) throw new TypeError("Invalid library definition");
-  const { importKey, ...definition } = value;
+  return validateLibraryFields(value, ["importKey"]);
+}
+
+/** Shared by update and create. `videos` is optional here; the backend defaults it on create. */
+function validateLibraryFields(value: unknown, extraFields: readonly string[]): CreateLibraryRequest {
+  if (
+    !isRecord(value) ||
+    !hasOnlyFields(value, ["include", "exclude", "ocr", "image", "videos", ...extraFields])
+  )
+    throw new TypeError("Invalid library definition");
+  const { ocr, image, videos, importKey } = value;
+  if (
+    typeof ocr !== "boolean" ||
+    typeof image !== "boolean" ||
+    (videos !== undefined && typeof videos !== "boolean")
+  )
+    throw new TypeError("Invalid library search options");
   if (importKey !== undefined && (typeof importKey !== "string" || importKey.length > 32_800))
     throw new TypeError("Invalid library import key");
   return {
-    ...validateLibraryDefinition(definition),
+    include: validateFolderList(value.include, false),
+    exclude: validateFolderList(value.exclude, true),
+    ocr,
+    image,
+    ...(videos === undefined ? {} : { videos }),
     ...(importKey === undefined ? {} : { importKey }),
   };
 }
@@ -401,6 +404,7 @@ function validateExecutionProvider(value: unknown): ExecutionProviderId {
     value !== "cpu" &&
     value !== "directml" &&
     value !== "openvino" &&
+    value !== "cuda" &&
     value !== "webgpu" &&
     value !== "coreml"
   ) {

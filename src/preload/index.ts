@@ -120,9 +120,6 @@ const backend: NicegalBridge["backend"] = {
   listJobs(): Promise<JobListResponse> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.listJobs);
   },
-  setIndexVideos(indexVideos: boolean): Promise<void> {
-    return ipcRenderer.invoke(IPC_CHANNELS.backend.setIndexVideos, indexVideos);
-  },
   cancelJob(jobId: string): Promise<JobSnapshot> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.cancelJob, jobId);
   },

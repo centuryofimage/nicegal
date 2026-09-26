@@ -116,9 +116,7 @@
   .search-notice {
     flex-basis: 100%;
     color: var(--text-secondary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
   .search-sections {
     display: flex;

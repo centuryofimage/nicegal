@@ -14,13 +14,14 @@
     <li>
       <strong>Add a folder</strong>
       <span
-        >Choose <b>Add a folder</b> below, or in <b>Libraries</b>. Your files stay where they are.</span
+        >Choose <b>Add a folder</b> below, or use <b>Library manager</b>. Your files stay where they
+        are.</span
       >
       <span
         >Visual search is set up automatically. The first run downloads a search model; your files
         stay on your computer.</span
       >
-      <span>For words inside pictures, enable <b>text recognition</b> in Libraries.</span>
+      <span>For words inside pictures, turn on <b>Text recognition</b> in Library manager.</span>
     </li>
     <li>
       <strong>Choose what to search</strong>
@@ -35,14 +36,14 @@
           <p>Use the search menu, or type a prefix:</p>
           <ul class="search-types">
             <li>
-              <b>Visual search</b> (<code>like:</code>) — Describe a photo or video or use an image
-              example.
+              <b>Visual search</b> (<code>like:</code>): describe a photo or video, or use an example
+              image.
             </li>
             <li>
-              <b>Exact text</b> (<code>ocr:</code>) — Find words inside pictures.
+              <b>Exact text</b> (<code>ocr:</code>): words inside pictures.
             </li>
             <li>
-              <b>Related text</b> (<code>meaning:</code>) — Find similar wording or meaning.
+              <b>Related text</b> (<code>meaning:</code>): similar wording or meaning.
             </li>
           </ul>
           <p>

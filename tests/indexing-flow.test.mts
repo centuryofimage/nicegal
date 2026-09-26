@@ -153,20 +153,6 @@ test("Stop cancels the active job and every queued scan", async () => {
   assert.equal(f.orchestrator.restartingIndex, false);
 });
 
-for (const loaded of [null, { executionProvider: "cpu" }]) {
-  test(`Stop during model-state lookup prevents preparation (loaded=${Boolean(loaded)})`, async () => {
-    const f = fixture([]);
-    const reply = Promise.withResolvers<unknown>();
-    Object.assign(window.nicegal.backend, { getOcrModels: () => reply.promise });
-    const preparing = f.orchestrator.prepareSearchModels();
-    await f.orchestrator.cancel();
-    reply.resolve({ loaded });
-    await preparing;
-    assert.deepEqual(f.requests, []);
-    assert.equal(f.orchestrator.preparingSearchModels, false);
-  });
-}
-
 for (const status of ["completed", "failed", "cancelled"] as const) {
   test(`immediately ${status} thumbnail job clears the resume record`, async () => {
     const f = fixture([snapshot("thumbnailGenerate", status)]);
@@ -314,7 +300,11 @@ test("sync follows a restarted server job that reuses a completed job ID", async
       return () => {};
     },
   });
-  const tracker = new Tracker(() => {}, () => {}, () => {});
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
   await tracker.sync();
   list = { activeJobId: null, jobs: [snapshot("libraryScan", "completed", "1", 3)] };
   await tracker.sync();
@@ -563,6 +553,49 @@ test("v2 roots import once as one-folder libraries with their view state", async
   assert.equal(created.length, 2, "a completed import is not repeated");
   assert.equal(again.selectedId, 2);
   again.dispose();
+});
+
+test("a malformed v2 registry falls back to the older single-root library", async () => {
+  for (const malformed of ["{invalid json", JSON.stringify({ libraries: [{}] })]) {
+    storage.clear();
+    storage.set("nicegal.libraries.v2", malformed);
+    storage.set("nicegal.libraryRoot.v1", "C:/Pictures");
+    const created: CreateLibraryRequest[] = [];
+    catalogBackend({
+      createLibrary: async (request: CreateLibraryRequest) => {
+        created.push(request);
+        return library(1, request.include[0]);
+      },
+      listLibraries: async () => created.map((request) => library(1, request.include[0])),
+    });
+    const catalog = new CatalogController();
+    await catalog.initialize();
+    assert.deepEqual(
+      created.map((request) => request.include),
+      [["C:/Pictures"]],
+    );
+    assert.equal(catalog.selectedId, 1);
+    catalog.dispose();
+  }
+});
+
+test("an intentionally empty v2 registry does not restore the older single root", async () => {
+  storage.clear();
+  storage.set("nicegal.libraries.v2", JSON.stringify({ selectedRoot: "", libraries: [] }));
+  storage.set("nicegal.libraryRoot.v1", "C:/Pictures");
+  const created: CreateLibraryRequest[] = [];
+  catalogBackend({
+    createLibrary: async (request: CreateLibraryRequest) => {
+      created.push(request);
+      return library(1, request.include[0]);
+    },
+    listLibraries: async () => [],
+  });
+  const catalog = new CatalogController();
+  await catalog.initialize();
+  assert.deepEqual(created, []);
+  assert.equal(catalog.selectedId, null);
+  catalog.dispose();
 });
 
 test("a failed import is retried with the same import key", async () => {

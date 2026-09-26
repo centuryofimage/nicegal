@@ -157,14 +157,47 @@ test("library scan and library requests cross IPC with only their documented fie
   const update = (definition: unknown): Promise<unknown> =>
     Promise.resolve().then(() => handlers.get("backend:update-library")!({}, 3, definition));
   const root = process.cwd();
-  await update({ include: [root], exclude: [], ocr: false, image: true });
-  assert.deepEqual(updates.at(-1), [3, { include: [root], exclude: [], ocr: false, image: true }]);
-  await assert.rejects(update({ include: [], exclude: [], ocr: false, image: true }), /absolute/);
-  await assert.rejects(update({ include: ["relative"], ocr: false, image: true }), /absolute/);
-  await assert.rejects(update({ include: [root], exclude: [], ocr: 1, image: true }), /search/);
+  const options = { ocr: false, image: true, videos: true };
+  await update({ include: [root], exclude: [], ...options });
+  assert.deepEqual(updates.at(-1), [3, { include: [root], exclude: [], ...options }]);
+  await assert.rejects(update({ include: [], exclude: [], ...options }), /absolute/);
+  await assert.rejects(update({ include: ["relative"], ...options }), /absolute/);
+  await assert.rejects(update({ include: [root], exclude: [], ...options, ocr: 1 }), /search/);
+  await assert.rejects(update({ include: [root], exclude: [], ocr: false, image: true }), /search/);
   await assert.rejects(
-    update({ include: [root], exclude: [], ocr: false, image: true, name: "x" }),
+    update({ include: [root], exclude: [], ...options, name: "x" }),
     /definition/,
   );
   assert.equal(updates.length, 1);
+});
+
+test("backend error codes survive IPC; other errors pass through unchanged", async () => {
+  const { errorCode, errorMessage } = await vite.ssrLoadModule("/src/renderer/src/lib/errors.ts");
+  let failure: Error = new Error("unused");
+  registerBackendIpc({
+    status: { ready: true, error: null },
+    isTrustedSender: () => true,
+    client: {
+      listLibraries: async () => {
+        throw failure;
+      },
+    },
+  });
+  const list = (): Promise<unknown> =>
+    Promise.resolve().then(() => handlers.get("backend:list-libraries")!({}));
+  // Electron keeps only the message, behind its own prefix.
+  const received = async (): Promise<Error> => {
+    const error = (await list().catch((cause: unknown) => cause)) as Error;
+    return new Error(`Error invoking remote method 'backend:list-libraries': Error: ${error.message}`);
+  };
+
+  failure = Object.assign(new Error("Image model not ready"), { code: "models_not_ready" });
+  const coded = await received();
+  assert.equal(errorCode(coded), "models_not_ready");
+  assert.equal(errorMessage(coded), "Image model not ready");
+
+  failure = new Error("disk full");
+  const plain = await received();
+  assert.equal(errorCode(plain), undefined);
+  assert.equal(errorMessage(plain), "disk full");
 });

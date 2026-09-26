@@ -1,9 +1,22 @@
+import { decodeIpcError } from "../../../shared/ipc-error";
+
+function rawMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function errorMessage(error: unknown): string {
-  const message = cleanDiagnostic(error instanceof Error ? error.message : String(error));
+  const coded = decodeIpcError(rawMessage(error));
+  if (coded) return cleanDiagnostic(coded.message);
+  const message = cleanDiagnostic(rawMessage(error));
   const prefix = /^Error invoking remote method '[^']*':\s*/;
 
   if (!prefix.test(message)) return message;
   return message.replace(prefix, "").replace(/^Error:\s*/, "");
+}
+
+/** The backend's API error code, e.g. `models_not_ready`, when the failure came from it. */
+export function errorCode(error: unknown): string | undefined {
+  return decodeIpcError(rawMessage(error))?.code;
 }
 
 /** Terminal formatting is never useful in UI text or copied diagnostic reports. */
@@ -18,17 +31,4 @@ export function cleanDiagnostic(message: string): string {
       .trim()
   );
   /* eslint-enable no-control-regex */
-}
-
-export function searchErrorMessage(error: unknown): string {
-  return errorMessage(error);
-}
-
-/**
- * Whether a message is the backend rejecting a query's syntax rather than failing to run it —
- * the one search error the user can fix by retyping, so it's the one worth attaching syntax help
- * to. Matches the prefix `main/backend/nicegal-server-client.ts` puts on an FTS5 `query_syntax` code.
- */
-export function isQuerySyntaxError(message: string): boolean {
-  return message.startsWith("Query syntax —");
 }

@@ -54,7 +54,6 @@ export interface GallerySettings {
   indexOcr: boolean;
   indexImage: boolean;
   /** Include video frames in image search indexing. Videos remain in the catalog. */
-  indexVideos: boolean;
   /** Whether the left libraries pane is shown. Open on first run, then remembered. */
   librariesPaneOpen: boolean;
   /** Libraries pane width in CSS pixels, set by dragging its edge. */
@@ -78,7 +77,6 @@ const defaults: GallerySettings = {
   libraryIndexing: {},
   indexOcr: false,
   indexImage: true,
-  indexVideos: true,
   librariesPaneOpen: true,
   librariesPaneWidth: 200,
   folderSort: "name",
@@ -181,7 +179,6 @@ function loadInitial(): GallerySettings {
       ),
       indexOcr: typeof parsed.indexOcr === "boolean" ? parsed.indexOcr : true,
       indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : true,
-      indexVideos: typeof parsed.indexVideos === "boolean" ? parsed.indexVideos : true,
       librariesPaneOpen:
         typeof parsed.librariesPaneOpen === "boolean" ? parsed.librariesPaneOpen : true,
       folderSort: parsed.folderSort === "newest" ? "newest" : "name",

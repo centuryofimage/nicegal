@@ -1,5 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 
+import { encodeIpcError } from "../shared/ipc-error";
+
 export type IpcSenderValidator = (event: IpcMainInvokeEvent) => boolean;
 
 /**
@@ -13,6 +15,23 @@ export function handleTrustedIpc(
 ): void {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
     if (!isTrustedSender(event)) throw new Error("Rejected IPC from an untrusted renderer");
-    return handler(event, ...args);
+    let result: unknown;
+    try {
+      result = handler(event, ...args);
+    } catch (error) {
+      throw withIpcCode(error);
+    }
+    return result instanceof Promise
+      ? result.catch((error: unknown) => {
+          throw withIpcCode(error);
+        })
+      : result;
   });
+}
+
+/** Keeps a backend error's code, which Electron would otherwise drop with every other property. */
+function withIpcCode(error: unknown): unknown {
+  if (!(error instanceof Error) || !("code" in error) || typeof error.code !== "string")
+    return error;
+  return new Error(encodeIpcError({ code: error.code, message: error.message }));
 }

@@ -22,7 +22,7 @@
       })
       .catch((cause: unknown) => {
         if (!disposed)
-          recentLog = `Could not read recent log lines: ${cause instanceof Error ? cause.message : String(cause)}`;
+          recentLog = `Couldn't read recent log lines: ${cause instanceof Error ? cause.message : String(cause)}`;
       });
     return () => {
       disposed = true;
@@ -62,27 +62,27 @@
 </script>
 
 <AppMessage
-  title="Backend unavailable"
-  guidance="The gallery service could not start or stopped unexpectedly. Try restarting the service. If it fails again, restart the app."
+  title="Gallery service unavailable"
+  guidance="The gallery service couldn't start or stopped unexpectedly. Restart it. If it fails again, restart the app."
   message={`${error}\n\nRecent backend log lines:\n${recentLog}`}
   placement="overlay"
 >
   <div class="crash-report">
     <div class="crash-actions">
       <button class="ui-button" type="button" onclick={restartServer} disabled={restarting}>
-        {restarting ? "Restarting…" : "Restart server"}
+        {restarting ? "Restarting…" : "Restart service"}
       </button>
       <button class="ui-button" type="button" onclick={collectDiagnostics} disabled={collecting}>
         {collecting ? "Collecting…" : "Collect diagnostics"}
       </button>
     </div>
     <p>
-      Feel free to make a bug report <a href={BUG_REPORT_URL} onclick={openBugReport}>here</a> and
-      attach this zip.
+      To report the problem, attach the diagnostics zip to a
+      <a href={BUG_REPORT_URL} onclick={openBugReport}>bug report</a>.
     </p>
     {#if savedPath}<p role="status">Diagnostics saved to {savedPath}</p>{/if}
-    {#if restartError}<p role="alert">Could not restart server: {restartError}</p>{/if}
-    {#if collectionError}<p role="alert">Could not save diagnostics: {collectionError}</p>{/if}
+    {#if restartError}<p role="alert">Couldn't restart the service: {restartError}</p>{/if}
+    {#if collectionError}<p role="alert">Couldn't save diagnostics: {collectionError}</p>{/if}
   </div>
 </AppMessage>
 

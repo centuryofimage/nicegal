@@ -145,26 +145,36 @@ function readV2Registry(): { libraries: V2LibraryRecord[]; selectedRoot: string 
   try {
     const serialized = localStorage.getItem(LIBRARIES_STORAGE_KEY);
     if (serialized !== null) {
-      const value = JSON.parse(serialized) as { libraries?: unknown; selectedRoot?: unknown };
-      if (typeof value?.selectedRoot === "string") selectedRoot = value.selectedRoot;
-      for (const entry of Array.isArray(value?.libraries) ? value.libraries : []) {
-        const record = entry as Partial<V2LibraryRecord>;
-        const root = typeof record?.root === "string" ? record.root.trim() : "";
-        if (!root || libraries.some((library) => rootsMatch(library.root, root))) continue;
-        const view = normalizeViewState(record);
-        libraries.push({
-          root,
-          displayName: typeof record.displayName === "string" ? record.displayName.trim() : "",
-          query: view.query,
-          scrollTop: view.scrollTop,
-        });
+      let value: { libraries?: unknown; selectedRoot?: unknown } | null = null;
+      try {
+        value = JSON.parse(serialized) as typeof value;
+      } catch {
+        // A damaged v2 record should not hide the older single-root preference.
       }
-    } else {
-      const legacyRoot = localStorage.getItem(LIBRARY_ROOT_STORAGE_KEY)?.trim();
-      if (legacyRoot) {
-        libraries.push({ root: legacyRoot, displayName: "", query: "", scrollTop: 0 });
-        selectedRoot = legacyRoot;
+      if (value && Array.isArray(value.libraries)) {
+        if (typeof value.selectedRoot === "string") selectedRoot = value.selectedRoot;
+        for (const entry of value.libraries) {
+          const record = entry as Partial<V2LibraryRecord>;
+          const root = typeof record?.root === "string" ? record.root.trim() : "";
+          if (!root || libraries.some((library) => rootsMatch(library.root, root))) continue;
+          const view = normalizeViewState(record);
+          libraries.push({
+            root,
+            displayName: typeof record.displayName === "string" ? record.displayName.trim() : "",
+            query: view.query,
+            scrollTop: view.scrollTop,
+          });
+        }
+        // An explicitly empty v2 registry is intentional. A nonempty registry with no usable
+        // roots is damaged, so try the older single-root preference below.
+        if (value.libraries.length === 0 || libraries.length > 0)
+          return { libraries, selectedRoot };
       }
+    }
+    const legacyRoot = localStorage.getItem(LIBRARY_ROOT_STORAGE_KEY)?.trim();
+    if (legacyRoot) {
+      libraries.push({ root: legacyRoot, displayName: "", query: "", scrollTop: 0 });
+      selectedRoot = legacyRoot;
     }
   } catch {
     // Unreadable rollback data imports nothing; the backend list remains authoritative.

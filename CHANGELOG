@@ -1,8 +1,5 @@
-- Rebuild video thumbnailing and CLIP scanning
-  - Now based on length of video
-  - long videos might show up when searching more
-  - Dont generate all thumbnail sizes to save space and time
-  - Will require a vid thumbnail db rebuild.
-- Fix linux fonts
-- Fix backend restarting and fallbacks
-- add a few kbd shortcuts
+- fix library migrations in edge cases
+- clearer errors: search warnings open a dialog with the fix, search setup notices are no longer shown as errors, and fewer errors cover the whole gallery
+- speed up deletions
+- video indexing is now a per-library option in Library manager
+- changing the image model or execution provider waits until Settings closes before rescanning

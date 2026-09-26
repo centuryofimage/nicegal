@@ -2,6 +2,8 @@
   import type { Snippet } from "svelte";
 
   import { cleanDiagnostic } from "../lib/errors";
+  import TechnicalDetails from "./TechnicalDetails.svelte";
+
   let {
     title,
     message,
@@ -10,7 +12,7 @@
     actionLabel,
     onaction,
     children,
-    guidance = "The operation could not finish. Review the details below, then try again.",
+    guidance,
   }: {
     title?: string;
     message: string;
@@ -20,18 +22,10 @@
     actionLabel?: string;
     onaction?: () => void;
     children?: Snippet;
+    /** What to do next. An error overlay shows this and keeps `message` under Technical details. */
     guidance?: string;
   } = $props();
-  let copyStatus = $state("");
   const diagnostic = $derived(cleanDiagnostic(message));
-  async function copyDetails(): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(`${title ?? "Error"}\n${diagnostic}`);
-      copyStatus = "Copied";
-    } catch {
-      copyStatus = "Select the details and copy them manually.";
-    }
-  }
 </script>
 
 <div
@@ -43,13 +37,8 @@
 >
   {#if title}<strong>{title}</strong>{/if}
   {#if tone === "error" && placement === "overlay"}
-    <span role="alert">{guidance}</span>
-    <details>
-      <summary>Technical details</summary>
-      <textarea readonly aria-label="Technical error details" value={diagnostic}></textarea>
-      <button class="ui-button" type="button" onclick={copyDetails}>Copy details</button>
-      <span role="status">{copyStatus}</span>
-    </details>
+    {#if guidance}<span role="alert">{guidance}</span>{/if}
+    {#if message}<TechnicalDetails text={message} copyHeading={title ?? "Error"} />{/if}
   {:else}
     <span>{diagnostic}</span>
   {/if}
@@ -85,28 +74,6 @@
     color: var(--text-primary);
   }
 
-  details {
-    text-align: left;
-    min-width: 0;
-  }
-  summary {
-    cursor: pointer;
-  }
-  textarea {
-    display: block;
-    width: 100%;
-    height: min(220px, 30vh);
-    margin-block: var(--space-6);
-    resize: vertical;
-    overflow: auto;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    user-select: text;
-    font-size: var(--font-size-sm);
-    color: var(--text-primary);
-    background: var(--surface-1);
-    border: 1px solid var(--border);
-  }
 
   .error.overlay {
     border-color: color-mix(in srgb, var(--danger) 55%, var(--border));

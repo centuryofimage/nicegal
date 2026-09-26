@@ -369,7 +369,7 @@ function formatBackendError(error: unknown): string {
   return diagnostic && !message.includes(diagnostic) ? `${message}\n${diagnostic}` : message;
 }
 
-if (app.requestSingleInstanceLock()) {
+if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
   app.on("second-instance", focusMainWindow);
 
   app.whenReady().then(async () => {

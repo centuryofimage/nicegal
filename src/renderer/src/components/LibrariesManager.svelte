@@ -56,6 +56,18 @@
     }
   }
 
+  /** Saves the draft, then switches to Settings → Search without releasing the scan hold. */
+  async function openSearchSettings(): Promise<void> {
+    if (removeBusy || createBusy || navigationBusy) return;
+    navigationBusy = true;
+    try {
+      if (editor && !(await editor.saveChanges())) return;
+      view.openSettingsDialog("search");
+    } finally {
+      navigationBusy = false;
+    }
+  }
+
   async function select(id: LibraryId): Promise<void> {
     if (id === currentId || navigationBusy) return;
     navigationBusy = true;
@@ -202,6 +214,7 @@
             embedded
             {thumbnailFailures}
             {onretrythumbnails}
+            onopensearchsettings={openSearchSettings}
           />
         {/key}
       {:else}

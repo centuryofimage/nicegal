@@ -40,7 +40,8 @@ win:
       filter:
         - nicegal-server.exe
         - "*.dll"
-        - onnxruntime/**/*.dll
+        - onnxruntime/directml/*.dll
+        - onnxruntime/openvino/*.dll
   sign: false
 nsis:
   include: build/installer.nsh
@@ -48,9 +49,8 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
 mac:
   target:

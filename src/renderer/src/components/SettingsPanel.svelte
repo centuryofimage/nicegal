@@ -3,6 +3,7 @@
 
   import type { ExecutionProviderId } from "../../../shared/backend";
   import type { UpdatePreferences } from "../../../shared/updates";
+  import type { SettingsPage } from "../lib/library-view.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
   import { useApplication } from "../lib/application.svelte";
@@ -14,12 +15,14 @@
     runtime,
     onclose,
     onshowintro,
-    page = $bindable<"gallery" | "search" | "about">("gallery"),
+    onmanagelibraries,
+    page = $bindable<SettingsPage>("gallery"),
   }: {
     runtime: RuntimeController;
     onclose: () => void;
     onshowintro: () => void;
-    page?: "gallery" | "search" | "about";
+    onmanagelibraries: () => void;
+    page?: SettingsPage;
   } = $props();
 
   const themes: { id: GalleryTheme; label: string }[] = [
@@ -65,6 +68,7 @@
   const isMac = navigator.userAgent.includes("Macintosh");
   const executionProviders: { id: ExecutionProviderId; label: string }[] = [
     { id: "directml", label: "DirectML" },
+    { id: "cuda", label: "CUDA" },
     { id: "openvino", label: "OpenVINO (CPU)" },
     { id: "webgpu", label: "WebGPU" },
     { id: "coreml", label: "CoreML" },
@@ -159,16 +163,19 @@
       <AboutSettings />
     {:else}
       <SearchModels />
-      <section class="settings-group advanced-settings" aria-labelledby="advanced-search-title">
-        <h2 id="advanced-search-title">Advanced search settings</h2>
-        <label class="row">
+      <section class="settings-group" aria-labelledby="library-search-title">
+        <h2 id="library-search-title">Per library</h2>
+        <div class="row">
           <span class="setting-label"
-            >Index videos<small
-              >Applies to future search preparation. Videos remain in the gallery.</small
+            >Image search, text recognition, and videos<small
+              >Chosen for each library in Library manager.</small
             ></span
           >
-          <input type="checkbox" bind:checked={$settings.indexVideos} />
-        </label>
+          <button class="ui-button" onclick={onmanagelibraries}>Library manager…</button>
+        </div>
+      </section>
+      <section class="settings-group advanced-settings" aria-labelledby="advanced-search-title">
+        <h2 id="advanced-search-title">Advanced search settings</h2>
         <div class="row segmented-row">
           <span class="setting-label"
             >Execution provider<small
@@ -189,7 +196,7 @@
         {#if runtime.error}
           <p class="settings-error" role="alert">{runtime.error}</p>
         {/if}
-        <label class="row">
+        {#if import.meta.env.DEV}<label class="row">
           <span class="setting-label"
             >Index limit (debug)<small>0 indexes the complete library.</small></span
           ><input
@@ -201,7 +208,7 @@
             step={settingsLimits.debugIndexLimit.step}
             bind:value={$settings.debugIndexLimit}
           />
-        </label>
+        </label>{/if}
       </section>
     {/if}
   </div>

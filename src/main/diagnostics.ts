@@ -42,7 +42,7 @@ export function getAppInfo(): AppInfo {
   };
 }
 
-/** A short excerpt for the crash dialog. The archive retains the complete bounded logs. */
+/** A short, unredacted excerpt for the local crash dialog. ZIP exports are sanitized separately. */
 export async function recentBackendLog(): Promise<string> {
   const stateDirectory =
     process.env["NICEGAL_STATE_DIR"] ?? join(app.getPath("userData"), "nicegal-server");
@@ -58,7 +58,6 @@ export async function recentBackendLog(): Promise<string> {
   const lines = complete.trimEnd().split("\n").filter(Boolean).slice(-RECENT_LOG_LINES);
   return (
     lines
-      .map((line) => sanitizeLogLine(line))
       .map((line) => (line.length > 1200 ? `${line.slice(0, 1200)}…` : line))
       .join("\n") ||
     "Backend log has no recent entries."

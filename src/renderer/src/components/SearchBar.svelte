@@ -16,7 +16,6 @@
 
   import { useApplication } from "../lib/application.svelte";
   import { folderName } from "../lib/library-root";
-  import { isQuerySyntaxError } from "../lib/errors";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import {
     OCR_SYNTAX_NOTES,
@@ -39,11 +38,12 @@
     value = $bindable(""),
     composerOpen = $bindable(false),
     message,
-    infoNotice,
-    textSetupRequired = false,
+    querySyntaxError = false,
+    setupNotice = "",
+    limitNotice = "",
     semanticSuggestion = false,
     onsemanticsearch,
-    onsetuptextsearch,
+    onopenlibrarymanager,
     visualReferences = [],
     onvisualreferenceschange,
     onchoosevisualfile,
@@ -54,11 +54,15 @@
     value?: string;
     composerOpen?: boolean;
     message?: string | null;
-    infoNotice?: string | null;
-    textSetupRequired?: boolean;
+    /** `message` is the backend rejecting the query's syntax; show syntax help under it. */
+    querySyntaxError?: boolean;
+    /** Search is not ready for this library; Library manager is where that is fixed. */
+    setupNotice?: string;
+    /** The results were capped. */
+    limitNotice?: string;
     semanticSuggestion?: boolean;
     onsemanticsearch?: () => void;
-    onsetuptextsearch: () => void;
+    onopenlibrarymanager: () => void;
     visualReferences?: VisualReferenceTerm[];
     onvisualreferenceschange?: (references: VisualReferenceTerm[]) => void;
     onchoosevisualfile?: () => void;
@@ -205,11 +209,17 @@
   const preparingImages = $derived(
     catalog.selectedId !== null && jobs.scanState(catalog.selectedId) !== null,
   );
+  const hasEligibleAssets = $derived(
+    catalog.items.some((item) => !parsed.media || item.mediaKind === parsed.media),
+  );
   const imageNotice = $derived(
-    parsed.scope === "like" && (catalog.selectedStatus?.imageCoverage?.indexed ?? 0) === 0
+    parsed.scope === "like" &&
+      hasEligibleAssets &&
+      (parsed.body.trim() || visualReferences.length) &&
+      (catalog.selectedStatus?.imageCoverage?.indexed ?? 0) === 0
       ? preparingImages
-        ? "Preparing visual search… You can keep browsing."
-        : "Visual search is not ready for this library yet."
+        ? "Preparing visual search. You can keep browsing."
+        : "Visual search isn't ready for this library yet."
       : "",
   );
   const exampleCount = $derived(parseVisualTextTerms(parsed.body).length + visualReferences.length);
@@ -226,10 +236,15 @@
     ),
   );
   const ocrNotice = $derived(
-    (noOcr || textSetupRequired) && (parsed.scope === "ocr" || parsed.scope === "meaning")
-      ? "Text search hasn’t been set up for this library."
+    hasEligibleAssets &&
+      parsed.body.trim() &&
+      noOcr &&
+      (parsed.scope === "ocr" || parsed.scope === "meaning")
+      ? "Text search isn't set up for this library."
       : "",
   );
+  /** Coverage known before searching wins over what a finished search reported. */
+  const setupText = $derived(imageNotice || ocrNotice || setupNotice);
   const ScopeIcon = $derived(selectedScope.icon);
   /**
    * Empty scoped fields show their syntax hints; filters are visible input, even when the
@@ -249,7 +264,7 @@
   /** Syntax reminder under a rejected query — the same line the empty box shows as ghost text,
    * repeated where the user actually is when they get it wrong. */
   const messageHint = $derived(
-    message && isQuerySyntaxError(message) ? OCR_SYNTAX_NOTES.join(SYNTAX_GAP) : "",
+    message && querySyntaxError ? OCR_SYNTAX_NOTES.join(SYNTAX_GAP) : "",
   );
   // Scoped searches use the syntax hint instead.
   const placeholder = "Search file names, text, and images";
@@ -554,17 +569,20 @@
         {#if messageHint}<span class="search-message-hint">{messageHint}</span>{/if}
       </div>
     </div>
-  {:else if (imageNotice || ocrNotice || infoNotice) && !menuOpen}
+  {:else if setupText && !menuOpen}
     <div class="search-message search-info" role="status">
       <Info size={12} aria-hidden="true" />
-      <span>{imageNotice || ocrNotice || infoNotice}</span>
-      {#if imageNotice && !preparingImages}
-        <button class="ui-button" type="button" onclick={onsetuptextsearch}>Library manager</button>
-      {:else if ocrNotice}
-        <button class="ui-button" type="button" onclick={onsetuptextsearch}
-          >Set up text search</button
+      <span>{setupText}</span>
+      {#if !(imageNotice && preparingImages)}
+        <button class="ui-button" type="button" onclick={onopenlibrarymanager}
+          >Library manager…</button
         >
       {/if}
+    </div>
+  {:else if limitNotice && !menuOpen}
+    <div class="search-message search-info" role="status">
+      <Info size={12} aria-hidden="true" />
+      <span>{limitNotice}</span>
     </div>
   {/if}
 </div>
@@ -621,26 +639,22 @@
   }
 
   .search-message {
-    position: absolute;
-    z-index: var(--z-panel);
-    top: calc(100% + var(--space-3));
-    left: var(--space-5);
     display: flex;
-    width: max-content;
-    max-width: calc(100% - var(--space-10));
+    width: fit-content;
+    max-width: 100%;
     min-height: 23px;
     box-sizing: border-box;
     align-items: center;
     gap: var(--space-4);
+    margin-top: var(--space-3);
     padding: var(--space-3) var(--space-7);
-    overflow: hidden;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--surface-1);
     box-shadow: var(--shadow-overlay);
     color: var(--text-secondary);
     font-size: var(--font-size-sm);
-    white-space: nowrap;
+    white-space: normal;
   }
 
   .semantic-suggestion {
@@ -704,14 +718,13 @@
   }
 
   .search-message span {
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow-wrap: anywhere;
   }
 
-  /* Stacked, not appended: the strip is a single nowrap line, so a hint tacked onto the message
-     would push the error itself into the ellipsis. */
+  /* Keep syntax help below the error, including when a narrow window wraps both lines. */
   .search-message-body {
     display: grid;
+    flex: 1;
     min-width: 0;
     gap: var(--space-1);
   }
@@ -719,9 +732,12 @@
   .search-message-hint {
     color: var(--text-tertiary);
     font-size: var(--font-size-sm);
-    /* `nowrap` on the strip would collapse the gaps between notes; `pre` keeps them and still
-       holds the hint to one line. */
-    white-space: pre;
+    /* Preserve the spacing between syntax notes while allowing a narrow window to wrap them. */
+    white-space: pre-wrap;
+  }
+
+  .search-message :global(.ui-button) {
+    flex: none;
   }
 
   .scope-control {

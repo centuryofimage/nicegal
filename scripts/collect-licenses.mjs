@@ -22,8 +22,8 @@ if (backend.lockfileSha256 !== createHash("sha256").update(backendLock).digest("
 const command = process.platform === "win32" ? "cmd.exe" : "pnpm";
 const args =
   process.platform === "win32"
-    ? ["/d", "/c", "pnpm licenses list --json"]
-    : ["licenses", "list", "--json"];
+    ? ["/d", "/c", "pnpm list --json --depth Infinity"]
+    : ["list", "--json", "--depth", "Infinity"];
 const report = JSON.parse(
   execFileSync(command, args, {
     cwd: root,
@@ -33,60 +33,75 @@ const report = JSON.parse(
   }),
 );
 
-// pnpm groups versions by license. Read the installed manifests to retain the correct
-// project URL for each version, without putting machine-specific paths into the app.
+// pnpm's license command reads its content-addressed store, which can fail even
+// when the installed packages are intact. The dependency tree supplies paths;
+// installed manifests supply the license and project URL for each version.
 const packages = new Map();
-for (const entries of Object.values(report)) {
-  for (const entry of entries) {
-    for (const path of entry.paths) {
-      const manifest = JSON.parse(await readFile(resolve(path, "package.json"), "utf8"));
-      const repository =
-        typeof manifest.repository === "string" ? manifest.repository : manifest.repository?.url;
-      const candidates = [
-        manifest.homepage,
-        repository,
-        `https://www.npmjs.com/package/${manifest.name}/v/${manifest.version}`,
-      ];
-      let url;
-      for (const candidate of candidates) {
-        if (typeof candidate !== "string") continue;
-        const normalized = candidate
-          .replace(/^git\+/, "")
-          .replace(/^git:\/\//, "https://")
-          .replace(/\.git$/, "");
-        try {
-          const parsed = new URL(normalized);
-          if (parsed.protocol === "https:" && !parsed.username && !parsed.password) {
-            url = parsed.href;
-            break;
-          }
-        } catch {
-          /* Fall back to the package registry for non-web repository URLs. */
-        }
+const paths = new Set();
+function collectPaths(node) {
+  for (const entry of Object.values({
+    ...node.dependencies,
+    ...node.devDependencies,
+    ...node.optionalDependencies,
+  })) {
+    if (entry.path) paths.add(entry.path);
+    collectPaths(entry);
+  }
+}
+for (const project of report) collectPaths(project);
+for (const packagePath of paths) {
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(resolve(packagePath, "package.json"), "utf8"));
+  } catch (error) {
+    if (error.code === "ENOENT") continue; // Optional package for another platform.
+    throw error;
+  }
+  const repository =
+    typeof manifest.repository === "string" ? manifest.repository : manifest.repository?.url;
+  const candidates = [
+    manifest.homepage,
+    repository,
+    `https://www.npmjs.com/package/${manifest.name}/v/${manifest.version}`,
+  ];
+  let url;
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue;
+    const normalized = candidate
+      .replace(/^git\+/, "")
+      .replace(/^git:\/\//, "https://")
+      .replace(/\.git$/, "");
+    try {
+      const parsed = new URL(normalized);
+      if (parsed.protocol === "https:" && !parsed.username && !parsed.password) {
+        url = parsed.href;
+        break;
       }
-      if (!url) throw new Error(`No project URL for ${manifest.name}`);
-      const noticeFiles = (await readdir(path, { withFileTypes: true }))
-        .filter(
-          (file) =>
-            file.isFile() && /^(licen[sc]e|copying|notice|copyright)(?:$|[._-])/i.test(file.name),
-        )
-        .map((file) => file.name)
-        .sort();
-      const notices = await Promise.all(
-        noticeFiles.map(async (file) => ({
-          file,
-          text: await readFile(resolve(path, file), "utf8"),
-        })),
-      );
-      packages.set(`${manifest.name}@${manifest.version}`, {
-        name: manifest.name,
-        version: manifest.version,
-        license: entry.license || "Not specified",
-        url,
-        notices,
-      });
+    } catch {
+      /* Fall back to the package registry for non-web repository URLs. */
     }
   }
+  if (!url) throw new Error(`No project URL for ${manifest.name}`);
+  const noticeFiles = (await readdir(packagePath, { withFileTypes: true }))
+    .filter(
+      (file) =>
+        file.isFile() && /^(licen[sc]e|copying|notice|copyright)(?:$|[._-])/i.test(file.name),
+    )
+    .map((file) => file.name)
+    .sort();
+  const notices = await Promise.all(
+    noticeFiles.map(async (file) => ({
+      file,
+      text: await readFile(resolve(packagePath, file), "utf8"),
+    })),
+  );
+  packages.set(`${manifest.name}@${manifest.version}`, {
+    name: manifest.name,
+    version: manifest.version,
+    license: manifest.license || "Not specified",
+    url,
+    notices,
+  });
 }
 if (
   !packages.has(

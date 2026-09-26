@@ -129,14 +129,6 @@ export class NicegalServerClient {
     });
   }
 
-  async setIndexVideos(indexVideos: boolean): Promise<void> {
-    await this.request("/v1/runtime", {
-      method: "PUT",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ indexVideos }),
-    });
-  }
-
   async getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage> {
     const url = new URL("/v1/image-embeddings", this.endpoint);
     url.searchParams.set("libraryId", String(libraryId));
@@ -179,17 +171,7 @@ export class NicegalServerClient {
     if (request.before !== undefined) url.searchParams.set("before", request.before);
     if (request.after !== undefined) url.searchParams.set("after", request.after);
     if (request.timeline !== undefined) url.searchParams.set("timeline", request.timeline);
-    let response: Response;
-    try {
-      response = await this.request(url, { method: "GET", signal });
-    } catch (error) {
-      if (error instanceof NicegalServerError) {
-        throw new Error(
-          error.code === "query_syntax" ? `Query syntax — ${error.message}` : error.message,
-        );
-      }
-      throw error;
-    }
+    const response = await this.request(url, { method: "GET", signal });
     const value = (await response.json()) as SearchResponse;
     return {
       total: value.total,

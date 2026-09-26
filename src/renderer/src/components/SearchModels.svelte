@@ -1,22 +1,11 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-
-  import type { SearchModelsResponse } from "../../../shared/backend";
-
   import { useApplication } from "../lib/application.svelte";
-  import { cleanDiagnostic } from "../lib/errors";
-  import { jobLabel, jobPhaseProgress } from "../lib/job-format";
 
   const { services } = useApplication();
-  const { runtime, jobs, orchestrator, catalog } = services;
-  const names: { key: keyof SearchModelsResponse; label: string }[] = [
-    { key: "text", label: "Text meaning" },
-    { key: "clipImage", label: "Visual search" },
-    { key: "clipText", label: "Picture descriptions" },
-  ];
+  const { runtime, jobs, catalog } = services;
   const modelDescriptions: Record<string, string> = {
     "facebook/metaclip-2-worldwide-b32":
-      "Good enough for most searches. A balanced starting point.",
+      "Good for most searches.",
     "facebook/metaclip-2-worldwide-b16":
       "Sees more detail and can give slightly better results. Best with a stronger GPU.",
     "facebook/metaclip-2-worldwide-l14":
@@ -58,63 +47,10 @@
       modelLicenseError = cause instanceof Error ? cause.message : String(cause);
     }
   }
-  const setupJob = $derived(
-    jobs.active &&
-      (jobs.active.type === "modelPrepare" ||
-        jobs.active.type === "ocrModelLoad" ||
-        jobs.active.type === "libraryScan")
-      ? jobs.active
-      : null,
-  );
-  const settingUp = $derived(
-    orchestrator.preparingSearchModels || Boolean(setupJob && jobs.running),
-  );
-  const download = $derived(settingUp ? setupJob?.progress.download : undefined);
-  const downloadProgress = $derived(download && setupJob ? jobPhaseProgress(setupJob) : null);
-  const downloadPercent = $derived(
-    downloadProgress?.ratio != null ? Math.floor(downloadProgress.ratio * 100) : undefined,
-  );
-  const currentSetupModel = $derived.by((): string | null => {
-    const job = setupJob;
-    if (!settingUp || !job || download || job.type === "libraryScan") return null;
-    if (job.type === "ocrModelLoad") {
-      return job.phase === "downloadingModels" || job.phase === "loadingModels"
-        ? "PaddleOCR v6 small detector and recognizer"
-        : null;
-    }
-    if (job.phase !== "loadingModels") return null;
-    const imageModel = runtime.imageModel;
-    const imageName =
-      imageModel?.models.find((model) => model.id === imageModel.activeModel)?.name ??
-      imageModel?.activeModel ??
-      "Image search model";
-    const models = [
-      "BGE small English v1.5 · text meaning",
-      `${imageName} · image indexing`,
-      ...(runtime.supportsImageTextQueries ? [`${imageName} · image text search`] : []),
-    ];
-    return models[job.progress.phaseCompleted] ?? null;
-  });
-  const failed = $derived(
-    Boolean(
-      runtime.modelError ||
-      setupJob?.status === "failed" ||
-      (runtime.models && Object.values(runtime.models).some((model) => model.state === "failed")),
-    ),
-  );
-  const stopped = $derived(!settingUp && setupJob?.status === "cancelled");
-  onMount(() => {
-    void runtime.refreshModels();
-    const poll = setInterval(() => {
-      if (catalog.backendStatus.ready) void runtime.refreshModels();
-    }, 2000);
-    return () => clearInterval(poll);
-  });
 </script>
 
 <section aria-labelledby="search-models-title" class="model-section">
   <h2 id="search-models-title">Search</h2>
-  {@render preparation()}
   <fieldset
     class="image-model-picker"
     disabled={!runtime.imageModel ||
@@ -172,84 +108,6 @@
   {#if runtime.imageModelError}<p class="model-error" role="alert">
       {runtime.imageModelError}
     </p>{/if}
-  {#snippet preparation()}
-    <section class="model-setup" aria-label="Search preparation">
-      <p>
-        Visual search prepares automatically when you add a folder. Downloads happen as needed. Text
-        recognition is optional; enable it in Libraries to search words inside pictures.
-      </p>
-      {#if settingUp || failed || stopped}
-        <p class="setup-status" role="status">
-          {#if settingUp}Preparing search…{:else if failed}Search needs attention{:else}Search
-            preparation stopped{/if}
-        </p>
-      {/if}
-      {#if download && downloadProgress}
-        <div class="model-download">
-          <p class="model-download-name">Downloading: <strong>{download.modelId}</strong></p>
-          <p class="model-download-file">{download.filename}</p>
-          <div
-            class="model-download-track"
-            role="progressbar"
-            aria-label={`Downloading ${download.filename}`}
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow={downloadPercent}
-            aria-valuetext={downloadProgress.text}
-          >
-            <span
-              class:indeterminate={downloadPercent === undefined}
-              style:width={downloadPercent === undefined ? "35%" : `${downloadPercent}%`}
-            ></span>
-          </div>
-          <p class="model-download-value">
-            {downloadProgress.text}{downloadPercent !== undefined ? ` · ${downloadPercent}%` : ""}
-          </p>
-        </div>
-      {:else if settingUp && setupJob}
-        <p>{jobLabel(setupJob)} {jobPhaseProgress(setupJob).text}</p>
-      {/if}
-      {#if currentSetupModel}
-        <p class="current-model" role="status">
-          {setupJob?.phase === "downloadingModels" ? "Downloading" : "Preparing"}:
-          <strong>{currentSetupModel}</strong>
-        </p>
-      {/if}
-      {#if setupJob?.status === "cancelling"}<p>
-          Stopping… Completed downloads and search data will be kept.
-        </p>{/if}
-      {#if failed || stopped}<p>Use Library manager → Rescan library to resume preparing search.</p>{/if}
-      <div class="model-actions">
-        {#if settingUp}
-          <button
-            class="ui-button"
-            disabled={!jobs.running || setupJob?.status === "cancelling"}
-            onclick={() => orchestrator.cancel()}>Stop preparing search</button
-          >
-        {/if}
-      </div>
-      {#if failed}
-        <details>
-          <summary>Error details</summary>
-          {#each names as model (model.key)}
-            {@const status = runtime.models?.[model.key]}
-            {#if status?.state === "failed" && status.error}<div class="model-error" role="alert">
-                {model.label}: {cleanDiagnostic(status.error)}
-              </div>{/if}
-          {/each}
-          {#if runtime.modelError}<p class="model-error" role="alert">{runtime.modelError}</p>{/if}
-          {#if setupJob}
-            {#if setupJob.error}<p class="model-error" role="alert">
-                {cleanDiagnostic(setupJob.error)}
-              </p>{/if}
-            {#if setupJob.status === "cancelled"}<p>
-                Preparation cancelled. You can retry; completed downloads remain cached.
-              </p>{/if}
-          {/if}
-        </details>
-      {/if}
-    </section>
-  {/snippet}
 </section>
 
 <style>
@@ -263,22 +121,8 @@
     border-bottom: 1px solid var(--border-subtle);
     font-size: var(--font-size-md);
   }
-  p,
-  .model-actions {
+  p {
     margin: var(--space-8) var(--space-9);
-  }
-  details {
-    margin: var(--space-8) var(--space-9);
-  }
-  summary {
-    cursor: pointer;
-  }
-  .setup-status {
-    color: var(--text-primary);
-    font-weight: var(--font-weight-semibold);
-  }
-  .current-model {
-    overflow-wrap: anywhere;
   }
   p {
     color: var(--text-secondary);
@@ -291,10 +135,5 @@
     max-height: 140px;
     overflow: auto;
     user-select: text;
-  }
-  .model-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-6);
   }
 </style>

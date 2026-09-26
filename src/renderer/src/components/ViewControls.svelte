@@ -37,19 +37,19 @@
     {
       value: "justified",
       label: "Justified",
-      title: "Justified layout — image rows with a shared height",
+      title: "Justified: rows of equal height",
       icon: Rows3,
     },
     {
       value: "masonry",
       label: "Masonry",
-      title: "Masonry layout — variable-height image columns",
+      title: "Masonry: columns of varying height",
       icon: LayoutDashboard,
     },
     {
       value: "grid",
       label: "Grid",
-      title: "Grid layout — uniform image cells",
+      title: "Grid: cells of equal size",
       icon: Grid3X3,
     },
   ];

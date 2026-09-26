@@ -141,13 +141,10 @@ test("collectDiagnostics stops when the save dialog is canceled", async () => {
   assert.equal(calls.flushes, 1, "canceling does not start a second collection");
 });
 
-test("recentBackendLog shows only the last twelve complete lines", async () => {
+test("recentBackendLog keeps local paths in the last twelve complete lines", async () => {
   const lines = Array.from({ length: 20 }, (_, index) => `log entry ${index + 1}`);
   lines[19] = JSON.stringify({ event: "stderr", data: { line: "folder=/home/alice/private.jpg" } });
   await writeFile(join(directory, "backend.log"), `${lines.join("\n")}\n`, "utf8");
   const recent = await diagnostics.recentBackendLog();
-  assert.equal(
-    recent,
-    [...lines.slice(-12, -1), '{"event":"stderr","data":{"line":"[redacted local path]"}}'].join("\n"),
-  );
+  assert.equal(recent, lines.slice(-12).join("\n"));
 });

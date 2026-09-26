@@ -7,13 +7,25 @@ import { isTerminalJobStatus } from "./job-state";
 
 const COMPLETION_MESSAGE_MS = 6_000;
 
+export interface JobFailure {
+  title: string;
+  guidance: string;
+  /** Technical text for copying; "" when the guidance says everything. */
+  message: string;
+}
+
 export class JobTracker {
   active = $state<JobSnapshot | null>(null);
   /** Covers the request/response gap before the backend returns the first job snapshot. */
   starting = $state(false);
   /** Scans the backend has queued behind the active job, in its order. */
   queued = $state.raw<JobSnapshot[]>([]);
-  error = $state("");
+  /** A failure to start, stop or finish following a job, shown over the gallery until dismissed. */
+  failure = $state.raw<JobFailure | null>(null);
+  /** The failure's technical text, or "" when there is none. */
+  get error(): string {
+    return this.failure?.message ?? "";
+  }
   connectionError = $state<string | null>(null);
   /** Transient result line for the status bar after a terminal job result. */
   completionMessage = $state("");
@@ -75,13 +87,13 @@ export class JobTracker {
         else if (snapshot.jobId !== this.currentJobId) void this.sync();
         return snapshot;
       } catch (error) {
-        this.error = errorMessage(error);
+        this.fail("Couldn't start the job", error);
         return null;
       }
     }
     const generation = ++this.generation;
     this.cancelRequested = false;
-    this.error = "";
+    this.failure = null;
     this.connectionError = null;
     this.completionMessage = "";
     if (this.completionTimer) {
@@ -97,7 +109,7 @@ export class JobTracker {
       // Leave the previous job's subscription and `active` snapshot exactly as they were — a
       // failed start must not drop the old subscription while its (now-frozen) snapshot stays
       // on screen.
-      if (generation === this.generation) this.error = errorMessage(error);
+      if (generation === this.generation) this.fail("Couldn't start the job", error);
       return null;
     } finally {
       if (generation === this.generation) this.starting = false;
@@ -149,7 +161,7 @@ export class JobTracker {
       active.jobId !== this.completedJobId &&
       !isTerminalJobStatus(active.status)
     ) {
-      this.error = "";
+      this.failure = null;
       this.completionMessage = "";
       this.attach(active, ++this.generation);
     } else if (active?.jobId === this.currentJobId) {
@@ -218,7 +230,7 @@ export class JobTracker {
       const snapshot = await window.nicegal.backend.cancelJob(this.active.jobId);
       if (generation === this.generation) this.handleSnapshot(snapshot);
     } catch (error) {
-      if (generation === this.generation) this.error = errorMessage(error);
+      if (generation === this.generation) this.fail("Couldn't stop the job", error);
     }
   }
 
@@ -227,7 +239,7 @@ export class JobTracker {
    * later job that meets only those again reports them in the status bar instead.
    */
   dismiss(): void {
-    this.error = "";
+    this.failure = null;
     this.completionMessage = "";
     if (this.completionTimer) {
       clearTimeout(this.completionTimer);
@@ -260,10 +272,22 @@ export class JobTracker {
     this.queued = [];
     this.starting = false;
     this.connectionError = null;
-    if (restarting) this.error = "";
+    if (restarting) this.failure = null;
     else if (interrupted)
-      this.error =
-        "The gallery service stopped before this job finished. Once it is available, retry setup or indexing to continue. Completed work is retained.";
+      this.failure = {
+        title: "Indexing stopped",
+        guidance:
+          "The gallery service stopped before this job finished. Indexing resumes when the service is running again. Finished work is kept.",
+        message: "",
+      };
+  }
+
+  private fail(title: string, error: unknown): void {
+    this.failure = {
+      title,
+      guidance: "Try again. If it keeps failing, restart the app.",
+      message: errorMessage(error),
+    };
   }
 
   private handleSnapshot(snapshot: JobSnapshot): void {

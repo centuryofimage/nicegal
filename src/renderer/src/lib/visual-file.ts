@@ -5,13 +5,13 @@ export function visualFileBase64(file: Blob): Promise<string> {
     reader.onload = () => {
       const result = reader.result;
       if (typeof result !== "string" || !result.includes(",")) {
-        reject(new Error("Could not read the visual-search image."));
+        reject(new Error("Couldn't read the image."));
         return;
       }
       resolve(result.slice(result.indexOf(",") + 1));
     };
     reader.onerror = () =>
-      reject(reader.error ?? new Error("Could not read the visual-search image."));
+      reject(reader.error ?? new Error("Couldn't read the image."));
     reader.onabort = () => reject(new Error("Reading the visual-search image was cancelled."));
     reader.readAsDataURL(file);
   });

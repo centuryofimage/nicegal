@@ -93,6 +93,24 @@ test("media operator filters a library without search text", () => {
   search.dispose();
 });
 
+test("searching for absent media skips model queries and shows an empty result", async () => {
+  const catalog = [{ id: "1", mediaKind: "image", date: 1 }] as Parameters<
+    Controller["apply"]
+  >[0];
+  for (const query of ["type:video", "cat type:video", "like: cat type:video"]) {
+    const { search, requests } = fixture();
+    search.query = query;
+    search.schedule(1, catalog, "modified");
+    await pause();
+    assert.deepEqual(requests, [], query);
+    assert.equal(search.apply(catalog).matchTotal, 0, query);
+    assert.equal(search.pending, false, query);
+    assert.equal(search.allError, "", query);
+    assert.equal(search.error, "", query);
+    search.dispose();
+  }
+});
+
 test("media operator narrows backend filename matches", async () => {
   const { search, requests } = fixture();
   const catalog = [
@@ -128,7 +146,10 @@ test("quoted path scope uses backend search without text model setup", async () 
 test("visual scope after a media filter sends only the description to image search", async () => {
   const { search, requests } = fixture();
   search.query = "type:video like: red car";
-  search.schedule(1, [], "modified", true, false, true);
+  const catalog = [{ id: "1", mediaKind: "video", date: 1 }] as Parameters<
+    Controller["apply"]
+  >[0];
+  search.schedule(1, catalog, "modified", true, false, true);
   await pause();
   assert.equal(search.imageSetupRequired, false);
   assert.equal(requests.length, 1);
@@ -155,7 +176,7 @@ test("visual search waits for image coverage, then runs the unchanged query when
   await pause();
   assert.equal(requests.length, 0);
   assert.equal(search.imageSetupRequired, true);
-  assert.match(search.indexNotice, /not ready/);
+  assert.match(search.setupNotice, /isn't ready/);
   search.schedule(1, [], "modified", true, false, true);
   await pause();
   assert.equal(requests.length, 1);
@@ -309,11 +330,11 @@ test("switching libraries stops the old library's scan and scans the new one's p
     type: "libraryScan",
     params: { libraryId: 2, scanMode: "fast", pendingOnly: true },
   });
-  app.commands.beginLibraryManagement();
+  app.commands.beginDeferringScans();
   await catalog.selectLibrary(1);
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(started.length, 2, "switching inside management does not start a scan");
-  app.commands.endLibraryManagement();
+  app.commands.endDeferringScans();
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.deepEqual(started.at(-1), {
     type: "libraryScan",

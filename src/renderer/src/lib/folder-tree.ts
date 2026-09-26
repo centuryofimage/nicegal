@@ -26,6 +26,7 @@ function trimSeparators(path: string): string {
 function parentOf(path: string): string | null {
   const trimmed = trimSeparators(path);
   const index = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
+  if (index === 2 && /^[A-Za-z]:[\\/]/.test(trimmed)) return trimmed.slice(0, 3);
   return index < 0 ? null : trimmed.slice(0, index);
 }
 
@@ -45,13 +46,23 @@ function compareSiblings(order: FolderSort): (a: FolderNode, b: FolderNode) => n
 
 /**
  * Builds the tree under the library's included roots. Roots stay in their configured order; each
- * directory hangs under its nearest listed ancestor, and siblings follow `order`.
+ * directory hangs under its nearest listed ancestor, and siblings follow `order`. Only folders
+ * containing an image, or leading to one, are included.
  */
 export function buildFolderTree(
   roots: readonly string[],
   folders: readonly FolderEntry[],
   order: FolderSort,
+  imagePaths: readonly string[],
 ): FolderNode[] {
+  const imageFolders = new Set<string>();
+  for (const path of imagePaths) {
+    let folder = parentOf(path);
+    while (folder !== null && !imageFolders.has(folder)) {
+      imageFolders.add(folder);
+      folder = parentOf(folder);
+    }
+  }
   const nodes = new Map<string, FolderNode>();
   const add = (path: string, modifiedNs: string | null): void => {
     const newestMs = modifiedNs === null ? null : Number(BigInt(modifiedNs) / 1_000_000n);
@@ -76,18 +87,19 @@ export function buildFolderTree(
   }
 
   const compare = compareSiblings(order);
-  const finish = (node: FolderNode): number | null => {
+  const finish = (node: FolderNode): boolean => {
+    node.children = node.children.filter(finish);
     for (const child of node.children) {
-      const newest = finish(child);
+      const newest = child.newestMs;
       if (newest !== null && (node.newestMs === null || newest > node.newestMs))
         node.newestMs = newest;
     }
     node.children.sort(compare);
-    return node.newestMs;
+    return imageFolders.has(node.path) || node.children.length > 0;
   };
-  top.forEach(finish);
+  const visible = top.filter(finish);
   const rootOrder = new Map(roots.map((root, index) => [root, index]));
-  return top.sort(
+  return visible.sort(
     (a, b) => (rootOrder.get(a.path) ?? Infinity) - (rootOrder.get(b.path) ?? Infinity),
   );
 }

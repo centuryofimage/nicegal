@@ -14,7 +14,6 @@ export const IPC_CHANNELS = {
     getRuntimeStatus: "backend:get-runtime-status",
     setImageModel: "backend:set-image-model",
     setExecutionProvider: "backend:set-execution-provider",
-    setIndexVideos: "backend:set-index-videos",
     listLibraries: "backend:list-libraries",
     createLibrary: "backend:create-library",
     updateLibrary: "backend:update-library",

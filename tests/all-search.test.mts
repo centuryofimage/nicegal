@@ -345,7 +345,7 @@ test("a lane failure preserves siblings and commits wait until pointer interacti
     f.search.apply(catalog).items.map((item) => item.id),
     ["1", "2", "8"],
   );
-  assert.match(f.search.apply(catalog).sections![0].status!, /Related text unavailable/);
+  assert.match(f.search.apply(catalog).sections![0].status!, /Model unavailable/);
   assert.equal(f.search.pending, false);
   f.search.dispose();
 });
@@ -464,10 +464,28 @@ test("a malformed section response cannot corrupt successful results, including 
     );
     assert.equal(view.sections?.[0].count, 1);
     assert.equal(view.sections?.length, 1);
-    assert.match(f.search.allNotice, /Visual search unavailable/);
+    assert.match(f.search.allError, /Visual results: Invalid search response/);
     assert.equal(f.search.pending, false);
     f.search.dispose();
   }
+});
+
+const { encodeIpcError } = await vite.ssrLoadModule("/src/shared/ipc-error.ts");
+/** A backend error as the renderer receives it: Electron's prefix around the coded payload. */
+const ipcError = (code: string, message: string): Error =>
+  new Error(`Error invoking remote method 'backend:search': Error: ${encodeIpcError({ code, message })}`);
+
+test("a visual model that is not ready is a setup notice, not a search error", async () => {
+  const f = fixture();
+  f.search.query = "like: needle";
+  f.search.schedule(1, items(), "modified");
+  await pause(240);
+  f.complete("literal", ipcError("models_not_ready", "Image model not ready"));
+  await pause(5);
+  assert.equal(f.search.error, "");
+  assert.equal(f.search.setupNotice, "Visual search isn't ready for this library yet.");
+  assert.equal(f.search.imageSetupRequired, true);
+  f.search.dispose();
 });
 
 test("collapsed sections preserve counts and dense layout indices in every layout", async () => {
