@@ -6,8 +6,8 @@ import {
   type IpcMainInvokeEvent,
   type MenuItemConstructorOptions,
 } from "electron";
-import { mkdir } from "node:fs/promises";
 import { mkdirSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
@@ -29,8 +29,11 @@ import { startUpdates } from "./updates";
 registerCustomSchemes();
 
 // Test runs can isolate Electron preferences alongside the backend databases. Changing only
-// NICEGAL_STATE_DIR leaves saved library IDs and queries in the regular profile.
-const isolatedUserData = process.env["NICEGAL_USER_DATA_DIR"];
+// NICEGAL_STATE_DIR leaves saved library IDs and queries in the regular profile. Development
+// builds default to a profile in the checkout so they never touch the installed app's libraries.
+const isolatedUserData =
+  process.env["NICEGAL_USER_DATA_DIR"] ||
+  (app.isPackaged ? undefined : join(process.cwd(), ".dev-profile"));
 if (isolatedUserData) {
   mkdirSync(isolatedUserData, { recursive: true });
   app.setPath("userData", isolatedUserData);

@@ -74,7 +74,6 @@
     color: var(--text-primary);
   }
 
-
   .error.overlay {
     border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
   }

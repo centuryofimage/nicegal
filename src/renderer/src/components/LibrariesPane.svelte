@@ -375,7 +375,7 @@
           tabindex="-1"
           title={[row.node.path, status?.detail].filter(Boolean).join("\n")}
           data-index={index + 1}
-          >
+        >
           <span class="expander" aria-hidden="true">
             {#if !row.node.children.length}
               <span class="leaf"></span>

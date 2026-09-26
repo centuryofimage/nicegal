@@ -79,12 +79,10 @@ test("filter keeps matches and their ancestors, marking only matches", () => {
 });
 
 test("folders without images or image-bearing descendants are hidden", () => {
-  const tree = buildFolderTree(
-    [root, "E:\\Empty"],
-    folders,
-    "name",
-    [`${root}\\a2\\deep\\image.jpg`, `${root}\\b\\image.jpg`],
-  );
+  const tree = buildFolderTree([root, "E:\\Empty"], folders, "name", [
+    `${root}\\a2\\deep\\image.jpg`,
+    `${root}\\b\\image.jpg`,
+  ]);
   assert.deepEqual(names(visibleFolderRows(tree, {}, null, "")), ["Downloads", "a2", "b"]);
   assert.deepEqual(names(visibleFolderRows(tree, {}, `${root}\\a2\\deep`, "")), [
     "Downloads",

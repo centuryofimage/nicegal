@@ -10,8 +10,7 @@ export function visualFileBase64(file: Blob): Promise<string> {
       }
       resolve(result.slice(result.indexOf(",") + 1));
     };
-    reader.onerror = () =>
-      reject(reader.error ?? new Error("Couldn't read the image."));
+    reader.onerror = () => reject(reader.error ?? new Error("Couldn't read the image."));
     reader.onabort = () => reject(new Error("Reading the visual-search image was cancelled."));
     reader.readAsDataURL(file);
   });

@@ -94,9 +94,7 @@ test("media operator filters a library without search text", () => {
 });
 
 test("searching for absent media skips model queries and shows an empty result", async () => {
-  const catalog = [{ id: "1", mediaKind: "image", date: 1 }] as Parameters<
-    Controller["apply"]
-  >[0];
+  const catalog = [{ id: "1", mediaKind: "image", date: 1 }] as Parameters<Controller["apply"]>[0];
   for (const query of ["type:video", "cat type:video", "like: cat type:video"]) {
     const { search, requests } = fixture();
     search.query = query;
@@ -146,9 +144,7 @@ test("quoted path scope uses backend search without text model setup", async () 
 test("visual scope after a media filter sends only the description to image search", async () => {
   const { search, requests } = fixture();
   search.query = "type:video like: red car";
-  const catalog = [{ id: "1", mediaKind: "video", date: 1 }] as Parameters<
-    Controller["apply"]
-  >[0];
+  const catalog = [{ id: "1", mediaKind: "video", date: 1 }] as Parameters<Controller["apply"]>[0];
   search.schedule(1, catalog, "modified", true, false, true);
   await pause();
   assert.equal(search.imageSetupRequired, false);

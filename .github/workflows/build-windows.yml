@@ -9,7 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RELEASE_SERIES: '0.0'
+  RELEASE_SERIES: "0.0"
 
 concurrency:
   group: desktop-release-${{ github.ref }}

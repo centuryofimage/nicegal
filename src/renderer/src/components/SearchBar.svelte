@@ -44,6 +44,7 @@
     semanticSuggestion = false,
     onsemanticsearch,
     onopenlibrarymanager,
+    onopensearchsettings,
     visualReferences = [],
     onvisualreferenceschange,
     onchoosevisualfile,
@@ -63,6 +64,7 @@
     semanticSuggestion?: boolean;
     onsemanticsearch?: () => void;
     onopenlibrarymanager: () => void;
+    onopensearchsettings?: () => void;
     visualReferences?: VisualReferenceTerm[];
     onvisualreferenceschange?: (references: VisualReferenceTerm[]) => void;
     onchoosevisualfile?: () => void;
@@ -169,6 +171,8 @@
   function scopeTitle(option: ScopeOption): string {
     if (!runtime.supportsImageTextQueries && option.scope === "like")
       return "Find similar images using image examples";
+    if (!runtime.supportsImageTextQueries && option.scope === "all")
+      return "File names, exact text, and related text. This image model searches by image example only.";
     return [option.summary, ...(option.syntax ?? [])].join("\n");
   }
 
@@ -267,7 +271,12 @@
     message && querySyntaxError ? OCR_SYNTAX_NOTES.join(SYNTAX_GAP) : "",
   );
   // Scoped searches use the syntax hint instead.
-  const placeholder = "Search file names, text, and images";
+  // An image-only model returns no visual results for typed words.
+  const placeholder = $derived(
+    runtime.supportsImageTextQueries
+      ? "Search file names, text, and images"
+      : "Search file names and text",
+  );
 
   function selectScope(scope: SearchScope): void {
     composerOpen = false;
@@ -477,6 +486,18 @@
           if (parsed.scope === "like" && !runtime.supportsImageTextQueries && !composerOpen)
             toggleComposer();
         }}
+        onkeydown={(event) => {
+          // The box is read-only here; typing opens the composer, which explains why.
+          const typing =
+            event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
+          if (
+            typing &&
+            parsed.scope === "like" &&
+            !runtime.supportsImageTextQueries &&
+            !composerOpen
+          )
+            toggleComposer();
+        }}
         onscroll={syncBackdrop}
         type="text"
         placeholder={parsed.scope === "all" ? placeholder : ""}
@@ -550,6 +571,11 @@
   {#if parsed.scope === "like" && composerOpen}
     <VisualSearchComposer
       supportsTextQueries={runtime.supportsImageTextQueries}
+      modelName={runtime.imageModelName}
+      onopensettings={() => {
+        composerOpen = false;
+        onopensearchsettings?.();
+      }}
       expression={parsed.body}
       references={visualReferences}
       onexpressionchange={setVisualExpression}

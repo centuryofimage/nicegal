@@ -24,6 +24,8 @@
     onclear,
     selectedPhotoCount = 0,
     supportsTextQueries = true,
+    modelName = null,
+    onopensettings,
   }: {
     expression?: string;
     references?: VisualReferenceTerm[];
@@ -35,6 +37,9 @@
     onclear: () => void;
     selectedPhotoCount?: number;
     supportsTextQueries?: boolean;
+    /** The image model in use, named when it cannot search from descriptions. */
+    modelName?: string | null;
+    onopensettings?: () => void;
   } = $props();
 
   // The popover is recreated when it closes. Its rows are a deliberately local editing draft,
@@ -130,15 +135,29 @@
     </div>
     <p>“Less like” changes similarity; it does not guarantee an exclusion.</p>
     {#if !supportsTextQueries}
-      <p>Choose a file or selected library photos to find similar images.</p>
+      <p class="model-note">
+        {modelName ?? "This image model"} searches by image example only. To search with text descriptions,
+        choose another model in
+        <a
+          href="#search-settings"
+          onclick={(event) => {
+            event.preventDefault();
+            onopensettings?.();
+          }}>Search settings</a
+        >.
+      </p>
       {#if terms.length}
         <div class="unsupported-terms" role="alert">
           <p>Remove these descriptions to search with this image-only model:</p>
           {#each terms as term (term.id)}
             <div>
               <span>{term.text || "Empty description"}</span>
-              <button type="button" class="remove" onclick={() => remove(term.id)}
-                aria-label="Remove description {term.text || "example"}"><X size={13} aria-hidden="true" /></button
+              <button
+                type="button"
+                class="remove"
+                onclick={() => remove(term.id)}
+                aria-label="Remove description {term.text || 'example'}"
+                ><X size={13} aria-hidden="true" /></button
               >
             </div>
           {/each}
@@ -147,7 +166,9 @@
     {/if}
     <div class="term-list">
       <div class="term-head" aria-hidden="true">
-        <span>Match</span><span>{supportsTextQueries ? "Description or image" : "Image"}</span><span>Weight</span><span></span>
+        <span>Match</span><span>{supportsTextQueries ? "Description or image" : "Image"}</span><span
+          >Weight</span
+        ><span></span>
       </div>
       {#each supportsTextQueries ? terms : [] as term, index (term.id)}
         <div class="term-row">
@@ -326,6 +347,13 @@
   p {
     margin: 0;
     font-size: var(--font-size-md);
+  }
+  .model-note a {
+    color: var(--accent-active);
+    text-decoration: underline;
+  }
+  .model-note a:hover {
+    color: var(--accent);
   }
   .term-list {
     display: grid;

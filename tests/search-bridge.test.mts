@@ -188,7 +188,9 @@ test("backend error codes survive IPC; other errors pass through unchanged", asy
   // Electron keeps only the message, behind its own prefix.
   const received = async (): Promise<Error> => {
     const error = (await list().catch((cause: unknown) => cause)) as Error;
-    return new Error(`Error invoking remote method 'backend:list-libraries': Error: ${error.message}`);
+    return new Error(
+      `Error invoking remote method 'backend:list-libraries': Error: ${error.message}`,
+    );
   };
 
   failure = Object.assign(new Error("Image model not ready"), { code: "models_not_ready" });

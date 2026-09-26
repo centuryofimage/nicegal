@@ -36,8 +36,8 @@
           <p>Use the search menu, or type a prefix:</p>
           <ul class="search-types">
             <li>
-              <b>Visual search</b> (<code>like:</code>): describe a photo or video, or use an example
-              image.
+              <b>Visual search</b> (<code>like:</code>): describe a photo or video, or use an
+              example image.
             </li>
             <li>
               <b>Exact text</b> (<code>ocr:</code>): words inside pictures.

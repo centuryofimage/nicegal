@@ -7,6 +7,7 @@
   import type { RuntimeController } from "../lib/runtime.svelte";
 
   import { useApplication } from "../lib/application.svelte";
+  import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
   import { settings, settingsLimits, type GalleryTheme } from "../lib/settings.svelte";
   import AboutSettings from "./AboutSettings.svelte";
   import SearchModels from "./SearchModels.svelte";
@@ -29,7 +30,8 @@
     { id: "seven-a", label: "very" },
     { id: "seven-b", label: "Hospital" },
   ];
-  const { catalog } = useApplication().services;
+  const { catalog, jobs } = useApplication().services;
+  const jobNote = $derived(runtimeSwitchJobNote(jobs));
   let updatePreferences = $state<UpdatePreferences | null>(null);
   let updateSaving = $state(false);
   let updateError = $state<string | null>(null);
@@ -84,7 +86,11 @@
     ),
   );
   const executionProviderDisabled = $derived(
-    runtime.loading || runtime.saving || runtime.imageModelSaving || !catalog.backendStatus.ready,
+    runtime.loading ||
+      runtime.saving ||
+      runtime.imageModelSaving ||
+      !catalog.backendStatus.ready ||
+      jobBlocksRuntimeSwitch(jobs),
   );
 </script>
 
@@ -179,7 +185,11 @@
         <div class="row segmented-row">
           <span class="setting-label"
             >Execution provider<small
-              >{runtime.saving ? "Switching…" : "Leave this unless indexing fails."}</small
+              >{runtime.stoppingJobs && runtime.saving
+                ? "Stopping indexing…"
+                : runtime.saving
+                  ? "Switching…"
+                  : jobNote || "Leave this unless indexing fails."}</small
             ></span
           >
           <div class="ui-choice-group" aria-label="Execution provider">
@@ -197,18 +207,18 @@
           <p class="settings-error" role="alert">{runtime.error}</p>
         {/if}
         {#if import.meta.env.DEV}<label class="row">
-          <span class="setting-label"
-            >Index limit (debug)<small>0 indexes the complete library.</small></span
-          ><input
-            class="number-input"
-            type="number"
-            title="0 = no limit"
-            min={settingsLimits.debugIndexLimit.min}
-            max={settingsLimits.debugIndexLimit.max}
-            step={settingsLimits.debugIndexLimit.step}
-            bind:value={$settings.debugIndexLimit}
-          />
-        </label>{/if}
+            <span class="setting-label"
+              >Index limit (debug)<small>0 indexes the complete library.</small></span
+            ><input
+              class="number-input"
+              type="number"
+              title="0 = no limit"
+              min={settingsLimits.debugIndexLimit.min}
+              max={settingsLimits.debugIndexLimit.max}
+              step={settingsLimits.debugIndexLimit.step}
+              bind:value={$settings.debugIndexLimit}
+            />
+          </label>{/if}
       </section>
     {/if}
   </div>

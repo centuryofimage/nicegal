@@ -64,7 +64,9 @@
       limitNotice={ocrSearch.limitNotice}
       semanticSuggestion={ocrSearch.shouldSuggestSemantic}
       onsemanticsearch={view.switchToMeaningSearch}
-      onopenlibrarymanager={() => catalog.selectedId !== null && view.editLibrary(catalog.selectedId)}
+      onopenlibrarymanager={() =>
+        catalog.selectedId !== null && view.editLibrary(catalog.selectedId)}
+      onopensearchsettings={() => view.openSettingsDialog("search")}
       visualReferences={ocrSearch.visualReferences}
       onvisualreferenceschange={(references) => ocrSearch.setVisualReferences(references)}
       onchoosevisualfile={() => void chooseVisualFile(ocrSearch)}

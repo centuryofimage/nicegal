@@ -72,7 +72,11 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
     { source: "server", event: "stderr", data: { line: "folder=/data/alice/secret.jpg" } },
     { source: "http", event: "request-started", data: { path: "/v1/jobs" } },
   ];
-  await writeFile(join(directory, "backend.log"), `${entries.map(JSON.stringify).join("\n")}\n`, "utf8");
+  await writeFile(
+    join(directory, "backend.log"),
+    `${entries.map(JSON.stringify).join("\n")}\n`,
+    "utf8",
+  );
   await writeFile(join(directory, "backend.log.1"), `previous error: ${privatePath}\n`, "utf8");
   await writeFile(
     join(directory, "runtime.json"),

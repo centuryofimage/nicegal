@@ -49,6 +49,8 @@
   let saving = $state(false);
   let error = $state("");
   let removingFolder = $state<string | null>(null);
+  /** A chosen folder waiting for the keep-or-delete answer before it joins `exclude`. */
+  let excludingFolder = $state<string | null>(null);
   let purgeFolders = $state.raw<string[]>([]);
 
   function resetDraft(): void {
@@ -60,6 +62,7 @@
     image = library.image;
     videos = library.videos;
     removingFolder = null;
+    excludingFolder = null;
     purgeFolders = [];
   }
   resetDraft();
@@ -135,10 +138,24 @@
         error = "Choose a subfolder of one of this library's folders.";
         return;
       }
-      if (!exclude.some((path) => isWithin(folder, path))) exclude = [...exclude, folder];
+      if (!exclude.some((path) => isWithin(folder, path))) excludingFolder = folder;
     } catch (cause) {
       error = errorMessage(cause);
     }
+  }
+
+  /** Like removing a folder, excluding one can also delete its indexed data once saved. */
+  function addExclusion(path: string, deleteIndexedData: boolean): void {
+    exclude = [...exclude, path];
+    purgeFolders = deleteIndexedData
+      ? [...new Set([...purgeFolders, path])]
+      : purgeFolders.filter((candidate) => candidate !== path);
+    excludingFolder = null;
+  }
+
+  function includeAgain(path: string): void {
+    exclude = exclude.filter((candidate) => candidate !== path);
+    purgeFolders = purgeFolders.filter((candidate) => candidate !== path);
   }
 
   async function apply(): Promise<boolean> {
@@ -166,8 +183,11 @@
         },
         name.trim() || null,
       );
-      if (purgeFolders.length && !(await orchestrator.purgeRemovedFolders(libraryId, purgeFolders))) {
-        error = "The folder was removed, but deleting its indexed data couldn't start. Try saving again.";
+      if (
+        purgeFolders.length &&
+        !(await orchestrator.purgeRemovedFolders(libraryId, purgeFolders))
+      ) {
+        error = "Changes were saved, but deleting indexed data couldn't start. Try saving again.";
         return false;
       }
       resetDraft();
@@ -180,7 +200,9 @@
     }
   }
 
-  async function scan(options: { pendingOnly?: boolean; retryFailed?: boolean } = {}): Promise<void> {
+  async function scan(
+    options: { pendingOnly?: boolean; retryFailed?: boolean } = {},
+  ): Promise<void> {
     if (await saveChanges()) commands.scanLibrary(libraryId, options);
   }
 
@@ -263,8 +285,7 @@
                   ? "Remove the library to remove its last folder"
                   : "Remove folder from this library"}
                 disabled={include.length === 1}
-                onclick={() => (removingFolder = path)}
-                ><X size={14} aria-hidden="true" /></button
+                onclick={() => (removingFolder = path)}><X size={14} aria-hidden="true" /></button
               >
             </li>
           {:else}
@@ -274,11 +295,13 @@
         {#if removingFolder}
           <div class="remove-folder-confirmation" role="group" aria-label="Remove folder">
             <span>Remove {removingFolder} from this library?</span>
-            <button class="ui-button ui-button-compact" onclick={() => removeFolder(removingFolder!, false)}
-              >Keep indexed data</button
+            <button
+              class="ui-button ui-button-compact"
+              onclick={() => removeFolder(removingFolder!, false)}>Keep indexed data</button
             >
-            <button class="ui-button ui-button-compact" onclick={() => removeFolder(removingFolder!, true)}
-              >Delete indexed data</button
+            <button
+              class="ui-button ui-button-compact"
+              onclick={() => removeFolder(removingFolder!, true)}>Delete indexed data</button
             >
             <button class="ui-button ui-button-compact" onclick={() => (removingFolder = null)}
               >Cancel</button
@@ -311,12 +334,27 @@
                   class="folder-remove"
                   aria-label={`Include ${path} again`}
                   title="Remove exclusion and include this folder again"
-                  onclick={() => (exclude = exclude.filter((candidate) => candidate !== path))}
-                  ><X size={14} aria-hidden="true" /></button
+                  onclick={() => includeAgain(path)}><X size={14} aria-hidden="true" /></button
                 >
               </li>
             {/each}
           </ul>
+        {/if}
+        {#if excludingFolder}
+          <div class="remove-folder-confirmation" role="group" aria-label="Exclude folder">
+            <span>Exclude {excludingFolder} from this library?</span>
+            <button
+              class="ui-button ui-button-compact"
+              onclick={() => addExclusion(excludingFolder!, false)}>Keep indexed data</button
+            >
+            <button
+              class="ui-button ui-button-compact"
+              onclick={() => addExclusion(excludingFolder!, true)}>Delete indexed data</button
+            >
+            <button class="ui-button ui-button-compact" onclick={() => (excludingFolder = null)}
+              >Cancel</button
+            >
+          </div>
         {/if}
         <div class="list-actions">
           <button
@@ -395,7 +433,8 @@
   {#if error || changeCount}
     <footer>
       <span class={["footer-status", { attention: Boolean(error) }]} role="status">
-        {error || `${changeCount} ${changeCount === 1 ? "change" : "changes"} · saves when you leave this view`}
+        {error ||
+          `${changeCount} ${changeCount === 1 ? "change" : "changes"} · saves when you leave this view`}
       </span>
     </footer>
   {/if}

@@ -143,8 +143,8 @@
       class="dismiss-setup"
       onclick={() => ondismisssetup(setupIssue.key)}
       title="Dismiss this search warning"
-      aria-label="Dismiss this search warning"
-    ><X size={11} aria-hidden="true" /></button>
+      aria-label="Dismiss this search warning"><X size={11} aria-hidden="true" /></button
+    >
   </span>
 {/if}
 <span class="status-segment message" role="status">

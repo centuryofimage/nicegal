@@ -18,7 +18,8 @@ const RECENT_LOG_LINES = 12;
 const REDACTED_PATH = "[redacted local path]";
 const WINDOWS_PATH = /(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]/;
 const UNC_PATH = /\\\\(?:\?\\)?[^\\\s]+\\[^\\\s]+/;
-const POSIX_PATH = /(?:^|[\s"'=(])\/(?:Users|home|mnt|media|Volumes|var|tmp|opt|etc|private|run|srv|root|Applications)\//i;
+const POSIX_PATH =
+  /(?:^|[\s"'=(])\/(?:Users|home|mnt|media|Volumes|var|tmp|opt|etc|private|run|srv|root|Applications)\//i;
 const LABELED_POSIX_PATH = /\b(?:path|directory|folder|file|root)\s*[=:]\s*\/(?!\/)/i;
 
 interface DiagnosticFile {
@@ -57,9 +58,7 @@ export async function recentBackendLog(): Promise<string> {
   const complete = file.truncated ? (firstNewline < 0 ? "" : text.slice(firstNewline + 1)) : text;
   const lines = complete.trimEnd().split("\n").filter(Boolean).slice(-RECENT_LOG_LINES);
   return (
-    lines
-      .map((line) => (line.length > 1200 ? `${line.slice(0, 1200)}…` : line))
-      .join("\n") ||
+    lines.map((line) => (line.length > 1200 ? `${line.slice(0, 1200)}…` : line)).join("\n") ||
     "Backend log has no recent entries."
   );
 }
@@ -108,7 +107,9 @@ export async function collectDiagnostics(
       const file = await readFileTail(request.archiveName, request.path, request.limit);
       if (file) files.push(sanitizeDiagnosticFile(file));
     } catch (error) {
-      issues.push(`Could not include ${request.archiveName}: ${redactDiagnosticString(formatError(error))}`);
+      issues.push(
+        `Could not include ${request.archiveName}: ${redactDiagnosticString(formatError(error))}`,
+      );
     }
   }
 
@@ -160,11 +161,7 @@ function sanitizeDiagnosticFile(file: DiagnosticFile): DiagnosticFile {
   } else {
     const firstNewline = text.indexOf("\n");
     const complete = file.truncated ? (firstNewline < 0 ? "" : text.slice(firstNewline + 1)) : text;
-    sanitized = complete
-      .split("\n")
-      .filter(Boolean)
-      .map(sanitizeLogLine)
-      .join("\n");
+    sanitized = complete.split("\n").filter(Boolean).map(sanitizeLogLine).join("\n");
     if (sanitized) sanitized += "\n";
   }
   return { ...file, data: Buffer.from(sanitized, "utf8") };

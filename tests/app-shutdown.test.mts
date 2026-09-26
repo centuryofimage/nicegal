@@ -6,7 +6,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createServer } from "vite";
 
-for (const scenario of ["fallback restart", "crash", "manual restart", "quit", "update restart"] as const)
+for (const scenario of [
+  "fallback restart",
+  "crash",
+  "manual restart",
+  "quit",
+  "update restart",
+] as const)
   test(`${scenario} handles a backend exit`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "nicegal-shutdown-test-"));
     const stopped = Promise.withResolvers<void>();
@@ -38,6 +44,7 @@ for (const scenario of ["fallback restart", "crash", "manual restart", "quit", "
       requestSingleInstanceLock: (): boolean => true,
       setAppUserModelId: (): void => {},
       getPath: (): string => directory,
+      setPath: (): void => {},
       whenReady: () => ({
         then: (callback: () => Promise<void>): void => {
           state.ready = callback();

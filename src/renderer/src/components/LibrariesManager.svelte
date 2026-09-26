@@ -1,10 +1,10 @@
 <script lang="ts">
   import type { LibraryId } from "../../../shared/backend";
+  import type { LibraryRecord } from "../lib/catalog.svelte";
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
   import type { LibraryViewController } from "../lib/library-view.svelte";
 
   import { useApplication } from "../lib/application.svelte";
-  import type { LibraryRecord } from "../lib/catalog.svelte";
   import { sameFolder } from "../lib/library-root";
   import { libraryOptionsSummary } from "../lib/library-status";
   import LibraryEditor from "./LibraryEditor.svelte";
@@ -23,7 +23,9 @@
 
   const { catalog, jobs, orchestrator } = useApplication().services;
   let managingId = $state<LibraryId | null | undefined>(undefined);
-  const currentId = $derived(managingId === undefined ? (view.editingLibraryId ?? catalog.selectedId) : managingId);
+  const currentId = $derived(
+    managingId === undefined ? (view.editingLibraryId ?? catalog.selectedId) : managingId,
+  );
   let editor = $state.raw<LibraryEditor>();
   let createBusy = $state(false);
   let createError = $state("");
@@ -158,9 +160,13 @@
               <strong>{library.displayName}</strong>
               {#if duplicate}<span class="duplicate">Duplicate folder</span>{/if}
             </span>
-            <span class="library-paths">{library.include.map((folder) => folder.path).join(" · ")}</span>
+            <span class="library-paths"
+              >{library.include.map((folder) => folder.path).join(" · ")}</span
+            >
             <span class="library-summary">
-              {status && !status.loading ? `${status.cataloged.toLocaleString()} files · ` : ""}{libraryOptionsSummary(library)}
+              {status && !status.loading
+                ? `${status.cataloged.toLocaleString()} files · `
+                : ""}{libraryOptionsSummary(library)}
             </span>
           </button>
         {:else}
@@ -168,14 +174,15 @@
         {/each}
       </div>
       <div class="list-actions">
-        <button class="ui-button" onclick={() => void add()} disabled={createBusy || !catalog.backendStatus.ready}
-          >New library…</button
+        <button
+          class="ui-button"
+          onclick={() => void add()}
+          disabled={createBusy || !catalog.backendStatus.ready}>New library…</button
         >
         <button
           class="ui-button"
           onclick={() => void prepareRemoval()}
-          disabled={!selected || navigationBusy}
-          >Remove library…</button
+          disabled={!selected || navigationBusy}>Remove library…</button
         >
         {#if createError}<p class="error" role="alert">{createError}</p>{/if}
       </div>
@@ -189,17 +196,26 @@
           <p>Original files are never touched. Indexed data another library uses is kept.</p>
           {#if jobs.running}
             <p role="status">A job is running. Stop it before removing this library.</p>
-            <button class="ui-button stop-job" onclick={() => void stopJob()} disabled={stoppingJob || jobs.active?.status === "cancelling"}
-              >{stoppingJob || jobs.active?.status === "cancelling" ? "Stopping jobs…" : "Stop running and queued jobs"}</button
+            <button
+              class="ui-button stop-job"
+              onclick={() => void stopJob()}
+              disabled={stoppingJob || jobs.active?.status === "cancelling"}
+              >{stoppingJob || jobs.active?.status === "cancelling"
+                ? "Stopping jobs…"
+                : "Stop running and queued jobs"}</button
             >
           {/if}
           {#if removeError}<p class="error" role="alert">{removeError}</p>{/if}
           <div class="remove-actions">
-            <button class="ui-button" onclick={() => void remove(false)} disabled={removeBusy || jobs.running}
-              >Remove, keep indexed data</button
+            <button
+              class="ui-button"
+              onclick={() => void remove(false)}
+              disabled={removeBusy || jobs.running}>Remove, keep indexed data</button
             >
-            <button class="ui-button" onclick={() => void remove(true)} disabled={removeBusy || jobs.running}
-              >Remove and delete indexed data</button
+            <button
+              class="ui-button"
+              onclick={() => void remove(true)}
+              disabled={removeBusy || jobs.running}>Remove and delete indexed data</button
             >
             <button class="ui-button" onclick={() => (removing = null)} disabled={removeBusy}
               >Cancel</button
@@ -222,7 +238,6 @@
       {/if}
     </div>
   </div>
-
 </section>
 
 <style>
@@ -248,8 +263,15 @@
     padding: var(--space-8) var(--space-12);
     border-bottom: 1px solid var(--border-subtle);
   }
-  h1, h2, p { margin: 0; }
-  h1, h2 { font-size: var(--dialog-title-size); }
+  h1,
+  h2,
+  p {
+    margin: 0;
+  }
+  h1,
+  h2 {
+    font-size: var(--dialog-title-size);
+  }
   .manager-main {
     display: grid;
     flex: 1;
@@ -263,7 +285,11 @@
     border-right: 1px solid var(--border-subtle);
     background: var(--surface-1);
   }
-  .library-rows { flex: 1; min-height: 0; overflow: auto; }
+  .library-rows {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
   .library-rows button {
     display: grid;
     width: 100%;
@@ -277,24 +303,88 @@
     text-align: left;
     cursor: pointer;
   }
-  .library-rows button:hover, .library-rows button:focus-visible { background: var(--surface-hover); }
-  .library-rows button.selected { background: var(--btn-face-active); color: var(--text-primary); }
-  .library-label { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
-  .library-paths, .library-summary { color: var(--text-secondary); font-size: var(--font-size-sm); overflow-wrap: anywhere; }
-  .duplicate { color: var(--danger); font-size: var(--font-size-sm); }
-  .list-actions { display: grid; justify-items: start; gap: var(--space-6); padding: var(--space-8); border-top: 1px solid var(--border-subtle); }
-  .manager-details { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-  .empty { padding: var(--space-8); color: var(--text-secondary); }
-  .details-empty { padding: var(--space-12); }
-  .error { color: var(--danger); overflow-wrap: anywhere; }
-  .remove-confirmation { display: grid; align-content: start; gap: var(--space-8); padding: var(--space-12); }
-  .remove-confirmation p { overflow-wrap: anywhere; }
-  .remove-actions { display: flex; flex-wrap: wrap; gap: var(--space-6); }
-  .stop-job { justify-self: start; }
+  .library-rows button:hover,
+  .library-rows button:focus-visible {
+    background: var(--surface-hover);
+  }
+  .library-rows button.selected {
+    background: var(--btn-face-active);
+    color: var(--text-primary);
+  }
+  .library-label {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+  .library-paths,
+  .library-summary {
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+    overflow-wrap: anywhere;
+  }
+  .duplicate {
+    color: var(--danger);
+    font-size: var(--font-size-sm);
+  }
+  .list-actions {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-6);
+    padding: var(--space-8);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .manager-details {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .empty {
+    padding: var(--space-8);
+    color: var(--text-secondary);
+  }
+  .details-empty {
+    padding: var(--space-12);
+  }
+  .error {
+    color: var(--danger);
+    overflow-wrap: anywhere;
+  }
+  .remove-confirmation {
+    display: grid;
+    align-content: start;
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+  .remove-confirmation p {
+    overflow-wrap: anywhere;
+  }
+  .remove-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+  .stop-job {
+    justify-self: start;
+  }
   @media (max-width: 650px) {
-    .manager-main { display: flex; flex-direction: column; }
-    .library-list { flex: 0 0 auto; max-height: 35%; border-right: 0; border-bottom: 1px solid var(--border-subtle); }
-    .list-actions { display: flex; flex-wrap: wrap; }
-    .manager-details { flex: 1; }
+    .manager-main {
+      display: flex;
+      flex-direction: column;
+    }
+    .library-list {
+      flex: 0 0 auto;
+      max-height: 35%;
+      border-right: 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .list-actions {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .manager-details {
+      flex: 1;
+    }
   }
 </style>

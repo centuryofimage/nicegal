@@ -8,6 +8,7 @@ import { CatalogController, type LibraryRecord } from "./catalog.svelte";
 import { ONBOARDING_DISMISSED_STORAGE_KEY } from "./constants";
 import { errorMessage } from "./errors";
 import { JobOrchestrator } from "./job-orchestrator.svelte";
+import { stopsForRuntimeSwitch } from "./job-state";
 import { JobTracker } from "./job-tracker.svelte";
 import { sameFolder } from "./library-root";
 import { OcrSearchController } from "./ocr-search.svelte";
@@ -90,8 +91,8 @@ class Application implements ApplicationContext {
   private started = false;
   private backendInitialized = false;
   private deferringScans = false;
-  /** The scan held while a settings dialog is open; `full` after a backend restart. */
-  private deferredScan: { libraryId: LibraryId; full: boolean } | null = null;
+  /** The library whose scan is held while a settings dialog is open. */
+  private deferredScan: LibraryId | null = null;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
@@ -102,7 +103,7 @@ class Application implements ApplicationContext {
       void jobs.cancelLibraryScans(previous);
       if (next !== null) this.requestPendingScan(next);
     });
-    const runtime = new RuntimeController();
+    const runtime = new RuntimeController(() => this.stopJobsForRuntimeSwitch());
     const jobs: JobTracker = new JobTracker(
       (delay) => catalog.scheduleRefresh(delay),
       () => catalog.bumpThumbnailRevision(),
@@ -132,7 +133,7 @@ class Application implements ApplicationContext {
         libraryId: LibraryId,
         options: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean } = {},
       ) => {
-        if (this.deferredScan?.libraryId === libraryId) this.deferredScan = null;
+        if (this.deferredScan === libraryId) this.deferredScan = null;
         void orchestrator.scan(libraryId, { scanMode: "full", ...options });
       },
       startThumbnailBackfill: (libraryId: LibraryId, options: ThumbnailBackfillOptions) =>
@@ -158,10 +159,10 @@ class Application implements ApplicationContext {
       },
       endDeferringScans: () => {
         this.deferringScans = false;
-        const scan = this.deferredScan;
+        const libraryId = this.deferredScan;
         this.deferredScan = null;
-        if (scan && scan.libraryId === catalog.selectedId)
-          void orchestrator.scan(scan.libraryId, scan.full ? { scanMode: "full" } : {});
+        if (libraryId !== null && libraryId === catalog.selectedId)
+          void orchestrator.scan(libraryId);
       },
     });
   }
@@ -247,11 +248,34 @@ class Application implements ApplicationContext {
     orchestrator.backendReady();
     await jobs.sync();
     // A restart drops running and queued scans. A routine scan may have started with no
-    // pending folder flag, and a fast scan skips unchanged directories. Revisit every asset.
-    // A restart from Settings (model or provider change) waits until the dialog closes.
+    // pending folder flag, so rescan every folder. The directory check is enough: indexing
+    // covers every asset the current models still lack, including after a model change. A
+    // restart from Settings (model or provider change) waits until the dialog closes.
     if (catalog.selectedId === null) return;
-    if (this.deferringScans) this.deferredScan = { libraryId: catalog.selectedId, full: true };
-    else await orchestrator.scan(catalog.selectedId, { scanMode: "full" });
+    if (this.deferringScans) this.deferredScan = catalog.selectedId;
+    else await orchestrator.scan(catalog.selectedId);
+  }
+
+  /**
+   * Stops indexing so a model or provider switch can restart the gallery service. The restart
+   * resumes the selected library's scan once Settings closes; holding it here as well covers a
+   * switch that fails. Returns why the switch has to wait, or null.
+   */
+  private async stopJobsForRuntimeSwitch(): Promise<string | null> {
+    const { catalog, jobs, orchestrator } = this.services;
+    if (!jobs.running) return null;
+    if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
+      return "Switch after the current job finishes.";
+    if (this.deferringScans && catalog.selectedId !== null) this.deferredScan = catalog.selectedId;
+    // Cancelling is cooperative, and the backend refuses the switch until the job has ended. A
+    // scan the backend had queued can start in the meantime, so cancel whatever is running.
+    const deadline = Date.now() + 30_000;
+    while (jobs.running && Date.now() < deadline) {
+      if (jobs.active?.status !== "cancelling") await orchestrator.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await jobs.sync();
+    }
+    return jobs.running ? "Indexing didn't stop in time. Try again." : null;
   }
 
   private async initializeReadyBackend(): Promise<void> {
@@ -267,7 +291,7 @@ class Application implements ApplicationContext {
       // Follow whatever the backend is already running or has queued from its last session.
       await jobs.sync();
       await orchestrator.resumeInterruptedJob(catalog.selectedId);
-      // Opening the app checks the selected library; the backend runs a full walk when due.
+      // Opening the app checks the selected library's directories for changes.
       if (catalog.selectedId !== null) await orchestrator.scan(catalog.selectedId);
     } catch (error) {
       this.problem = {
@@ -292,12 +316,15 @@ class Application implements ApplicationContext {
   private async createLibrary(folder: string): Promise<LibraryRecord> {
     const { catalog } = this.services;
     await catalog.loadLibraries();
-    if (catalog.librariesError) throw new Error(`Couldn't check existing libraries: ${catalog.librariesError}`);
+    if (catalog.librariesError)
+      throw new Error(`Couldn't check existing libraries: ${catalog.librariesError}`);
     const existing = catalog.libraries.find((library) =>
       library.include.some((included) => sameFolder(included.path, folder)),
     );
     if (existing) {
-      throw new Error(`That folder is already in “${existing.displayName}”. Select that library or add a different folder.`);
+      throw new Error(
+        `That folder is already in “${existing.displayName}”. Select that library or add a different folder.`,
+      );
     }
     const library = await catalog.createLibrary(folder);
     this.librarySelectionRevision += 1;
@@ -323,11 +350,7 @@ class Application implements ApplicationContext {
   }
 
   private requestPendingScan(libraryId: LibraryId): void {
-    if (this.deferringScans)
-      this.deferredScan = {
-        libraryId,
-        full: this.deferredScan?.libraryId === libraryId && this.deferredScan.full,
-      };
+    if (this.deferringScans) this.deferredScan = libraryId;
     else void this.services.orchestrator.scan(libraryId, { pendingOnly: true });
   }
 

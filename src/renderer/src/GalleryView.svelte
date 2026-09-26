@@ -16,10 +16,10 @@
   import TimelineScrollbar from "./components/TimelineScrollbar.svelte";
   import VirtualGallery from "./components/VirtualGallery.svelte";
   import { useApplication } from "./lib/application.svelte";
-  import { offlineFolders } from "./lib/library-status";
   import { createGalleryShortcutHandler } from "./lib/gallery-shortcuts";
   import { originalUrlOf } from "./lib/gallery/types";
   import { createGalleryWheelZoom } from "./lib/gallery/wheel-zoom";
+  import { offlineFolders } from "./lib/library-status";
   import { createLibraryViewController } from "./lib/library-view.svelte";
   import { galleryLayoutState, settings } from "./lib/settings.svelte";
 

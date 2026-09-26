@@ -10,3 +10,4 @@ shots/
 /resources/licenses/
 .claude/
 agent-browser.json
+.dev-profile/

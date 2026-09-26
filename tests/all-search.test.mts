@@ -473,7 +473,9 @@ test("a malformed section response cannot corrupt successful results, including 
 const { encodeIpcError } = await vite.ssrLoadModule("/src/shared/ipc-error.ts");
 /** A backend error as the renderer receives it: Electron's prefix around the coded payload. */
 const ipcError = (code: string, message: string): Error =>
-  new Error(`Error invoking remote method 'backend:search': Error: ${encodeIpcError({ code, message })}`);
+  new Error(
+    `Error invoking remote method 'backend:search': Error: ${encodeIpcError({ code, message })}`,
+  );
 
 test("a visual model that is not ready is a setup notice, not a search error", async () => {
   const f = fixture();

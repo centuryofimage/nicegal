@@ -92,4 +92,3 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.dmg
-

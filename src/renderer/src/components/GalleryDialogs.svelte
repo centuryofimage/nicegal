@@ -36,7 +36,11 @@
 {/if}
 
 {#if view.activeDialog === "manageLibraries"}
-  <Modal labelledby="libraries-manager-title" onclose={() => manager?.requestClose()} --modal-width="920px">
+  <Modal
+    labelledby="libraries-manager-title"
+    onclose={() => manager?.requestClose()}
+    --modal-width="920px"
+  >
     <LibrariesManager
       bind:this={manager}
       {view}

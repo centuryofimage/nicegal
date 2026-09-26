@@ -374,7 +374,10 @@ function validateCreateLibrary(value: unknown): CreateLibraryRequest {
 }
 
 /** Shared by update and create. `videos` is optional here; the backend defaults it on create. */
-function validateLibraryFields(value: unknown, extraFields: readonly string[]): CreateLibraryRequest {
+function validateLibraryFields(
+  value: unknown,
+  extraFields: readonly string[],
+): CreateLibraryRequest {
   if (
     !isRecord(value) ||
     !hasOnlyFields(value, ["include", "exclude", "ocr", "image", "videos", ...extraFields])
@@ -610,10 +613,16 @@ function validateJobRequest(value: unknown): JobRequest {
     };
   }
   if (request.type === "libraryPurge") {
-    const params = requireJobParams(value, ["libraryId"], "Invalid library purge job");
+    const params = requireJobParams(value, ["libraryId", "folders"], "Invalid library purge job");
     const job: LibraryPurgeJobRequest = {
       type: "libraryPurge",
-      params: { libraryId: validateLibraryId(params.libraryId) },
+      params: {
+        libraryId: validateLibraryId(params.libraryId),
+        // Folders removed from or excluded by an edit; omitted to purge the whole library.
+        ...(params.folders === undefined
+          ? {}
+          : { folders: validateFolderList(params.folders, false) }),
+      },
     };
     return job;
   }

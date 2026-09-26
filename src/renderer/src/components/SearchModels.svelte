@@ -1,11 +1,14 @@
 <script lang="ts">
   import { useApplication } from "../lib/application.svelte";
+  import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
 
   const { services } = useApplication();
   const { runtime, jobs, catalog } = services;
+  // A running scan is stopped by the switch itself; other jobs have to finish first.
+  const jobBlocksSwitch = $derived(jobBlocksRuntimeSwitch(jobs));
+  const jobNote = $derived(runtimeSwitchJobNote(jobs));
   const modelDescriptions: Record<string, string> = {
-    "facebook/metaclip-2-worldwide-b32":
-      "Good for most searches.",
+    "facebook/metaclip-2-worldwide-b32": "Good for most searches.",
     "facebook/metaclip-2-worldwide-b16":
       "Sees more detail and can give slightly better results. Best with a stronger GPU.",
     "facebook/metaclip-2-worldwide-l14":
@@ -56,7 +59,7 @@
     disabled={!runtime.imageModel ||
       runtime.imageModelSaving ||
       runtime.saving ||
-      jobs.running ||
+      jobBlocksSwitch ||
       !catalog.backendStatus.ready}
   >
     <legend>Image search model</legend>
@@ -101,9 +104,12 @@
     </p>
   {/if}
   <p>
-    {runtime.imageModelSaving
-      ? "Switching image model…"
-      : "Each model keeps its own index. Switching briefly restarts the gallery service."}
+    {runtime.stoppingJobs
+      ? "Stopping indexing…"
+      : runtime.imageModelSaving
+        ? "Switching image model…"
+        : jobNote ||
+          "Each model keeps its own index. Switching briefly restarts the gallery service."}
   </p>
   {#if runtime.imageModelError}<p class="model-error" role="alert">
       {runtime.imageModelError}

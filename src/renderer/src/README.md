@@ -5,19 +5,19 @@ It owns component references and local presentation state (Info visibility and S
 
 ## Where to put a change
 
-| Change | Owner |
-| --- | --- |
-| Workspace-wide keyboard shortcut, such as Ctrl/Cmd+L | `lib/gallery-shortcuts.ts` |
-| Search-field/composer keys and editing | `components/SearchBar.svelte` |
-| Viewer keys, zoom, and fullscreen | `components/DetailView.svelte` |
-| Search toolbar wiring and selected-image actions | `components/GalleryToolbar.svelte` |
-| Visual-search file picker and dropped-file import | `lib/visual-search-input.ts` |
-| Ctrl+wheel tile sizing | `lib/gallery/wheel-zoom.ts` |
-| Libraries/Settings/Getting Started dialog composition | `components/GalleryDialogs.svelte` |
-| Getting Started content and styling | `components/GettingStarted.svelte` |
-| Selection, viewer navigation, library restoration, and search-view derivation | `lib/library-view.svelte.ts` |
-| Query execution, results, and visual-search session state | `lib/ocr-search.svelte.ts` |
-| App lifecycle, backend/native services, and cross-service commands | `lib/application.svelte.ts` |
+| Change                                                                        | Owner                              |
+| ----------------------------------------------------------------------------- | ---------------------------------- |
+| Workspace-wide keyboard shortcut, such as Ctrl/Cmd+L                          | `lib/gallery-shortcuts.ts`         |
+| Search-field/composer keys and editing                                        | `components/SearchBar.svelte`      |
+| Viewer keys, zoom, and fullscreen                                             | `components/DetailView.svelte`     |
+| Search toolbar wiring and selected-image actions                              | `components/GalleryToolbar.svelte` |
+| Visual-search file picker and dropped-file import                             | `lib/visual-search-input.ts`       |
+| Ctrl+wheel tile sizing                                                        | `lib/gallery/wheel-zoom.ts`        |
+| Libraries/Settings/Getting Started dialog composition                         | `components/GalleryDialogs.svelte` |
+| Getting Started content and styling                                           | `components/GettingStarted.svelte` |
+| Selection, viewer navigation, library restoration, and search-view derivation | `lib/library-view.svelte.ts`       |
+| Query execution, results, and visual-search session state                     | `lib/ocr-search.svelte.ts`         |
+| App lifecycle, backend/native services, and cross-service commands            | `lib/application.svelte.ts`        |
 
 ## Shortcuts and focus
 

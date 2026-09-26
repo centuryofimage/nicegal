@@ -5,7 +5,7 @@ import type {
   SearchModelsResponse,
 } from "../../../shared/backend";
 
-import { errorMessage } from "./errors";
+import { errorCode, errorMessage } from "./errors";
 
 /**
  * The ONNX Runtime execution provider nicegal-server is running with, and the switcher's
@@ -29,10 +29,22 @@ export class RuntimeController {
   get supportsImageTextQueries(): boolean {
     return this.imageModel?.supportsTextQueries ?? true;
   }
+  /** Display name of the image model in use, for copy that explains what it can search. */
+  get imageModelName(): string | null {
+    const imageModel = this.imageModel;
+    return imageModel?.models.find((model) => model.id === imageModel.activeModel)?.name ?? null;
+  }
   imageModelSaving = $state(false);
   imageModelError = $state<string | null>(null);
+  /** True while a switch waits for running indexing to stop. */
+  stoppingJobs = $state(false);
   private statusGeneration = 0;
   private modelGeneration = 0;
+
+  constructor(
+    /** Stops jobs that block a model or provider switch; returns why it could not, or null. */
+    private readonly stopJobs: () => Promise<string | null> = async () => null,
+  ) {}
 
   reset(): void {
     this.statusGeneration += 1;
@@ -101,10 +113,15 @@ export class RuntimeController {
     this.imageModelSaving = true;
     this.imageModelError = null;
     try {
+      const blocked = await this.stopBlockingJobs();
+      if (blocked) {
+        this.imageModelError = blocked;
+        return;
+      }
       this.status = await window.nicegal.backend.setImageModel(model);
       await this.refreshModels();
     } catch (error) {
-      this.imageModelError = errorMessage(error);
+      this.imageModelError = switchErrorMessage(error);
     } finally {
       this.imageModelSaving = false;
       this.imageModelBeforeRestart = null;
@@ -118,13 +135,34 @@ export class RuntimeController {
     this.saving = true;
     this.error = null;
     try {
+      const blocked = await this.stopBlockingJobs();
+      if (blocked) {
+        this.error = blocked;
+        return;
+      }
       this.status = await window.nicegal.backend.setExecutionProvider(executionProvider);
       await this.refreshModels();
     } catch (error) {
-      this.error = errorMessage(error);
+      this.error = switchErrorMessage(error);
     } finally {
       this.saving = false;
       this.loading = false;
     }
   }
+
+  private async stopBlockingJobs(): Promise<string | null> {
+    this.stoppingJobs = true;
+    try {
+      return await this.stopJobs();
+    } finally {
+      this.stoppingJobs = false;
+    }
+  }
+}
+
+/** The backend refuses a switch while a job runs; that happens only if one started meanwhile. */
+function switchErrorMessage(error: unknown): string {
+  return errorCode(error) === "job_busy"
+    ? "A job started before the switch. Try again."
+    : errorMessage(error);
 }

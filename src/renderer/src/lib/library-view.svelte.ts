@@ -69,7 +69,11 @@ export interface LibraryViewController {
   handleGalleryScroll(state: { scrollTop: number; layout: GalleryLayout }): void;
   handleSeek(y: number): void;
   /** Picks a folder and creates a library for it. */
-  addLibrary(): Promise<{ status: "created"; id: LibraryId } | { status: "cancelled" } | { status: "error"; message: string }>;
+  addLibrary(): Promise<
+    | { status: "created"; id: LibraryId }
+    | { status: "cancelled" }
+    | { status: "error"; message: string }
+  >;
   selectLibrary(libraryId: LibraryId): Promise<void>;
   removeLibrary(libraryId: LibraryId, purge: boolean): Promise<boolean>;
   dispose(): void;
@@ -508,7 +512,9 @@ export function createLibraryViewController(
   }
 
   async function addLibrary(): Promise<
-    { status: "created"; id: LibraryId } | { status: "cancelled" } | { status: "error"; message: string }
+    | { status: "created"; id: LibraryId }
+    | { status: "cancelled" }
+    | { status: "error"; message: string }
   > {
     try {
       const folder = await window.nicegal.native.chooseDirectory();

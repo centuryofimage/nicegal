@@ -57,8 +57,15 @@ export function formatVisualTextTerms(terms: readonly VisualTextTerm[]): string 
   return terms
     .filter((term) => term.text.trim())
     .map((term, index) => {
-      const operator = index === 0 ? (term.polarity === "less" ? "- " : "") : term.polarity === "less" ? " - " : " + ";
-      const text = /\s[+-]\s/.test(term.text) ? `"${term.text.replaceAll('"', "\\\"")}"` : term.text;
+      const operator =
+        index === 0
+          ? term.polarity === "less"
+            ? "- "
+            : ""
+          : term.polarity === "less"
+            ? " - "
+            : " + ";
+      const text = /\s[+-]\s/.test(term.text) ? `"${term.text.replaceAll('"', '\\"')}"` : term.text;
       const strength = term.strength === 1 ? "" : `${term.strength}:`;
       return `${operator}${strength}${text}`;
     })

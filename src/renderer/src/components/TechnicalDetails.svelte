@@ -21,7 +21,9 @@
 
   async function copyDetails(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(copyHeading ? `${copyHeading}\n${diagnostic}` : diagnostic);
+      await navigator.clipboard.writeText(
+        copyHeading ? `${copyHeading}\n${diagnostic}` : diagnostic,
+      );
       copyStatus = "Copied";
     } catch {
       copyStatus = "Select the details and copy them manually.";
@@ -32,7 +34,8 @@
 <details class="technical-details">
   <summary>{summary}</summary>
   <textarea readonly aria-label={summary} value={diagnostic}></textarea>
-  <button class="ui-button ui-button-compact" type="button" onclick={copyDetails}>Copy details</button
+  <button class="ui-button ui-button-compact" type="button" onclick={copyDetails}
+    >Copy details</button
   >
   <span role="status">{copyStatus}</span>
 </details>

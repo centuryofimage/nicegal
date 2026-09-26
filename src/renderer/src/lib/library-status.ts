@@ -18,7 +18,9 @@ export interface StatusText {
 
 /** Compact description of the search features enabled for one library. */
 export function searchTypesSummary(library: Pick<Library, "image" | "ocr">): string {
-  const types = [library.image ? "Image search" : "", library.ocr ? "Text recognition" : ""].filter(Boolean);
+  const types = [library.image ? "Image search" : "", library.ocr ? "Text recognition" : ""].filter(
+    Boolean,
+  );
   return types.length ? types.join(" + ") : "Search off";
 }
 
@@ -43,7 +45,8 @@ export function formatScanTime(ns: string | null): string {
  * is undefined for a folder added in an unsaved edit.
  */
 export function folderStatus(folder: LibraryFolder | undefined): StatusText {
-  if (!folder) return { text: "Added", tone: "normal", detail: "Scanned after this change is saved" };
+  if (!folder)
+    return { text: "Added", tone: "normal", detail: "Scanned after this change is saved" };
   const outcome = folder.scanOutcome ? OUTCOMES[folder.scanOutcome] : undefined;
   if (outcome) return { ...outcome, detail: folder.scanError ?? undefined };
   const scanned = formatScanTime(folder.lastScanCompletedNs);

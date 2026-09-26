@@ -1,5 +1,5 @@
-- fix library migrations in edge cases
-- clearer errors: search warnings open a dialog with the fix, search setup notices are no longer shown as errors, and fewer errors cover the whole gallery
-- speed up deletions
-- video indexing is now a per-library option in Library manager
-- changing the image model or execution provider waits until Settings closes before rescanning
+- finally settle on a good sync algorithm that ignores unmodified folders
+  - manual sync is still in settings
+- linked folders (symlinks and junctions) now act like normal folders, and folders with unreadable files no longer resync every time
+- clarify some blocking ui states, including image-only search with DINOv3
+- skip previously failed videos

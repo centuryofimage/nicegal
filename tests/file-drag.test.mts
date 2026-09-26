@@ -68,7 +68,8 @@ test("revealing a multi-selection opens only the clicked item", async () => {
   });
   const showMenu = handlers.get(channels.showFileContextMenu)!;
   await showMenu({ sender: {} }, { assetIds: ["2", "1"] });
-  const reveal = fileMenu.find((item) => item.label?.startsWith("Reveal clicked item")) ??
+  const reveal =
+    fileMenu.find((item) => item.label?.startsWith("Reveal clicked item")) ??
     fileMenu.find((item) => item.label === "Open clicked item's folder");
   assert.ok(reveal?.click);
   reveal.click();
