@@ -167,63 +167,38 @@ export class NicegalServerClient {
     };
   }
 
+  /** One mode through `POST /v1/search`, the route that carries structured filters and visual
+   * compositions. */
   async search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> {
-    if (request.imageQuery) return this.searchCompositeImage(request, signal);
-    const url = new URL("/v1/search", this.endpoint);
-    url.searchParams.set("q", request.query);
-    url.searchParams.set("type", request.type);
-    url.searchParams.set("libraryId", String(request.libraryId));
-    if (request.folder !== undefined) url.searchParams.set("folder", request.folder);
-    if (request.pathContains !== undefined)
-      url.searchParams.set("pathContains", request.pathContains);
-    url.searchParams.set("limit", String(request.limit ?? 100_000));
-    if (request.before !== undefined) url.searchParams.set("before", request.before);
-    if (request.after !== undefined) url.searchParams.set("after", request.after);
-    if (request.timeline !== undefined) url.searchParams.set("timeline", request.timeline);
-    const response = await this.request(url, { method: "GET", signal });
-    const value = (await response.json()) as SearchResponse;
-    return {
-      total: value.total,
-      results: value.results.map((result) => ({
-        assetId: String(result.assetId),
-        timestampMs: result.timestampMs,
-        snippet: result.snippet,
-        rank: result.rank,
-        distance: result.distance,
-        score: result.score,
-      })),
-    };
-  }
-
-  private async searchCompositeImage(
-    request: SearchRequest,
-    signal?: AbortSignal,
-  ): Promise<SearchResponse> {
     const response = await this.request("/v1/search", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         libraryId: request.libraryId,
         ...(request.folder === undefined ? {} : { folder: request.folder }),
-        ...(request.pathContains === undefined ? {} : { pathContains: request.pathContains }),
+        ...(request.filters === undefined ? {} : { filters: request.filters }),
         limit: request.limit ?? 100_000,
         ...(request.before === undefined ? {} : { before: request.before }),
         ...(request.after === undefined ? {} : { after: request.after }),
         ...(request.timeline === undefined ? {} : { timeline: request.timeline }),
-        queries: [{ key: "visual", type: "image", imageQuery: request.imageQuery }],
+        queries: [
+          request.imageQuery
+            ? { key: "search", type: "image", imageQuery: request.imageQuery }
+            : { key: "search", type: request.type, q: request.query },
+        ],
       }),
       signal,
     });
     const value = (await response.json()) as {
       queries?: Array<{ key?: string; total?: number; results?: SearchResponse["results"] }>;
     };
-    const visual = value.queries?.find((query) => query.key === "visual");
-    if (!visual || typeof visual.total !== "number" || !Array.isArray(visual.results)) {
-      throw new Error("nicegal-server returned an invalid visual search response");
+    const found = value.queries?.find((query) => query.key === "search");
+    if (!found || typeof found.total !== "number" || !Array.isArray(found.results)) {
+      throw new Error("nicegal-server returned an invalid search response");
     }
     return {
-      total: visual.total,
-      results: visual.results.map((result) => ({
+      total: found.total,
+      results: found.results.map((result) => ({
         assetId: String(result.assetId),
         timestampMs: result.timestampMs,
         snippet: result.snippet ?? "",

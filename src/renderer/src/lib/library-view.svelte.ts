@@ -19,7 +19,7 @@ import { isActiveJob } from "./job-state";
 import { withScope } from "./search-query";
 import { layoutOptions, settings } from "./settings.svelte";
 
-export type SettingsPage = "gallery" | "search" | "about";
+export type SettingsPage = "gallery" | "search" | "remote" | "about";
 export type ActiveDialog = "manageLibraries" | "settings" | "searchProblem" | null;
 
 export interface LibraryViewController {

@@ -23,7 +23,10 @@ import { ThumbnailReader } from "./backend/thumbnail-reader";
 import { collectDiagnostics, getAppInfo, recentBackendLog } from "./diagnostics";
 import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
+import { registerRemoteIpc } from "./remote/ipc";
+import { RemoteAccess } from "./remote/remote-access";
 import { APP_ENTRY_URL } from "./renderer-location";
+import { HIDDEN_LAUNCH_ARG, TrayController } from "./tray";
 import { startUpdates } from "./updates";
 
 registerCustomSchemes();
@@ -62,7 +65,37 @@ function broadcastBackendStatus(): void {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(IPC_CHANNELS.backend.statusChanged, backendStatus);
   }
+  remoteAccess.broadcast(IPC_CHANNELS.backend.statusChanged, backendStatus);
 }
+
+const rendererDirectory = join(__dirname, "../renderer");
+const tray = new TrayController(
+  icon,
+  () => BrowserWindow.getAllWindows()[0] ?? null,
+  () => shutdownStarted,
+);
+const remoteAccess = new RemoteAccess(
+  join(app.getPath("userData"), "remote-access.json"),
+  {
+    rendererDirectory,
+    iconPath: icon,
+    devRendererUrl: isDev ? rendererEntryUrl : null,
+    getCatalog: () => backendClient,
+    getThumbnails: () => thumbnailReader,
+  },
+  (status) => {
+    tray.setOptions(status.background);
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(IPC_CHANNELS.remote.statusChanged, status);
+    }
+  },
+  {
+    // A development build would register the development Electron binary; Linux has no API.
+    available: app.isPackaged && process.platform !== "linux",
+    get: () => app.getLoginItemSettings({ args: [HIDDEN_LAUNCH_ARG] }).openAtLogin,
+    set: (openAtLogin) => app.setLoginItemSettings({ openAtLogin, args: [HIDDEN_LAUNCH_ARG] }),
+  },
+);
 
 const backendContext = {
   status: backendStatus,
@@ -85,6 +118,7 @@ const backendContext = {
   restartFailedBackend,
 };
 registerBackendIpc(backendContext);
+registerRemoteIpc(remoteAccess, isTrustedRenderer);
 registerNativeIpc({
   isTrustedSender: isTrustedRenderer,
   get client(): NicegalServerClient | null {
@@ -157,6 +191,7 @@ function createWindow(): void {
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  tray.attach(mainWindow);
 
   void loadRenderer(mainWindow).catch((error: unknown) => {
     console.error("Failed to load the renderer", error);
@@ -169,7 +204,10 @@ async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
   });
 
   await mainWindow.loadURL(rendererEntryUrl);
-  if (!mainWindow.isDestroyed()) mainWindow.show();
+  if (mainWindow.isDestroyed()) return;
+  // Opened at sign-in: stay in the tray so paired devices can connect.
+  if (process.argv.includes(HIDDEN_LAUNCH_ARG)) tray.hide(mainWindow);
+  else mainWindow.show();
 }
 
 function installApplicationMenu(): void {
@@ -237,9 +275,7 @@ function focusMainWindow(): void {
     if (app.isReady()) createWindow();
     return;
   }
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.show();
-  mainWindow.focus();
+  tray.show();
 }
 
 /** Reported once by the exited process's own `exit` handler; a deliberate `stop()` never reaches
@@ -381,12 +417,14 @@ if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
     // Chromium needs the handlers before the first renderer navigation. Readers become available
     // after startup and can be replaced on backend restart without re-registering the protocols.
     installProtocolHandlers({
-      rendererDirectory: join(__dirname, "../renderer"),
+      rendererDirectory,
       rendererOrigins: [new URL(rendererEntryUrl).origin],
       getCatalog: () => backendClient,
       getThumbnails: () => thumbnailReader,
     });
+    tray.setOptions(remoteAccess.tray);
     createWindow();
+    void remoteAccess.start();
     updates = startUpdates(isTrustedRenderer, () => {
       restartForUpdate = true;
       app.quit();
@@ -410,6 +448,7 @@ if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
     if (shutdownStarted) return;
     shutdownStarted = true;
     updates?.stop();
+    void remoteAccess.stop();
     void shutdownBackend()
       .then(() => {
         if (restartForUpdate) updates?.installAndRestart();

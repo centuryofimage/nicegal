@@ -123,6 +123,14 @@ export interface ExternalVisualReference {
   bytesBase64: string;
 }
 
+/**
+ * A `path:` or `ext:` term. Path patterns are case-insensitive substrings of the full path; with
+ * `*` or `?` they must match the whole file name, or the whole path when they contain a separator.
+ */
+export type FileFilter =
+  | { kind: "path"; pattern: string; exclude?: boolean }
+  | { kind: "ext"; extensions: string[]; exclude?: boolean };
+
 export interface SearchRequest {
   /** IPC-only generation, increasing within this renderer's lifetime. Supply with searchLane. */
   searchSession?: number;
@@ -132,8 +140,8 @@ export interface SearchRequest {
   type: "ocrSimple" | "ocrMatch" | "ocrGlob" | "vector" | "image" | "name" | "path";
   libraryId: LibraryId;
   folder?: string;
-  /** Case-insensitive substring of the indexed full path. */
-  pathContains?: string;
+  /** Path and extension terms every result must satisfy. */
+  filters?: FileFilter[];
   limit?: number;
   before?: string;
   after?: string;
@@ -534,8 +542,17 @@ export interface NativeBridge {
   startFileDrag(token: string): Promise<void>;
 }
 
+/** A remote browser's link to the PC. The desktop window's IPC never drops, so it never fires. */
+export interface ConnectionBridge {
+  onReconnectingChanged(listener: (reconnecting: boolean) => void): () => void;
+}
+
 export interface NicegalBridge {
   updates: import("./updates").UpdateBridge;
+  remote: import("./remote").RemoteAccessBridge;
+  /** True in a browser connected over remote access rather than the desktop window. */
+  isRemote: boolean;
+  connection: ConnectionBridge;
   backend: BackendBridge;
   native: NativeBridge;
 }

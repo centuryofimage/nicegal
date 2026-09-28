@@ -66,11 +66,9 @@ test("visual search keeps the winning video timestamp for text and composite que
     async () =>
       new Response(
         JSON.stringify({
-          total: 1,
-          results: [{ assetId: 7, timestampMs: 13_000, snippet: "", rank: 1, distance: 0.1 }],
           queries: [
             {
-              key: "visual",
+              key: "search",
               total: 1,
               results: [{ assetId: 7, timestampMs: 13_000, snippet: "", rank: 1, distance: 0.1 }],
             },

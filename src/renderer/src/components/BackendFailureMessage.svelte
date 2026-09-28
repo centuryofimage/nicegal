@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
   import AppMessage from "./AppMessage.svelte";
 
   const BUG_REPORT_URL = "https://github.com/centuryofimage/nicegal/issues";
@@ -72,7 +73,13 @@
       <button class="ui-button" type="button" onclick={restartServer} disabled={restarting}>
         {restarting ? "Restarting…" : "Restart service"}
       </button>
-      <button class="ui-button" type="button" onclick={collectDiagnostics} disabled={collecting}>
+      <button
+        class="ui-button"
+        type="button"
+        onclick={collectDiagnostics}
+        title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+        disabled={collecting || isRemote()}
+      >
         {collecting ? "Collecting…" : "Collect diagnostics"}
       </button>
     </div>

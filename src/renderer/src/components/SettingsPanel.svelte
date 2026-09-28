@@ -8,8 +8,10 @@
 
   import { useApplication } from "../lib/application.svelte";
   import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
+  import { isRemote } from "../lib/platform";
   import { settings, settingsLimits, type GalleryTheme } from "../lib/settings.svelte";
   import AboutSettings from "./AboutSettings.svelte";
+  import RemoteAccessSettings from "./RemoteAccessSettings.svelte";
   import SearchModels from "./SearchModels.svelte";
 
   let {
@@ -109,6 +111,11 @@
     <button class="ui-button" aria-pressed={page === "search"} onclick={() => (page = "search")}
       >Search</button
     >
+    {#if !isRemote()}
+      <button class="ui-button" aria-pressed={page === "remote"} onclick={() => (page = "remote")}
+        >Remote access</button
+      >
+    {/if}
     <button class="ui-button" aria-pressed={page === "about"} onclick={() => (page = "about")}
       >About</button
     >
@@ -143,30 +150,32 @@
         >
       </section>
 
-      <section class="settings-group" aria-labelledby="updates-title">
-        <h2 id="updates-title">Updates</h2>
-        <label class="row">
-          <span class="setting-label"
-            >{isMac ? "Notify me about updates" : "Automatic updates"}</span
-          >
-          <input
-            type="checkbox"
-            checked={updatePreferences?.enabled ?? false}
-            disabled={!updatePreferences || updateSaving || updatePreferences.mode === "none"}
-            onchange={setAutomaticUpdates}
-          />
-        </label>
-        {#if updatePreferences?.mode === "notify"}
-          <p class="update-build-note">
-            Check once when Nicegal opens. Download updates from the release page.
-          </p>
-        {:else if updatePreferences?.mode === "none"}
-          <p class="update-build-note">This build does not check for updates.</p>
-        {/if}
-        {#if updateError}<p class="settings-error" role="alert">{updateError}</p>{/if}
-      </section>
+      {#if !isRemote()}<section class="settings-group" aria-labelledby="updates-title">
+          <h2 id="updates-title">Updates</h2>
+          <label class="row">
+            <span class="setting-label"
+              >{isMac ? "Notify me about updates" : "Automatic updates"}</span
+            >
+            <input
+              type="checkbox"
+              checked={updatePreferences?.enabled ?? false}
+              disabled={!updatePreferences || updateSaving || updatePreferences.mode === "none"}
+              onchange={setAutomaticUpdates}
+            />
+          </label>
+          {#if updatePreferences?.mode === "notify"}
+            <p class="update-build-note">
+              Check once when Nicegal opens. Download updates from the release page.
+            </p>
+          {:else if updatePreferences?.mode === "none"}
+            <p class="update-build-note">This build does not check for updates.</p>
+          {/if}
+          {#if updateError}<p class="settings-error" role="alert">{updateError}</p>{/if}
+        </section>{/if}
     {:else if page === "about"}
       <AboutSettings />
+    {:else if page === "remote"}
+      <RemoteAccessSettings />
     {:else}
       <SearchModels />
       <section class="settings-group" aria-labelledby="library-search-title">

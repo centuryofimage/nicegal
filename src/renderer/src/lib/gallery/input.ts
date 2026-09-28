@@ -5,6 +5,9 @@ import SelectionArea from "@viselect/vanilla";
 import type { SelectionModifiers } from "./selection.svelte";
 import type { PoolTile } from "./tile-pool";
 
+export const LONG_PRESS_MS = 500;
+export const LONG_PRESS_SLOP_PX = 10;
+
 interface GalleryInputCallbacks {
   onopen(index: number): void;
   onselect(index: number, modifiers: SelectionModifiers): void;
@@ -22,6 +25,7 @@ export function createGalleryInput(callbacks: GalleryInputCallbacks): {
   activate(tile: PoolTile, event: MouseEvent): void;
   onFrameKeydown(event: KeyboardEvent, tile: PoolTile): void;
   openFileMenu(event: MouseEvent, tile: PoolTile): void;
+  onFramePointerDown(event: PointerEvent, tile: PoolTile): void;
   startFileDrag(event: DragEvent, tile: PoolTile): void;
   onViewportPointerDown(event: PointerEvent): void;
   onViewportPointerUp(event: PointerEvent): void;
@@ -60,6 +64,37 @@ export function createGalleryInput(callbacks: GalleryInputCallbacks): {
   function openFileMenu(event: MouseEvent, tile: PoolTile): void {
     event.preventDefault();
     callbacks.onfilemenu(tile.index);
+  }
+
+  /** iOS Safari sends no contextmenu for a long press, so touch presses time their own. Android
+   * sends both, which opens the same menu twice with the same items. */
+  function onFramePointerDown(event: PointerEvent, tile: PoolTile): void {
+    if (event.pointerType !== "touch" || !event.isPrimary) return;
+    // Pooled tiles are reused while scrolling; keep the item that was pressed.
+    const index = tile.index;
+    const { pointerId, clientX: x, clientY: y } = event;
+    const stop = (): void => {
+      clearTimeout(timer);
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", stop, true);
+      window.removeEventListener("pointercancel", stop, true);
+    };
+    const move = (moved: PointerEvent): void => {
+      if (
+        moved.pointerId === pointerId &&
+        Math.abs(moved.clientX - x) + Math.abs(moved.clientY - y) > LONG_PRESS_SLOP_PX
+      )
+        stop();
+    };
+    const timer = setTimeout(() => {
+      stop();
+      // The lifted finger's click must not also open the viewer.
+      suppressActivation = true;
+      callbacks.onfilemenu(index);
+    }, LONG_PRESS_MS);
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", stop, true);
+    window.addEventListener("pointercancel", stop, true);
   }
 
   /** Press position of a potential background click; consumed on the matching pointerup. A tile
@@ -211,6 +246,7 @@ export function createGalleryInput(callbacks: GalleryInputCallbacks): {
     activate,
     onFrameKeydown,
     openFileMenu,
+    onFramePointerDown,
     startFileDrag,
     onViewportPointerDown,
     onViewportPointerUp,

@@ -85,7 +85,7 @@ async function handleAppRequest(request: Request, rendererDirectory: string): Pr
   }
 }
 
-function handleThumbnailRequest(
+export function handleThumbnailRequest(
   request: Request,
   getThumbnails: () => ThumbnailReader | null,
 ): Response {
@@ -148,7 +148,7 @@ function handleThumbnailRequest(
  * `api://server/v1/...` forwards GET and POST to the same nicegal-server path with the bearer
  * token, passing the status, content type and body through unchanged.
  */
-async function handleApiRequest(
+export async function handleApiRequest(
   request: Request,
   getClient: () => NicegalServerClient | null,
   rendererOrigins: readonly string[],
@@ -196,7 +196,7 @@ async function handleApiRequest(
   }
 }
 
-async function resolveOriginalPath(
+export async function resolveOriginalPath(
   requestUrl: string,
   getCatalog: () => NicegalServerClient | null,
 ): Promise<string | null> {

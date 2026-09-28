@@ -151,6 +151,15 @@
   /* The search row is its own, roomier toolbar. Its field, text buttons, and icon controls use
      this one metric so chrome stays aligned as a theme changes its toolbar density. */
   --toolbar-control-height: 32px;
+  /* Status bar indicator light while a paired device has the gallery open: a lit LED, bright
+     core and a faint halo. */
+  --status-connected-highlight: #d4ffc8;
+  --status-connected: #3cc93c;
+  --status-connected-edge: #238a23;
+  --status-connected-glow: rgba(60, 201, 60, 0.5);
+  /* Remote browsers' touch sheets. Rows follow touch-target sizing, not Win32 density. */
+  --sheet-max-width: 480px;
+  --sheet-row-height: 44px;
   /* Status bar image size slider: a thin filled rail and a small round thumb. */
   --size-slider-width: 110px;
   --size-slider-track: 2px;
@@ -179,6 +188,7 @@
 
   /* Type — Segoe UI: this is a Windows-native app, not a cross-platform web app. */
   --font-ui: "Segoe UI", "Segoe UI Fallback", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   --font-size-sm: 11px;
   --font-size-md: 12px;
   --font-weight-normal: 400;

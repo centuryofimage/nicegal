@@ -1,9 +1,11 @@
 <script lang="ts">
+  import Ban from "@lucide/svelte/icons/ban";
   import CalendarDays from "@lucide/svelte/icons/calendar-days";
   import Check from "@lucide/svelte/icons/check";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
   import FileText from "@lucide/svelte/icons/file-text";
+  import FileType from "@lucide/svelte/icons/file-type";
   import FolderSearch from "@lucide/svelte/icons/folder-search";
   import Images from "@lucide/svelte/icons/images";
   import Info from "@lucide/svelte/icons/info";
@@ -112,6 +114,7 @@
       menuLabel: "File name",
       prefix: "name:",
       summary: "File names only",
+      syntax: ["IMG_* (starts with)", "*.png (ends with)"],
       icon: FileText,
     },
     {
@@ -142,6 +145,8 @@
   let exampleDate = $state(localIsoDate(new Date()));
   const filterExamples = $derived([
     { label: "Path", token: 'path:"Trips"', prefix: 'path:"Trips"', icon: FolderSearch },
+    { label: "Extension", token: "ext:jpg,png", prefix: "ext:jpg,png", icon: FileType },
+    { label: "Exclude", token: "!ext:gif", prefix: "!ext:gif", icon: Ban },
     {
       label: "Before",
       token: `before:${exampleDate}`,
@@ -383,6 +388,7 @@
           token.kind === "date" ||
           token.kind === "media" ||
           token.kind === "path" ||
+          token.kind === "ext" ||
           token.kind === "folder",
       )
       .map((token) => token.raw)
@@ -473,7 +479,7 @@
       <!-- The hint rides a data attribute and a ::after rather than a trailing element: the
            backdrop is `white-space: pre`, so any markup added here prints its own indentation. -->
       <div class="input-backdrop" bind:this={backdropEl} data-hint={scopeHint} aria-hidden="true">
-        {#each inputTokens as token (token)}{#if token.kind === "scope" || token.kind === "date" || token.kind === "media" || token.kind === "folder" || token.kind === "path"}<span
+        {#each inputTokens as token (token)}{#if token.kind === "scope" || token.kind === "date" || token.kind === "media" || token.kind === "folder" || token.kind === "path" || token.kind === "ext"}<span
               class:token-invalid={token.kind === "date" && !token.valid}
               class="token">{token.raw}</span
             >{:else}{token.raw}{/if}{/each}

@@ -25,7 +25,7 @@ test("media and path filters compose with scopes and dates", () => {
   assert.equal(parsed.scope, "name");
   assert.equal(parsed.media, "video");
   assert.equal(parsed.body.trim(), "cat");
-  assert.equal(parsed.path, "trips");
+  assert.deepEqual(parsed.filters, [{ kind: "path", pattern: "trips" }]);
   assert.equal(withScope("cat type:video", "ocr"), "ocr: cat type:video");
   assert.equal(withMediaFilter("name: cat type:video", "image"), "name: cat type:image");
   assert.equal(withMediaFilter("type:video", null), "");
@@ -34,6 +34,17 @@ test("media and path filters compose with scopes and dates", () => {
   assert.equal(afterMedia.media, "video");
   assert.equal(afterMedia.body.trim().replace(/\s+/g, " "), "red car");
   assert.equal(withScope("type:video like: red car", "ocr"), "ocr: type:video red car");
+});
+
+test("path and extension filters accept wildcards, lists, and exclusion", () => {
+  const parsed = parseQuery('name: IMG_* ext:.JPG,png !path:"Old Trips" !ext:gif ext: path:');
+  assert.equal(parsed.body.trim().replace(/\s+/g, " "), "IMG_*");
+  assert.deepEqual(parsed.filters, [
+    { kind: "ext", extensions: ["jpg", "png"] },
+    { kind: "path", pattern: "Old Trips", exclude: true },
+    { kind: "ext", extensions: ["gif"], exclude: true },
+  ]);
+  assert.equal(withScope("ext:jpg !path:x cat", "ocr"), "ocr: ext:jpg !path:x cat");
 });
 
 test("folder focus preserves search terms and filters catalog paths at a separator", () => {
@@ -136,7 +147,8 @@ test("quoted path scope uses backend search without text model setup", async () 
   await pause();
   assert.equal(requests.length, 1);
   assert.equal(requests[0].type, "path");
-  assert.equal(requests[0].query, "C:\\Photo Trips\\cat.jpg");
+  assert.equal(requests[0].query, "");
+  assert.deepEqual(requests[0].filters, [{ kind: "path", pattern: "C:\\Photo Trips\\cat.jpg" }]);
   assert.equal(search.textSetupRequired, false);
   search.dispose();
 });
@@ -161,7 +173,7 @@ test("path filter stays separate from visual description", async () => {
   await pause();
   assert.equal(requests[0]?.type, "image");
   assert.equal(requests[0]?.query, "red car");
-  assert.equal(requests[0]?.pathContains, "Photo Trips");
+  assert.deepEqual(requests[0]?.filters, [{ kind: "path", pattern: "Photo Trips" }]);
   search.dispose();
 });
 

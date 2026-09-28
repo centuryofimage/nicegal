@@ -12,15 +12,19 @@
   import GalleryToolbar from "./components/GalleryToolbar.svelte";
   import LibrariesPane from "./components/LibrariesPane.svelte";
   import MetadataPanel from "./components/MetadataPanel.svelte";
+  import ReconnectingStatus from "./components/ReconnectingStatus.svelte";
+  import RemoteIndicator from "./components/RemoteIndicator.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import TimelineScrollbar from "./components/TimelineScrollbar.svelte";
   import VirtualGallery from "./components/VirtualGallery.svelte";
   import { useApplication } from "./lib/application.svelte";
   import { createGalleryShortcutHandler } from "./lib/gallery-shortcuts";
+  import { GalleryPinchZoom } from "./lib/gallery/pinch-zoom.svelte";
   import { originalUrlOf } from "./lib/gallery/types";
   import { createGalleryWheelZoom } from "./lib/gallery/wheel-zoom";
   import { offlineFolders } from "./lib/library-status";
   import { createLibraryViewController } from "./lib/library-view.svelte";
+  import { isRemote } from "./lib/platform";
   import { galleryLayoutState, settings } from "./lib/settings.svelte";
 
   const application = useApplication();
@@ -77,6 +81,12 @@
   const galleryWheelZoom = createGalleryWheelZoom(() =>
     Boolean(view.detailItem || view.activeDialog),
   );
+  const pinchZoom = new GalleryPinchZoom(() => Boolean(view.detailItem || view.activeDialog));
+  const galleryLayoutOptions = $derived(
+    pinchZoom.override
+      ? { ...view.galleryLayoutOptions, ...pinchZoom.override }
+      : view.galleryLayoutOptions,
+  );
   const handleKeydown = createGalleryShortcutHandler({
     focusSearch: () => toolbarControls?.focusSearch(),
     toggleInfo,
@@ -119,7 +129,12 @@
       />
     {/if}
     <div class="content-row" {@attach observeGallery}>
-      <div class="gallery-workspace" inert={Boolean(view.detailItem)} {@attach galleryWheelZoom}>
+      <div
+        class="gallery-workspace"
+        inert={Boolean(view.detailItem)}
+        {@attach galleryWheelZoom}
+        {@attach pinchZoom.attach}
+      >
         <VirtualGallery
           bind:this={gallery}
           items={view.filteredItems}
@@ -127,7 +142,7 @@
           ontogglesection={view.toggleSection}
           viewKey={ocrSearch.sortMode}
           oninteractionchange={(active) => ocrSearch.setInteracting(active)}
-          layoutOptions={view.galleryLayoutOptions}
+          layoutOptions={galleryLayoutOptions}
           imagePoolSize={galleryLayoutState.imagePoolSize}
           playAnimatedPreviews={$settings.playAnimatedPreviews}
           previewSuspended={Boolean(view.detailItem)}
@@ -197,10 +212,12 @@
           placement="overlay"
         />{:else if catalog.librariesLoaded && catalog.selectedId === null}<AppMessage
           title="No library yet"
-          message="Choose a folder of photos or videos to get started."
+          message={isRemote()
+            ? "Add a folder of photos or videos on the PC running Nicegal."
+            : "Choose a folder of photos or videos to get started."}
           placement="overlay"
           tone="neutral"
-          actionLabel="Choose media folder…"
+          actionLabel={isRemote() ? undefined : "Choose media folder…"}
           onaction={view.addLibrary}
         />{:else if !catalog.loading && catalog.items.length === 0 && catalog.selectedLibrary}<AppMessage
           title="No photos or videos"
@@ -288,6 +305,7 @@
     <PanelLeft size={13} aria-hidden="true" /><span>Libraries</span>
   </button>
   <div class="status-details">
+    {#if isRemote()}<ReconnectingStatus />{/if}
     {#if !view.detailItem}
       <StatusBar
         libraryName={view.libraryName}
@@ -328,6 +346,7 @@
       {/if}
     {/if}
   </div>
+  {#if !isRemote()}<RemoteIndicator onopen={() => view.openSettingsDialog("remote")} />{/if}
   {#if !view.detailItem}<GallerySizeSlider />{/if}
   <button
     bind:this={infoButton}
@@ -379,6 +398,9 @@
     display: flex;
     min-width: 0;
     flex: 1;
+    /* Pinching resizes tiles (GalleryPinchZoom). The browser must never treat it as page
+       zoom, even when the fingers change direction mid-gesture; scrolling stays native. */
+    touch-action: pan-x pan-y;
   }
   .content-row :global(.gallery-viewport) {
     flex: 1;

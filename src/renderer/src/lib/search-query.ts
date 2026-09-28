@@ -1,3 +1,5 @@
+import type { FileFilter } from "../../../shared/backend";
+
 /**
  * What a query matches against, named for the target rather than the engine behind it — `meaning`
  * and the visual `like` scope are both "semantic", so that word cannot distinguish them.
@@ -34,7 +36,8 @@ export type DateFilter =
 
 export type QueryToken =
   | { kind: "scope"; scope: Exclude<SearchScope, "all">; raw: string }
-  | { kind: "path"; value: string; raw: string }
+  | { kind: "path"; value: string; exclude: boolean; raw: string }
+  | { kind: "ext"; extensions: string[]; exclude: boolean; raw: string }
   | { kind: "folder"; path: string; raw: string }
   | { kind: "media"; media: MediaFilter; raw: string }
   | DateFilter
@@ -42,7 +45,8 @@ export type QueryToken =
 
 export type ParsedQuery = {
   scope: SearchScope;
-  path: string | null;
+  /** `path:` and `ext:` terms, each negated by a leading `!`. Empty terms are left out. */
+  filters: FileFilter[];
   folder: string | null;
   body: string;
   dates: DateFilter[];
@@ -62,7 +66,7 @@ export function parseQuery(raw: string): ParsedQuery {
   const parts = raw.match(/\s+|(?:[^\s"]|"[^"]*")+/g) ?? [];
   const tokens: QueryToken[] = [];
   let scope: SearchScope = "all";
-  let path: string | null = null;
+  const filters: FileFilter[] = [];
   let folder: string | null = null;
   const dates: DateFilter[] = [];
   let media: MediaFilter | null = null;
@@ -78,7 +82,8 @@ export function parseQuery(raw: string): ParsedQuery {
     const scopeMatch = scope === "all" ? part.match(scopePattern) : null;
     const temporalMatch = part.match(temporalPattern);
     const folderMatch = /^in:(?:"([^"]*)"|([^\s"]+))$/i.exec(part);
-    const pathMatch = /^path:(?:"([^"]*)"|([^\s"]*))$/i.exec(part);
+    const pathMatch = /^(!?)path:(?:"([^"]*)"|([^\s"]*))$/i.exec(part);
+    const extMatch = /^(!?)ext:([^\s"]*)$/i.exec(part);
 
     if (folderMatch) {
       folder = folderMatch[1] ?? folderMatch[2];
@@ -87,8 +92,22 @@ export function parseQuery(raw: string): ParsedQuery {
     }
 
     if (pathMatch) {
-      path = pathMatch[1] ?? pathMatch[2];
-      tokens.push({ kind: "path", value: path, raw: part });
+      const value = pathMatch[2] ?? pathMatch[3];
+      const exclude = pathMatch[1] === "!";
+      if (value) filters.push({ kind: "path", pattern: value, ...(exclude ? { exclude } : {}) });
+      tokens.push({ kind: "path", value, exclude, raw: part });
+      continue;
+    }
+
+    if (extMatch) {
+      const extensions = extMatch[2]
+        .split(",")
+        .map((extension) => extension.replace(/^\./, "").toLowerCase())
+        .filter(Boolean);
+      const exclude = extMatch[1] === "!";
+      if (extensions.length)
+        filters.push({ kind: "ext", extensions, ...(exclude ? { exclude } : {}) });
+      tokens.push({ kind: "ext", extensions, exclude, raw: part });
       continue;
     }
 
@@ -127,7 +146,7 @@ export function parseQuery(raw: string): ParsedQuery {
 
   return {
     scope,
-    path,
+    filters,
     folder,
     body,
     dates,

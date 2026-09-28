@@ -3,6 +3,7 @@
   import type { LibraryViewController } from "../lib/library-view.svelte";
 
   import { useApplication } from "../lib/application.svelte";
+  import FileActionSheet from "./FileActionSheet.svelte";
   import GettingStarted from "./GettingStarted.svelte";
   import LibrariesManager from "./LibrariesManager.svelte";
   import Modal from "./Modal.svelte";
@@ -22,7 +23,27 @@
   const { runtime, catalog } = application.services;
   const commands = application.commands;
   let manager = $state.raw<LibrariesManager>();
+  const sheetItems = $derived.by(() => {
+    const ids = application.fileSheet;
+    if (!ids) return [];
+    const byId = new Map(catalog.items.map((item) => [item.id, item]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  });
+
+  function visualSearchFromSheet(replace: boolean): void {
+    commands.addToVisualSearch(application.fileSheet ?? [], replace);
+    // The results are in the gallery, so leave the viewer to show them.
+    if (replace) view.closeDetail();
+  }
 </script>
+
+{#if sheetItems.length}
+  <FileActionSheet
+    items={sheetItems}
+    onvisualsearch={visualSearchFromSheet}
+    onclose={commands.closeFileSheet}
+  />
+{/if}
 
 {#if application.welcomeVisible}
   <Modal

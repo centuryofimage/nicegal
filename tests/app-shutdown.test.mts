@@ -92,6 +92,11 @@ for (const scenario of [
     `,
       "./backend/thumbnail-reader": "export class ThumbnailReader { close() {} }",
       "./native/ipc": "export function registerNativeIpc() {}",
+      "./remote/ipc": "export function registerRemoteIpc() {}",
+      "./remote/remote-access":
+        "export class RemoteAccess { tray = { minimizeToTray: false, closeToTray: false }; async start() {} async stop() {} broadcast() {} }",
+      "./tray":
+        "export const HIDDEN_LAUNCH_ARG = '--hidden'; export class TrayController { attach() {} setOptions() {} hide() {} show() {} }",
       "./updates": `export function startUpdates(_trusted, requestRestart) { const s = globalThis.__shutdownMocks.state; s.requestRestart = requestRestart; return {
       stop() { s.updateStops++; }, deferInstallation() { s.deferrals++; },
       installAndRestart() { s.installs++; return true; }

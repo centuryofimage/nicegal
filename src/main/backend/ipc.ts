@@ -1,4 +1,3 @@
-import { type WebContents } from "electron";
 import { isAbsolute } from "node:path";
 
 import type {
@@ -21,7 +20,7 @@ import type {
 import type { NicegalServerClient } from "./nicegal-server-client";
 
 import { IPC_CHANNELS } from "../../shared/ipc-channels";
-import { handleTrustedIpc, type IpcSenderValidator } from "../ipc";
+import { handleRemotableIpc, type BridgeClient, type IpcSenderValidator } from "../ipc";
 
 interface BackendIpcContext {
   status: BackendStatus;
@@ -32,7 +31,7 @@ interface BackendIpcContext {
 }
 
 interface JobSubscription {
-  listeners: Set<WebContents>;
+  listeners: Set<BridgeClient>;
   abort: AbortController;
 }
 
@@ -51,10 +50,10 @@ function abortSearches(searches: SenderSearches | undefined): void {
 
 export function registerBackendIpc(context: BackendIpcContext): void {
   const subscriptions = new Map<string, JobSubscription>();
-  const searchRequests = new Map<number, SenderSearches>();
+  const searchRequests = new Map<string, SenderSearches>();
   // Senders that already have a one-shot "destroyed" cleanup hook registered — see
   // `ensureSenderTracked`. Prevents accumulating one listener per subscribeJob/search call.
-  const trackedSenders = new Set<WebContents>();
+  const trackedSenders = new Set<BridgeClient>();
 
   const requireBackend = (): NicegalServerClient => {
     if (!context.client) {
@@ -63,7 +62,7 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     return context.client;
   };
 
-  const removeSubscription = (jobId: string, sender: WebContents): void => {
+  const removeSubscription = (jobId: string, sender: BridgeClient): void => {
     const subscription = subscriptions.get(jobId);
     if (!subscription) return;
     subscription.listeners.delete(sender);
@@ -73,25 +72,25 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     }
   };
 
-  const removeSender = (sender: WebContents): void => {
+  const removeSender = (sender: BridgeClient): void => {
     for (const [jobId] of subscriptions) removeSubscription(jobId, sender);
     abortSearches(searchRequests.get(sender.id));
     searchRequests.delete(sender.id);
   };
 
-  // Registers the destroyed-cleanup hook for `sender` exactly once, no matter how many times
+  // Registers the closed-cleanup hook for `sender` exactly once, no matter how many times
   // (or from which handler — search, subscribeJob, ...) it is called for that sender.
-  const ensureSenderTracked = (sender: WebContents): void => {
+  const ensureSenderTracked = (sender: BridgeClient): void => {
     if (trackedSenders.has(sender)) return;
     trackedSenders.add(sender);
-    sender.once("destroyed", () => {
+    sender.onceClosed(() => {
       trackedSenders.delete(sender);
       removeSender(sender);
     });
   };
 
-  handleTrustedIpc(IPC_CHANNELS.backend.status, context.isTrustedSender, () => context.status);
-  handleTrustedIpc(IPC_CHANNELS.backend.restartServer, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.status, context.isTrustedSender, () => context.status);
+  handleRemotableIpc(IPC_CHANNELS.backend.restartServer, context.isTrustedSender, () =>
     context.restartFailedBackend(),
   );
   let changingRuntime = false;
@@ -110,64 +109,64 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       changingRuntime = false;
     }
   };
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.setImageModel,
     context.isTrustedSender,
-    async (_event, model: unknown) => {
+    async (_client, model: unknown) => {
       if (typeof model !== "string" || model.length > 200) throw new Error("Invalid image model");
       return changeRuntime((client) => client.setImageModel(model));
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.getRuntimeStatus, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.getRuntimeStatus, context.isTrustedSender, () =>
     requireBackend().getRuntimeStatus(),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.setExecutionProvider,
     context.isTrustedSender,
-    (_event, value: unknown) => {
+    (_client, value: unknown) => {
       const provider = validateExecutionProvider(value);
       return changeRuntime((client) => client.setExecutionProvider(provider));
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.listLibraries, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.listLibraries, context.isTrustedSender, () =>
     requireBackend().listLibraries(),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.createLibrary,
     context.isTrustedSender,
-    (_event, value: unknown) => requireBackend().createLibrary(validateCreateLibrary(value)),
+    (_client, value: unknown) => requireBackend().createLibrary(validateCreateLibrary(value)),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.updateLibrary,
     context.isTrustedSender,
-    (_event, libraryId: unknown, definition: unknown) =>
+    (_client, libraryId: unknown, definition: unknown) =>
       requireBackend().updateLibrary(
         validateLibraryId(libraryId),
         validateLibraryDefinition(definition),
       ),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.deleteLibrary,
     context.isTrustedSender,
-    (_event, libraryId: unknown) => requireBackend().deleteLibrary(validateLibraryId(libraryId)),
+    (_client, libraryId: unknown) => requireBackend().deleteLibrary(validateLibraryId(libraryId)),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.listAssets,
     context.isTrustedSender,
-    (_event, value: unknown) => {
+    (_client, value: unknown) => {
       const { libraryId, timeline } = validateListAssetsRequest(value);
       return requireBackend().listAssets(libraryId, timeline);
     },
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.listFolders,
     context.isTrustedSender,
-    (_event, value: unknown) => requireBackend().listFolders(validateLibraryId(value)),
+    (_client, value: unknown) => requireBackend().listFolders(validateLibraryId(value)),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.assetMetadata,
     context.isTrustedSender,
-    (_event, value: unknown) => {
+    (_client, value: unknown) => {
       if (
         typeof value !== "string" ||
         !/^[1-9]\d*$/.test(value) ||
@@ -178,97 +177,101 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       return requireBackend().getAssetMetadata(value);
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.catalogRevision, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.catalogRevision, context.isTrustedSender, () =>
     requireBackend().getRevision(),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.countAssets,
     context.isTrustedSender,
-    (_event, value: unknown) => requireBackend().countAssets(validateLibraryId(value)),
+    (_client, value: unknown) => requireBackend().countAssets(validateLibraryId(value)),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.getImageEmbeddingCoverage,
     context.isTrustedSender,
-    (_event, value: unknown) => {
+    (_client, value: unknown) => {
       return requireBackend().getImageEmbeddingCoverage(validateLibraryId(value));
     },
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.getTextEmbeddingCoverage,
     context.isTrustedSender,
-    (_event, value: unknown) => {
+    (_client, value: unknown) => {
       return requireBackend().getTextEmbeddingCoverage(validateLibraryId(value));
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.getOcrModels, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.getOcrModels, context.isTrustedSender, () =>
     requireBackend().getOcrModels(),
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.getSearchModels, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.getSearchModels, context.isTrustedSender, () =>
     requireBackend().getSearchModels(),
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.loadCachedModel,
     context.isTrustedSender,
-    (_event, model: unknown) => {
+    (_client, model: unknown) => {
       if (model !== "clipText") throw new TypeError("Invalid cached model");
       return requireBackend().loadCachedModel(model);
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.search, context.isTrustedSender, async (event, value) => {
-    const request = validateSearchRequest(value);
-    ensureSenderTracked(event.sender);
-    let searches = searchRequests.get(event.sender.id);
-    if (!searches) {
-      searches = { session: -1, closed: true, lanes: new Map() };
-      searchRequests.set(event.sender.id, searches);
-    }
-    const { searchSession, searchLane, ...backendRequest } = request;
-    if (searchSession === undefined) {
-      abortSearches(searches);
-    } else {
-      if (
-        searchSession < searches.session ||
-        (searchSession === searches.session && searches.closed)
-      ) {
-        throw new DOMException("Search session was superseded", "AbortError");
+  handleRemotableIpc(
+    IPC_CHANNELS.backend.search,
+    context.isTrustedSender,
+    async (client, value) => {
+      const request = validateSearchRequest(value);
+      ensureSenderTracked(client);
+      let searches = searchRequests.get(client.id);
+      if (!searches) {
+        searches = { session: -1, closed: true, lanes: new Map() };
+        searchRequests.set(client.id, searches);
       }
-      if (searchSession > searches.session) {
+      const { searchSession, searchLane, ...backendRequest } = request;
+      if (searchSession === undefined) {
         abortSearches(searches);
-        searches.session = searchSession;
-        searches.closed = false;
+      } else {
+        if (
+          searchSession < searches.session ||
+          (searchSession === searches.session && searches.closed)
+        ) {
+          throw new DOMException("Search session was superseded", "AbortError");
+        }
+        if (searchSession > searches.session) {
+          abortSearches(searches);
+          searches.session = searchSession;
+          searches.closed = false;
+        }
       }
-    }
-    const lane = searchLane ?? "legacy";
-    searches.lanes.get(lane)?.abort();
-    const abort = new AbortController();
-    searches.lanes.set(lane, abort);
-    try {
-      const response = await requireBackend().search(backendRequest, abort.signal);
-      abort.signal.throwIfAborted();
-      return response;
-    } finally {
-      if (searches.lanes.get(lane) === abort) searches.lanes.delete(lane);
-    }
-  });
-  handleTrustedIpc(IPC_CHANNELS.backend.cancelSearch, context.isTrustedSender, (event) => {
-    abortSearches(searchRequests.get(event.sender.id));
+      const lane = searchLane ?? "legacy";
+      searches.lanes.get(lane)?.abort();
+      const abort = new AbortController();
+      searches.lanes.set(lane, abort);
+      try {
+        const response = await requireBackend().search(backendRequest, abort.signal);
+        abort.signal.throwIfAborted();
+        return response;
+      } finally {
+        if (searches.lanes.get(lane) === abort) searches.lanes.delete(lane);
+      }
+    },
+  );
+  handleRemotableIpc(IPC_CHANNELS.backend.cancelSearch, context.isTrustedSender, (client) => {
+    abortSearches(searchRequests.get(client.id));
   });
   // Deliberately not cancelled by a later call, unlike search: an in-flight ensure represents
   // real generation work already committed toward SQLite, so aborting it would only throw away
   // completed work and force a retry. The renderer's own flush loop already serializes its calls;
   // see the "flushing" guard in VirtualGallery.svelte.
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.ensureThumbnails,
     context.isTrustedSender,
-    async (_event, value) => {
+    async (_client, value) => {
       const request = validateEnsureThumbnailsRequest(value);
       return requireBackend().ensureThumbnails(request);
     },
   );
-  handleTrustedIpc(
+  handleRemotableIpc(
     IPC_CHANNELS.backend.startJob,
     context.isTrustedSender,
-    async (_event, value) => {
+    async (_client, value) => {
       if (changingRuntime) throw new Error("Search settings change already in progress");
       startingJobs += 1;
       try {
@@ -278,63 +281,71 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       }
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.listJobs, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.backend.listJobs, context.isTrustedSender, () =>
     requireBackend().listJobs(),
   );
-  handleTrustedIpc(IPC_CHANNELS.backend.cancelJob, context.isTrustedSender, (_event, value) => {
+  handleRemotableIpc(IPC_CHANNELS.backend.cancelJob, context.isTrustedSender, (_client, value) => {
     return requireBackend().cancelJob(validateJobId(value));
   });
-  handleTrustedIpc(IPC_CHANNELS.backend.subscribeJob, context.isTrustedSender, (event, value) => {
-    const jobId = validateJobId(value);
-    const client = requireBackend();
-    let subscription = subscriptions.get(jobId);
-    if (!subscription) {
-      // Captured by name in the closures below (instead of re-reading the mutable outer
-      // `subscription` binding) so each invocation's watch loop only ever acts on — and only
-      // ever tears down — the exact subscription object it created. Without this, an aborted
-      // watch whose promise settles late can delete a *newer* subscription that has since taken
-      // its place at the same jobId key, orphaning the new watch's snapshots (see finding notes).
-      const created: JobSubscription = {
-        listeners: new Set<WebContents>(),
-        abort: new AbortController(),
-      };
-      subscription = created;
-      subscriptions.set(jobId, created);
-      void client
-        .watchJob(
-          jobId,
-          (snapshot: JobSnapshot) => {
-            if (subscriptions.get(jobId) !== created) return;
-            for (const listener of created.listeners) {
-              if (!listener.isDestroyed()) {
-                listener.send(IPC_CHANNELS.backend.jobSnapshot, { jobId, snapshot });
+  handleRemotableIpc(
+    IPC_CHANNELS.backend.subscribeJob,
+    context.isTrustedSender,
+    (client, value) => {
+      const jobId = validateJobId(value);
+      const backend = requireBackend();
+      let subscription = subscriptions.get(jobId);
+      if (!subscription) {
+        // Captured by name in the closures below (instead of re-reading the mutable outer
+        // `subscription` binding) so each invocation's watch loop only ever acts on — and only
+        // ever tears down — the exact subscription object it created. Without this, an aborted
+        // watch whose promise settles late can delete a *newer* subscription that has since taken
+        // its place at the same jobId key, orphaning the new watch's snapshots (see finding notes).
+        const created: JobSubscription = {
+          listeners: new Set<BridgeClient>(),
+          abort: new AbortController(),
+        };
+        subscription = created;
+        subscriptions.set(jobId, created);
+        void backend
+          .watchJob(
+            jobId,
+            (snapshot: JobSnapshot) => {
+              if (subscriptions.get(jobId) !== created) return;
+              for (const listener of created.listeners) {
+                if (!listener.isClosed()) {
+                  listener.send(IPC_CHANNELS.backend.jobSnapshot, { jobId, snapshot });
+                }
               }
+            },
+            created.abort.signal,
+            (error) => {
+              if (subscriptions.get(jobId) !== created) return;
+              for (const listener of created.listeners) {
+                if (!listener.isClosed())
+                  listener.send(IPC_CHANNELS.backend.jobConnection, { jobId, error });
+              }
+            },
+          )
+          .catch((error: unknown) => {
+            if (!created.abort.signal.aborted) {
+              console.error(`Job ${jobId} subscription failed`, error);
             }
-          },
-          created.abort.signal,
-          (error) => {
-            if (subscriptions.get(jobId) !== created) return;
-            for (const listener of created.listeners) {
-              if (!listener.isDestroyed())
-                listener.send(IPC_CHANNELS.backend.jobConnection, { jobId, error });
-            }
-          },
-        )
-        .catch((error: unknown) => {
-          if (!created.abort.signal.aborted) {
-            console.error(`Job ${jobId} subscription failed`, error);
-          }
-        })
-        .finally(() => {
-          if (subscriptions.get(jobId) === created) subscriptions.delete(jobId);
-        });
-    }
-    subscription.listeners.add(event.sender);
-    ensureSenderTracked(event.sender);
-  });
-  handleTrustedIpc(IPC_CHANNELS.backend.unsubscribeJob, context.isTrustedSender, (event, value) => {
-    removeSubscription(validateJobId(value), event.sender);
-  });
+          })
+          .finally(() => {
+            if (subscriptions.get(jobId) === created) subscriptions.delete(jobId);
+          });
+      }
+      subscription.listeners.add(client);
+      ensureSenderTracked(client);
+    },
+  );
+  handleRemotableIpc(
+    IPC_CHANNELS.backend.unsubscribeJob,
+    context.isTrustedSender,
+    (client, value) => {
+      removeSubscription(validateJobId(value), client);
+    },
+  );
 }
 
 function validateTimeline(value: unknown): Timeline {
@@ -459,8 +470,7 @@ function validateSearchRequest(value: unknown): SearchRequest {
     request.libraryId < 1 ||
     (request.folder !== undefined &&
       (typeof request.folder !== "string" || request.folder.length > 4096)) ||
-    (request.pathContains !== undefined &&
-      (typeof request.pathContains !== "string" || request.pathContains.length > 4096)) ||
+    (request.filters !== undefined && !validateFileFilters(request.filters)) ||
     (request.limit !== undefined &&
       (!Number.isInteger(request.limit) || request.limit < 1 || request.limit > 250_000))
   ) {
@@ -472,10 +482,31 @@ function validateSearchRequest(value: unknown): SearchRequest {
   if (request.imageQuery !== undefined && request.type !== "image") {
     throw new TypeError("Image components require image search");
   }
-  if (request.imageQuery === undefined && !request.query.trim()) {
+  // A file search with no text lists what its filters admit.
+  const fileSearch = request.type === "name" || request.type === "path";
+  if (request.imageQuery === undefined && !request.query.trim() && !fileSearch) {
     throw new TypeError("Search query is required");
   }
   return request as SearchRequest;
+}
+
+function validateFileFilters(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > 32) return false;
+  return value.every(
+    (filter) =>
+      isRecord(filter) &&
+      (filter.exclude === undefined || typeof filter.exclude === "boolean") &&
+      ((filter.kind === "path" &&
+        typeof filter.pattern === "string" &&
+        filter.pattern.length <= 4096) ||
+        (filter.kind === "ext" &&
+          Array.isArray(filter.extensions) &&
+          filter.extensions.length >= 1 &&
+          filter.extensions.length <= 32 &&
+          filter.extensions.every(
+            (extension) => typeof extension === "string" && extension.length <= 255,
+          ))),
+  );
 }
 
 function validateImageQuery(value: unknown): boolean {

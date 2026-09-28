@@ -3,6 +3,8 @@ import { EventEmitter } from "node:events";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
+/** A desktop-window IPC event; handlers see it as a stable bridge client. */
+const windowEvent = { sender: Object.assign(new EventEmitter(), { id: 99 }) };
 const handlers = new Map<string, (event: unknown, value?: unknown) => Promise<unknown>>();
 const vite = await createServer({
   configFile: false,
@@ -142,7 +144,7 @@ test("library scan and library requests cross IPC with only their documented fie
   });
   const start = (params: Record<string, unknown>): Promise<unknown> =>
     Promise.resolve().then(() =>
-      handlers.get("backend:start-job")!({}, { type: "libraryScan", params }),
+      handlers.get("backend:start-job")!(windowEvent, { type: "libraryScan", params }),
     );
   for (const params of [{ libraryId: 3 }, { libraryId: 3, retryFailed: true }]) {
     await start(params);
@@ -155,7 +157,9 @@ test("library scan and library requests cross IPC with only their documented fie
   assert.equal(requests.length, 2);
 
   const update = (definition: unknown): Promise<unknown> =>
-    Promise.resolve().then(() => handlers.get("backend:update-library")!({}, 3, definition));
+    Promise.resolve().then(() =>
+      handlers.get("backend:update-library")!(windowEvent, 3, definition),
+    );
   const root = process.cwd();
   const options = { ocr: false, image: true, videos: true };
   await update({ include: [root], exclude: [], ...options });
@@ -184,7 +188,7 @@ test("backend error codes survive IPC; other errors pass through unchanged", asy
     },
   });
   const list = (): Promise<unknown> =>
-    Promise.resolve().then(() => handlers.get("backend:list-libraries")!({}));
+    Promise.resolve().then(() => handlers.get("backend:list-libraries")!(windowEvent));
   // Electron keeps only the message, behind its own prefix.
   const received = async (): Promise<Error> => {
     const error = (await list().catch((cause: unknown) => cause)) as Error;

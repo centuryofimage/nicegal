@@ -15,6 +15,7 @@
     type ThumbnailBackfillOptions,
   } from "../lib/job-params";
   import { folderStatus, isWithin } from "../lib/library-status";
+  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
   import TechnicalDetails from "./TechnicalDetails.svelte";
   import ThumbnailFailures from "./ThumbnailFailures.svelte";
 
@@ -309,8 +310,11 @@
           </div>
         {/if}
         <div class="list-actions">
-          <button class="ui-button ui-button-compact" onclick={addFolder}
-            ><Plus size={13} aria-hidden="true" /> Add folder…</button
+          <button
+            class="ui-button ui-button-compact"
+            onclick={addFolder}
+            title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+            disabled={isRemote()}><Plus size={13} aria-hidden="true" /> Add folder…</button
           >
           {#if include.length === 1}
             <span class="hint">You can add another folder to this library.</span>
@@ -360,7 +364,9 @@
           <button
             class="ui-button ui-button-compact"
             onclick={excludeFolder}
-            disabled={!include.length}><Plus size={13} aria-hidden="true" /> Exclude folder…</button
+            title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+            disabled={!include.length || isRemote()}
+            ><Plus size={13} aria-hidden="true" /> Exclude folder…</button
           >
         </div>
       </fieldset>

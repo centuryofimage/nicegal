@@ -24,14 +24,16 @@ export function buildMasonryLayout(
 ): GalleryLayout {
   if (!viewportWidth || !items.length) return emptyLayout("masonry");
 
-  const { gap, padding, columnWidth, granularity, clamp } = options;
+  const { gap, padding, columnWidth, granularity, clamp, fillRows } = options;
   const contentWidth = Math.max(1, viewportWidth - padding * 2);
-  const columnCount = Math.max(
-    1,
-    Math.round((contentWidth + gap) / (Math.max(1, columnWidth) + gap)),
-  );
-  // Snap to a width that fills the viewport exactly; the setting is a target, not a hard size.
-  const width = (contentWidth - (columnCount - 1) * gap) / columnCount;
+  const fit = (contentWidth + gap) / (Math.max(1, columnWidth) + gap);
+  const columnCount = Math.max(1, fillRows ? Math.round(fit) : Math.floor(fit));
+  // Filling snaps to a width that spans the viewport exactly; the setting is then a target.
+  const width = fillRows
+    ? (contentWidth - (columnCount - 1) * gap) / columnCount
+    : Math.min(contentWidth, Math.max(1, columnWidth));
+  const left =
+    padding + (fillRows ? 0 : (contentWidth - columnCount * width - (columnCount - 1) * gap) / 2);
   // Tiles are drawn at a fixed width, so the "tame the panorama" guard is a minimum height.
   const bounds = aspectBounds(clamp, { referenceWidth: width });
   const tracker = createDividerTracker(items, granularity);
@@ -58,7 +60,7 @@ export function buildMasonryLayout(
     }
 
     const height = width / clampAspectRatio(items[index].aspectRatio, bounds);
-    const x = padding + column * (width + gap);
+    const x = left + column * (width + gap);
     const y = cursors[column];
     positions.push({ index, x, y, width, height });
     columns[column].indices.push(index);

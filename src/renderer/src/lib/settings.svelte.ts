@@ -83,7 +83,8 @@ const defaults: GallerySettings = {
   libraryIndexing: {},
   indexOcr: false,
   indexImage: true,
-  librariesPaneOpen: true,
+  // At phone width the pane covers the gallery, so a first visit starts with it closed.
+  librariesPaneOpen: !globalThis.matchMedia?.("(max-width: 600px)").matches,
   librariesPaneWidth: 200,
   folderSort: "name",
 };
@@ -186,7 +187,9 @@ function loadInitial(): GallerySettings {
       indexOcr: typeof parsed.indexOcr === "boolean" ? parsed.indexOcr : true,
       indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : true,
       librariesPaneOpen:
-        typeof parsed.librariesPaneOpen === "boolean" ? parsed.librariesPaneOpen : true,
+        typeof parsed.librariesPaneOpen === "boolean"
+          ? parsed.librariesPaneOpen
+          : settingsDefaults.librariesPaneOpen,
       folderSort: parsed.folderSort === "newest" ? "newest" : "name",
     });
   } catch {

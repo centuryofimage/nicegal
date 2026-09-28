@@ -39,6 +39,15 @@ export const IPC_CHANNELS = {
     jobConnection: "backend:job-connection",
     ensureThumbnails: "backend:ensure-thumbnails",
   },
+  remote: {
+    status: "remote:status",
+    statusChanged: "remote:status-changed",
+    setEnabled: "remote:set-enabled",
+    renewPairingCode: "remote:renew-pairing-code",
+    removeDevice: "remote:remove-device",
+    setBackground: "remote:set-background",
+    setHttps: "remote:set-https",
+  },
   native: {
     appInfo: "native:app-info",
     collectDiagnostics: "native:collect-diagnostics",

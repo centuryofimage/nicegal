@@ -1,5 +1,6 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
@@ -7,6 +8,8 @@ import type { RuntimeController as Controller } from "../src/renderer/src/lib/ru
 
 import { IPC_CHANNELS } from "../src/shared/ipc-channels.ts";
 
+/** A desktop-window IPC event; handlers see it as a stable bridge client. */
+const windowEvent = { sender: Object.assign(new EventEmitter(), { id: 99 }) };
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
 Object.assign(globalThis, { __runtimeHandlers: handlers });
 const vite = await createServer({
@@ -57,7 +60,7 @@ test("provider and model changes share restart and exclude overlapping job start
     },
   });
   const invoke = async (channel: string, value: unknown): Promise<unknown> =>
-    handlers.get(channel)!({}, value);
+    handlers.get(channel)!(windowEvent, value);
   const channels = IPC_CHANNELS.backend;
   const change = invoke(channels.setExecutionProvider, "cpu");
   await Promise.resolve();

@@ -1,5 +1,6 @@
 import type { ImageQuery } from "../../../../shared/backend";
 
+import { apiUrl } from "../platform";
 import { readSafetensors, type F32Tensor } from "./safetensors";
 import { colorizeScores } from "./similar";
 
@@ -34,7 +35,7 @@ export async function loadMatchMap(
   signal: AbortSignal,
 ): Promise<MatchResult> {
   try {
-    const response = await fetch("api://server/v1/image-embeddings/patches", {
+    const response = await fetch(apiUrl("/v1/image-embeddings/patches"), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ assetId: Number(assetId), imageQuery }),

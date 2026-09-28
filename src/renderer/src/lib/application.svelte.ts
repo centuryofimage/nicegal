@@ -12,6 +12,7 @@ import { stopsForRuntimeSwitch } from "./job-state";
 import { JobTracker } from "./job-tracker.svelte";
 import { sameFolder } from "./library-root";
 import { OcrSearchController } from "./ocr-search.svelte";
+import { isRemote } from "./platform";
 import { RuntimeController } from "./runtime.svelte";
 import { settings } from "./settings.svelte";
 
@@ -26,7 +27,11 @@ export interface ApplicationServices {
 }
 
 export interface ApplicationCommands {
+  /** The native menu on the desktop; the file action sheet in a remote browser. */
   readonly showFileContextMenu: (assetIds: string[]) => Promise<void>;
+  readonly closeFileSheet: () => void;
+  /** With `replace`, starts a new visual search from these items ("Find similar images"). */
+  readonly addToVisualSearch: (assetIds: readonly string[], replace: boolean) => void;
   readonly startFileDrag: (assetIds: string[], isCurrent: () => boolean) => Promise<void>;
   /** Creates a library for one folder and selects it. */
   readonly createLibrary: (folder: string) => Promise<LibraryRecord>;
@@ -78,6 +83,8 @@ export interface ApplicationContext {
   readonly librarySelectionRevision: number;
   readonly welcomeVisible: boolean;
   readonly problem: AppProblem | null;
+  /** Items the file action sheet is showing, first the one pressed. */
+  readonly fileSheet: readonly string[] | null;
 }
 
 class Application implements ApplicationContext {
@@ -87,6 +94,7 @@ class Application implements ApplicationContext {
   problem = $state.raw<AppProblem | null>(null);
   librarySelectionRevision = $state(0);
   welcomeVisible = $state(false);
+  fileSheet = $state.raw<readonly string[] | null>(null);
 
   private started = false;
   private backendInitialized = false;
@@ -126,8 +134,21 @@ class Application implements ApplicationContext {
         // A release, cancellation, or newer press during resolution must not start a late drag.
         if (isCurrent()) await window.nicegal.native.startFileDrag(token);
       },
-      showFileContextMenu: (assetIds: string[]) =>
-        window.nicegal.native.showFileContextMenu({ assetIds }),
+      showFileContextMenu: async (assetIds: string[]) => {
+        if (isRemote()) this.fileSheet = assetIds;
+        else await window.nicegal.native.showFileContextMenu({ assetIds });
+      },
+      closeFileSheet: () => {
+        this.fileSheet = null;
+      },
+      addToVisualSearch: (assetIds: readonly string[], replace: boolean) => {
+        ocrSearch.addLibraryReferences(
+          catalog.items
+            .filter((item) => assetIds.includes(item.id))
+            .map((item) => ({ id: item.id, displayName: item.displayName })),
+          replace,
+        );
+      },
       createLibrary: (folder: string) => this.createLibrary(folder),
       saveLibrary: (libraryId: LibraryId, definition: LibraryDefinition, name: string | null) =>
         this.saveLibrary(libraryId, definition, name),
@@ -178,14 +199,7 @@ class Application implements ApplicationContext {
       catalog.onSettingsChange(value);
     });
     const unsubscribeVisualSearch = window.nicegal.native.onAddToVisualSearch(
-      (assetIds, replace) => {
-        this.services.ocrSearch.addLibraryReferences(
-          catalog.items
-            .filter((item) => assetIds.includes(item.id))
-            .map((item) => ({ id: item.id, displayName: item.displayName })),
-          replace,
-        );
-      },
+      this.commands.addToVisualSearch,
     );
     const unsubscribeBackendStatus = window.nicegal.backend.onBackendStatusChanged((status) => {
       const recovered = !catalog.backendStatus.ready && status.ready;

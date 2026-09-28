@@ -1,9 +1,11 @@
 /* eslint-disable svelte/prefer-svelte-reactivity -- Search collections are immutable snapshots; raw state tracks replacement without per-hit reactive bookkeeping. */
+import { v4 as uuid } from "@lukeed/uuid";
 
 import type {
   ImageQuery,
   LibraryId,
   Timeline,
+  SearchRequest,
   SearchResponse,
   SearchResult,
 } from "../../../shared/backend";
@@ -22,6 +24,20 @@ import {
 } from "./visual-query";
 
 type CatalogItem = CatalogController["items"][number];
+
+/** One `schedule` call's shared inputs. `request` fills in everything every lane sends. */
+type SearchRun = {
+  generation: number;
+  scope: SearchScope;
+  body: string;
+  references: VisualReferenceTerm[];
+  request: (
+    lane: NonNullable<SearchRequest["searchLane"]>,
+    type: SearchRequest["type"],
+    query: string,
+    limit?: number,
+  ) => SearchRequest;
+};
 
 /** A result's cosine similarity to the search, from the visual or related-text vector lane. */
 export interface VectorMatch {
@@ -406,7 +422,7 @@ export class OcrSearchController {
     this.setVisualReferences([
       ...this.visualReferences,
       ...items.map((item, index) => ({
-        id: `external-${crypto.randomUUID()}-${index}`,
+        id: `external-${uuid()}-${index}`,
         source: "external" as const,
         displayName: item.displayName,
         bytesBase64: item.bytesBase64,
@@ -472,7 +488,7 @@ export class OcrSearchController {
   get pendingLabel(): string {
     switch (this.parsed.scope) {
       case "all":
-        if (this.parsed.path && !this.searchBody) return "Searching paths…";
+        if (this.parsed.filters.length && !this.searchBody) return "Searching files…";
         return this.literalPending
           ? "Searching names and text…"
           : this.broadPending.meaning && this.broadPending.visual
@@ -507,6 +523,11 @@ export class OcrSearchController {
     return false; // All now searches related text itself.
   }
 
+  /**
+   * Starts the searches the current query needs. Each lane is a separate backend request that
+   * publishes into its own state, so one slow or failed engine never holds back or discards
+   * another's results. A new call cancels everything the previous one started.
+   */
   schedule(
     libraryId: LibraryId | null,
     items: CatalogItem[],
@@ -515,10 +536,100 @@ export class OcrSearchController {
     hasOcr = true,
     hasImages = true,
   ): void {
+    const { generation, searchSession } = this.beginRun(libraryId);
+    const { scope, body: rawBody, dates, folder, filters, media } = this.parsed;
+    const body = normalizeSearchBody(scope, rawBody);
+    const references = scope === "like" ? this.visualReferences : [];
+
+    // Media filtering uses the loaded catalog. With no eligible assets, every backend lane
+    // would produce an empty displayed result, so avoid loading models just to discard hits.
+    if (media && !items.some((item) => item.mediaKind === media)) {
+      this.total = 0;
+      return;
+    }
+    if (scope === "like" && body && !supportsImageTextQueries) {
+      this.total = 0;
+      this.error =
+        "This model supports image examples only. Remove text descriptions and add an image example.";
+      return;
+    }
+    if (!body && !references.length && !filters.length) {
+      this.filenameMatches = null;
+      this.matches = null;
+      this.total = items.length;
+      return;
+    }
+    const time = timeRangeForDates(dates);
+    if (time === null) {
+      this.total = 0;
+      return;
+    }
+    if (libraryId === null) {
+      this.error = "No library selected.";
+      return;
+    }
+
+    const run: SearchRun = {
+      generation,
+      scope,
+      body,
+      references,
+      request: (searchLane, type, query, limit = SEARCH_RESULT_LIMIT) => ({
+        query,
+        type,
+        libraryId,
+        ...(folder ? { folder } : {}),
+        ...(filters.length ? { filters } : {}),
+        limit,
+        searchSession,
+        searchLane,
+        timeline,
+        ...time,
+      }),
+    };
+
+    if ((scope === "name" && body) || (!body && !references.length)) {
+      this.filePending = true;
+      const field = body ? "name" : "path";
+      this.timer = setTimeout(() => this.searchFiles(run, field, true), SEARCH_DEBOUNCE_MS);
+      return;
+    }
+    if (scope === "like" && !hasImages) {
+      this.imageSetupRequired = true;
+      this.setupNotice = "Visual search isn't ready for this library yet.";
+      this.total = 0;
+      return;
+    }
+
+    this.pending = true;
+    this.filePending = scope === "all" || scope === "meaning";
+    if (scope === "all") {
+      const visual = supportsImageTextQueries && hasImages;
+      this.broadPending = { meaning: hasOcr, visual };
+      this.broadTimer = setTimeout(() => {
+        if (hasOcr) this.searchBroad(run, "meaning");
+        if (visual) this.searchBroad(run, "visual");
+      }, 400);
+    }
+    const composed = scope === "like" && (isVisualComposition(body) || references.length > 0);
+    this.timer = setTimeout(
+      () => {
+        // All without OCR has only file names to show, so they carry the total.
+        const namesOnly = scope === "all" && !hasOcr;
+        if (scope === "all" || scope === "meaning") this.searchFiles(run, "name", namesOnly);
+        if (namesOnly) this.pending = false;
+        else if (scope === "like") this.searchPrimary(run);
+        else this.searchPrimaryWhenIndexed(run, libraryId);
+      },
+      composed ? 250 : SEARCH_DEBOUNCE_MS,
+    );
+  }
+
+  /** Cancels the previous run and clears every result it could still publish. */
+  private beginRun(libraryId: LibraryId | null): { generation: number; searchSession: number } {
     if (this.timer) clearTimeout(this.timer);
     if (this.broadTimer) clearTimeout(this.broadTimer);
     void window.nicegal.backend.cancelSearch?.().catch(() => {});
-    const searchSession = ++nextSearchSession;
     this.deferredResults = [];
     this.broadPending = { meaning: false, visual: false };
     this.broadResults = { meaning: { results: [], total: 0 }, visual: { results: [], total: 0 } };
@@ -532,12 +643,6 @@ export class OcrSearchController {
       this.meaningMinMatchPercentile = DEFAULT_MATCH_QUALITY;
       this.clipMatchQuality = DEFAULT_CLIP_MATCH_QUALITY;
     }
-    const generation = ++this.generation;
-    const { scope, body: rawBody, dates, ocrMode, folder, path, media } = this.parsed;
-    const body = normalizeSearchBody(scope, rawBody);
-    const references = scope === "like" ? this.visualReferences : [];
-    const composedVisual = scope === "like" && (isVisualComposition(body) || references.length > 0);
-    const visualTerms = composedVisual ? parseVisualTextTerms(body) : [];
     this.error = "";
     this.querySyntaxError = false;
     this.setupNotice = "";
@@ -555,336 +660,167 @@ export class OcrSearchController {
     this.filenameMatches = new Set<string>();
     this.filenameOrderedIds = [];
     this.matches = new Set<string>();
+    return { generation: ++this.generation, searchSession: ++nextSearchSession };
+  }
 
-    // Media filtering uses the loaded catalog. With no eligible assets, every backend lane
-    // would produce an empty displayed result, so avoid loading models just to discard hits.
-    if (media && !items.some((item) => item.mediaKind === media)) {
-      this.total = 0;
-      return;
-    }
+  /** Sends one lane's request and publishes its outcome only while `run` is current. */
+  private send(
+    run: SearchRun,
+    request: SearchRequest,
+    handle: {
+      result: (response: SearchResponse) => void;
+      error: (error: unknown) => void;
+      done: () => void;
+    },
+  ): void {
+    void window.nicegal.backend
+      .searchOcr(request)
+      .then(validateSearchResponse)
+      .then((response) => this.publish(run.generation, () => handle.result(response)))
+      .catch((error: unknown) => this.publish(run.generation, () => handle.error(error)))
+      .finally(() => this.publish(run.generation, handle.done));
+  }
 
-    if (scope === "like" && body && !supportsImageTextQueries) {
-      this.total = 0;
-      this.error =
-        "This model supports image examples only. Remove text descriptions and add an image example.";
-      return;
-    }
+  private noteLimit(response: SearchResponse): void {
+    if (response.total > response.results.length)
+      this.limitNotice = "Result limit reached; narrow the search by date.";
+  }
 
-    if (!body && !references.length && !path) {
-      this.filenameMatches = null;
-      this.matches = null;
-      this.total = items.length;
-      return;
-    }
-
-    if ((scope === "name" && !!body) || (!body && !!path && !references.length)) {
-      const fileScope = body && scope === "name" ? "name" : "path";
-      const time = timeRangeForDates(dates);
-      if (time === null) {
-        this.total = 0;
-        return;
-      }
-      if (libraryId === null) {
-        this.error = "No library selected.";
-        return;
-      }
-      this.filePending = true;
-      this.timer = setTimeout(() => {
-        void window.nicegal.backend
-          .searchOcr({
-            query: body || path || "",
-            type: fileScope,
-            libraryId,
-            ...(folder ? { folder } : {}),
-            ...(body && path ? { pathContains: path } : {}),
-            limit: SEARCH_RESULT_LIMIT,
-            searchSession,
-            searchLane: "files",
-            timeline,
-            ...time,
-          })
-          .then(validateSearchResponse)
-          .then((response) =>
-            this.publish(generation, () => {
-              const ids = response.results.map((result) => result.assetId);
-              if (fileScope === "name") {
-                this.filenameMatches = new Set(ids);
-                this.filenameOrderedIds = ids;
-                this.filenameSnippets = new Map(
-                  response.results.map((result) => [result.assetId, result.snippet] as const),
-                );
-              } else {
-                this.matches = new Set(ids);
-                this.snippets = new Map(
-                  response.results.map((result) => [result.assetId, result.snippet] as const),
-                );
-              }
-              this.total = response.total;
-              if (response.total > response.results.length)
-                this.limitNotice = "Result limit reached; narrow the search by date.";
-            }),
-          )
-          .catch((error: unknown) =>
-            this.publish(generation, () => {
-              this.setQueryError(error);
-            }),
-          )
-          .finally(() =>
-            this.publish(generation, () => {
-              this.filePending = false;
-            }),
-          );
-      }, SEARCH_DEBOUNCE_MS);
-      return;
-    }
-
-    if (scope === "like" && !hasImages) {
-      this.imageSetupRequired = true;
-      this.setupNotice = "Visual search isn't ready for this library yet.";
-      this.total = 0;
-      return;
-    }
-
-    this.pending = true;
-    this.filePending = scope === "all" || scope === "meaning";
-    const time = timeRangeForDates(dates);
-    // Fast literal results need not wait for either embedder. Each lane owns its completion and
-    // error state; one failed or unavailable engine must never discard successful sibling results.
-    // The shared session cancels obsolete work; the renderer generation also guards late replies.
-    if (scope === "all" && libraryId !== null && time !== null) {
-      this.broadPending = { meaning: hasOcr, visual: supportsImageTextQueries && hasImages };
-      this.broadTimer = setTimeout(() => {
-        for (const lane of ["meaning", "visual"] as const) {
-          if (lane === "meaning" && !hasOcr) continue;
-          if (lane === "visual" && (!supportsImageTextQueries || !hasImages)) continue;
-          void window.nicegal.backend
-            .searchOcr({
-              query: body,
-              libraryId,
-              ...(folder ? { folder } : {}),
-              ...(path ? { pathContains: path } : {}),
-              timeline,
-              ...time,
-              type: lane === "meaning" ? "vector" : "image",
-              limit: lane === "meaning" ? ALL_RELATED_RESULT_LIMIT : SEARCH_RESULT_LIMIT,
-              searchSession,
-              searchLane: lane,
-            })
-            .then(validateSearchResponse)
-            .then((response) =>
-              this.publish(generation, () => {
-                if (generation !== this.generation) return;
-                this.broadResults = { ...this.broadResults, [lane]: response };
-                if (lane === "visual" && response.total > response.results.length)
-                  this.limitNotice = "Result limit reached; narrow the search by date.";
-              }),
-            )
-            .catch((error: unknown) =>
-              this.publish(generation, () => {
-                if (generation !== this.generation) return;
-                console.warn(`${lane} search failed`, error);
-                const message = errorMessage(error);
-                const modelNotReady = errorCode(error) === "models_not_ready";
-                if (modelNotReady && lane === "visual") this.imageSetupRequired = true;
-                if (modelNotReady && lane === "meaning") this.textSetupRequired = true;
-                if (modelNotReady)
-                  this.broadSetup[lane] =
-                    lane === "visual"
-                      ? "Visual search isn't ready for this library yet."
-                      : "Related text search isn't set up for this library.";
-                else this.broadErrors[lane] = message;
-              }),
-            )
-            .finally(() =>
-              this.publish(generation, () => {
-                if (generation === this.generation) this.broadPending[lane] = false;
-              }),
-            );
-        }
-      }, 400);
-    }
-    this.timer = setTimeout(
-      () => {
-        if ((scope === "all" || scope === "meaning") && libraryId !== null) {
-          const fileTime = timeRangeForDates(dates);
-          if (fileTime !== null) {
-            void window.nicegal.backend
-              .searchOcr({
-                query: body,
-                type: "name",
-                libraryId,
-                ...(folder ? { folder } : {}),
-                ...(path ? { pathContains: path } : {}),
-                limit: SEARCH_RESULT_LIMIT,
-                searchSession,
-                searchLane: "files",
-                timeline,
-                ...fileTime,
-              })
-              .then(validateSearchResponse)
-              .then((response) =>
-                this.publish(generation, () => {
-                  this.filenameOrderedIds = response.results.map((result) => result.assetId);
-                  this.filenameMatches = new Set(this.filenameOrderedIds);
-                  this.filenameSnippets = new Map(
-                    response.results.map((result) => [result.assetId, result.snippet] as const),
-                  );
-                  if (scope === "all" && !hasOcr) this.total = response.total;
-                  if (response.total > response.results.length)
-                    this.limitNotice = "Result limit reached; narrow the search by date.";
-                }),
-              )
-              .catch((error: unknown) =>
-                this.publish(generation, () => {
-                  this.setQueryError(error);
-                }),
-              )
-              .finally(() =>
-                this.publish(generation, () => {
-                  this.filePending = false;
-                }),
-              );
-          } else {
-            this.filePending = false;
-          }
+  /**
+   * File names for `name:` and All, or the files a filter-only query admits. `primary` means
+   * these are the whole result rather than one section of All.
+   */
+  private searchFiles(run: SearchRun, field: "name" | "path", primary: boolean): void {
+    this.send(run, run.request("files", field, run.body), {
+      result: (response) => {
+        const ids = response.results.map((result) => result.assetId);
+        const snippets = new Map(
+          response.results.map((result) => [result.assetId, result.snippet] as const),
+        );
+        if (field === "name") {
+          this.filenameMatches = new Set(ids);
+          this.filenameOrderedIds = ids;
+          this.filenameSnippets = snippets;
         } else {
-          this.filePending = false;
+          this.matches = new Set(ids);
+          this.snippets = snippets;
         }
-
-        if (scope === "all" && !hasOcr) {
-          this.pending = false;
-          return;
-        }
-
-        const time = timeRangeForDates(dates);
-        if (time === null) {
-          this.matches = new Set<string>();
-          this.total = 0;
-          this.pending = false;
-          return;
-        }
-
-        if (libraryId === null) {
-          this.error = "No library selected.";
-          this.pending = false;
-          return;
-        }
-
-        // All's primary lane is literal OCR; its independent broader lanes were scheduled above.
-        // Dedicated meaning: and like: searches use this single-lane path, including compositions.
-        const searchType =
-          scope === "meaning"
-            ? "vector"
-            : scope === "like"
-              ? "image"
-              : ocrMode === "glob"
-                ? "ocrGlob"
-                : "ocrMatch";
-        // `terms` and `raw` share the `match` mode, so a `terms` body must be quoted on the way
-        // out — unquoted, FTS5 would parse `12:30` as a column filter and reject it.
-        const searchQuery =
-          searchType === "ocrMatch" && ocrMode === "terms" ? quoteFtsTerms(body) : body;
-        const runSearch = (): void => {
-          const visualComponents = imageQueryComponents(visualTerms, references);
-          void window.nicegal.backend
-            .searchOcr({
-              query: composedVisual ? "" : searchQuery,
-              type: searchType,
-              libraryId,
-              ...(folder ? { folder } : {}),
-              ...(path ? { pathContains: path } : {}),
-              limit: SEARCH_RESULT_LIMIT,
-              searchSession,
-              searchLane: "literal",
-              timeline,
-              ...time,
-              ...(composedVisual
-                ? {
-                    imageQuery: {
-                      components: visualComponents,
-                    },
-                  }
-                : {}),
-            })
-            .then(validateSearchResponse)
-            .then((response) =>
-              this.publish(generation, () => {
-                if (generation !== this.generation) return;
-                this.matches = new Set(response.results.map((result) => result.assetId));
-                this.snippets = new Map(
-                  response.results.map((result) => [result.assetId, result.snippet] as const),
-                );
-                // The response is already in the backend's final rank order (reranked server-side),
-                // so relevance order is response order — nothing to re-sort. A server without `rank`
-                // simply leaves that order as the only signal, which is the graceful degradation.
-                this.rankedIds = response.results.map((result) => result.assetId);
-                this.scores = new Map(
-                  response.results.flatMap((result) => {
-                    const score = result.distance ?? result.score;
-                    return score === undefined ? [] : [[result.assetId, score] as const];
-                  }),
-                );
-                if (scope === "like") this.dedicatedFrameTimes = frameTimes(response.results);
-                this.total = response.total;
-                if (response.total > response.results.length)
-                  this.limitNotice = "Result limit reached; narrow the search by date.";
-              }),
-            )
-            .catch((error: unknown) =>
-              this.publish(generation, () => {
-                if (generation !== this.generation) return;
-                console.warn("Search failed", error);
-                const modelNotReady = errorCode(error) === "models_not_ready";
-                if (modelNotReady && scope === "like") this.imageSetupRequired = true;
-                if (modelNotReady && scope === "meaning") this.textSetupRequired = true;
-                if (modelNotReady)
-                  this.setupNotice =
-                    scope === "like"
-                      ? "Visual search isn't ready for this library yet."
-                      : "Text search isn't set up for this library.";
-                else this.setQueryError(error);
-              }),
-            )
-            .finally(() =>
-              this.publish(generation, () => {
-                if (generation === this.generation) this.pending = false;
-              }),
-            );
-        };
-
-        // Image availability is supplied from the selected library's coverage above.
-        if (scope === "like") {
-          runSearch();
-          return;
-        }
-
-        const coverageRequest = window.nicegal.backend.getTextEmbeddingCoverage(libraryId);
-
-        // `meaning` needs embeddings; `ocr` and `all` only need OCR text, so they gate on
-        // `indexed` instead — an un-embedded-but-OCR'd library should still search fine.
-        void coverageRequest
-          .then((response) => {
-            if (generation !== this.generation) return;
-            this.semanticAvailable = response.embedded > 0;
-            const notIndexed =
-              scope === "meaning" ? response.embedded === 0 : response.indexed === 0;
-            if (notIndexed) {
-              this.textSetupRequired = true;
-              this.setupNotice = "Text search isn't set up for this library.";
-              this.matches = new Set<string>();
-              this.snippets = new Map<string, string>();
-              this.total = this.filenameMatches?.size ?? 0;
-              this.pending = false;
-              return;
-            }
-            runSearch();
-          })
-          .catch(() => {
-            if (generation === this.generation) runSearch();
-          });
+        if (primary) this.total = response.total;
+        this.noteLimit(response);
       },
-      composedVisual ? 250 : SEARCH_DEBOUNCE_MS,
-    );
+      error: (error) => this.setQueryError(error),
+      done: () => (this.filePending = false),
+    });
+  }
+
+  /** All's related-text and visual sections. Neither can fail the literal results. */
+  private searchBroad(run: SearchRun, lane: "meaning" | "visual"): void {
+    const request =
+      lane === "meaning"
+        ? run.request(lane, "vector", run.body, ALL_RELATED_RESULT_LIMIT)
+        : run.request(lane, "image", run.body);
+    this.send(run, request, {
+      result: (response) => {
+        this.broadResults = { ...this.broadResults, [lane]: response };
+        if (lane === "visual") this.noteLimit(response);
+      },
+      error: (error) => {
+        console.warn(`${lane} search failed`, error);
+        if (errorCode(error) !== "models_not_ready") {
+          this.broadErrors[lane] = errorMessage(error);
+        } else if (lane === "visual") {
+          this.imageSetupRequired = true;
+          this.broadSetup.visual = "Visual search isn't ready for this library yet.";
+        } else {
+          this.textSetupRequired = true;
+          this.broadSetup.meaning = "Related text search isn't set up for this library.";
+        }
+      },
+      done: () => (this.broadPending[lane] = false),
+    });
+  }
+
+  /**
+   * `meaning` needs embeddings; `ocr` and `all` only need OCR text, so they gate on `indexed`
+   * instead. An un-embedded but OCR'd library should still search.
+   */
+  private searchPrimaryWhenIndexed(run: SearchRun, libraryId: LibraryId): void {
+    void window.nicegal.backend
+      .getTextEmbeddingCoverage(libraryId)
+      .then((response) => {
+        if (run.generation !== this.generation) return;
+        this.semanticAvailable = response.embedded > 0;
+        const notIndexed =
+          run.scope === "meaning" ? response.embedded === 0 : response.indexed === 0;
+        if (!notIndexed) return this.searchPrimary(run);
+        this.textSetupRequired = true;
+        this.setupNotice = "Text search isn't set up for this library.";
+        this.matches = new Set<string>();
+        this.snippets = new Map<string, string>();
+        this.total = this.filenameMatches?.size ?? 0;
+        this.pending = false;
+      })
+      .catch(() => {
+        if (run.generation === this.generation) this.searchPrimary(run);
+      });
+  }
+
+  /** The scope's own ranked lane: literal OCR for All and `ocr:`, vectors for the others. */
+  private searchPrimary(run: SearchRun): void {
+    const { scope, body, references } = run;
+    const ocrMode = this.parsed.ocrMode;
+    const type =
+      scope === "meaning"
+        ? "vector"
+        : scope === "like"
+          ? "image"
+          : ocrMode === "glob"
+            ? "ocrGlob"
+            : "ocrMatch";
+    const composed = scope === "like" && (isVisualComposition(body) || references.length > 0);
+    // `terms` and `raw` share the `match` mode, so a `terms` body must be quoted on the way
+    // out — unquoted, FTS5 would parse `12:30` as a column filter and reject it.
+    const query = composed
+      ? ""
+      : type === "ocrMatch" && ocrMode === "terms"
+        ? quoteFtsTerms(body)
+        : body;
+    const request = run.request("literal", type, query);
+    if (composed)
+      request.imageQuery = {
+        components: imageQueryComponents(parseVisualTextTerms(body), references),
+      };
+    this.send(run, request, {
+      result: (response) => {
+        this.matches = new Set(response.results.map((result) => result.assetId));
+        this.snippets = new Map(
+          response.results.map((result) => [result.assetId, result.snippet] as const),
+        );
+        // The response is already in the backend's final rank order, so relevance order is
+        // response order.
+        this.rankedIds = response.results.map((result) => result.assetId);
+        this.scores = new Map(
+          response.results.flatMap((result) => {
+            const score = result.distance ?? result.score;
+            return score === undefined ? [] : [[result.assetId, score] as const];
+          }),
+        );
+        if (scope === "like") this.dedicatedFrameTimes = frameTimes(response.results);
+        this.total = response.total;
+        this.noteLimit(response);
+      },
+      error: (error) => {
+        console.warn("Search failed", error);
+        if (errorCode(error) !== "models_not_ready") return this.setQueryError(error);
+        if (scope === "like") this.imageSetupRequired = true;
+        if (scope === "meaning") this.textSetupRequired = true;
+        this.setupNotice =
+          scope === "like"
+            ? "Visual search isn't ready for this library yet."
+            : "Text search isn't set up for this library.";
+      },
+      done: () => (this.pending = false),
+    });
   }
 
   /**
@@ -896,13 +832,13 @@ export class OcrSearchController {
    * `VirtualGallery` renders as happily as any other order because layout consumes the array.
    */
   apply(items: CatalogItem[]): SearchView {
-    const { scope, dates, media, folder, path } = this.parsed;
+    const { scope, dates, media, folder, filters } = this.parsed;
     const body = this.searchBody;
     const dated = filterItemsByDates(items, dates);
     const focused = folder ? dated.filter((item) => pathIsInFolder(item.path, folder)) : dated;
     const eligible = media ? focused.filter((item) => item.mediaKind === media) : focused;
     const filtering = this.query.length > 0;
-    if (!body && !this.activeVisualReferences.length && path)
+    if (!body && !this.activeVisualReferences.length && filters.length)
       return {
         items: filterItems(eligible, this.matches),
         matchTotal: filterItems(eligible, this.matches).length,

@@ -18,7 +18,7 @@ import type { IpcSenderValidator } from "../ipc";
 import appIcon from "../../../resources/icon.png?asset";
 import licenseInformation from "../../../resources/licenses/license-information.html?asset&asarUnpack";
 import { IPC_CHANNELS } from "../../shared/ipc-channels";
-import { handleTrustedIpc } from "../ipc";
+import { handleRemotableIpc, handleTrustedIpc } from "../ipc";
 import {
   copyFilePaths,
   copyFiles,
@@ -38,7 +38,7 @@ export interface NativeIpcContext {
 
 /** Main-process capabilities backed by Electron/OS APIs rather than the search backend. */
 export function registerNativeIpc(context: NativeIpcContext): void {
-  handleTrustedIpc(IPC_CHANNELS.native.appInfo, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.native.appInfo, context.isTrustedSender, () =>
     context.getAppInfo(),
   );
   handleTrustedIpc(
@@ -50,7 +50,7 @@ export function registerNativeIpc(context: NativeIpcContext): void {
       return context.collectDiagnostics(owner);
     },
   );
-  handleTrustedIpc(IPC_CHANNELS.native.recentBackendLog, context.isTrustedSender, () =>
+  handleRemotableIpc(IPC_CHANNELS.native.recentBackendLog, context.isTrustedSender, () =>
     context.recentBackendLog(),
   );
   // One preparation per renderer. Tokens keep resolved paths on the trusted side and prevent

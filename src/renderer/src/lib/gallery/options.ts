@@ -21,6 +21,12 @@ export interface LayoutOptions {
   cellWidth?: number;
   /** Grid: cell width / cell height. */
   cellAspectRatio?: number;
+  /**
+   * Grid and masonry: stretch the derived column count to fill the width, so the size setting is
+   * a target. Off, tiles keep the exact size and the leftover width is centred, which lets a pinch
+   * grow tiles continuously instead of stepping at each column count.
+   */
+  fillRows?: boolean;
   /** Overrides for the mode's display clamp. */
   clamp?: Partial<DisplayClamp>;
 }
@@ -39,6 +45,7 @@ export const layoutDefaults = {
   columns: 0,
   cellWidth: 160,
   cellAspectRatio: 1,
+  fillRows: true,
 };
 
 export function resolveLayoutOptions(options: LayoutOptions = {}): ResolvedLayoutOptions {

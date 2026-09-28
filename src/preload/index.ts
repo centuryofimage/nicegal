@@ -28,6 +28,7 @@ import type {
   SearchResponse,
   Timeline,
 } from "../shared/backend";
+import type { RemoteAccessBridge, RemoteAccessStatus } from "../shared/remote";
 import type { UpdateBridge, UpdateStatus } from "../shared/updates";
 
 import { IPC_CHANNELS } from "../shared/ipc-channels";
@@ -44,6 +45,21 @@ const updates: UpdateBridge = {
   },
   openReleaseNotes: () => ipcRenderer.invoke(IPC_CHANNELS.updates.releaseNotes),
   restartAndInstall: () => ipcRenderer.invoke(IPC_CHANNELS.updates.restartAndInstall),
+};
+
+const remote: RemoteAccessBridge = {
+  getStatus: () => ipcRenderer.invoke(IPC_CHANNELS.remote.status),
+  setEnabled: (enabled) => ipcRenderer.invoke(IPC_CHANNELS.remote.setEnabled, enabled),
+  renewPairingCode: () => ipcRenderer.invoke(IPC_CHANNELS.remote.renewPairingCode),
+  removeDevice: (deviceId) => ipcRenderer.invoke(IPC_CHANNELS.remote.removeDevice, deviceId),
+  setHttps: (enabled) => ipcRenderer.invoke(IPC_CHANNELS.remote.setHttps, enabled),
+  setBackground: (change) => ipcRenderer.invoke(IPC_CHANNELS.remote.setBackground, change),
+  onStatusChanged(listener) {
+    const handler = (_event: Electron.IpcRendererEvent, status: RemoteAccessStatus): void =>
+      listener(status);
+    ipcRenderer.on(IPC_CHANNELS.remote.statusChanged, handler);
+    return () => ipcRenderer.off(IPC_CHANNELS.remote.statusChanged, handler);
+  },
 };
 
 const backend: NicegalBridge["backend"] = {
@@ -203,4 +219,11 @@ const native: NativeBridge = {
   },
 };
 
-contextBridge.exposeInMainWorld("nicegal", { backend, native, updates } satisfies NicegalBridge);
+contextBridge.exposeInMainWorld("nicegal", {
+  backend,
+  native,
+  updates,
+  remote,
+  isRemote: false,
+  connection: { onReconnectingChanged: () => () => undefined },
+} satisfies NicegalBridge);

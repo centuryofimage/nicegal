@@ -1,5 +1,7 @@
-- fix video sync algorithm oddities
-- drop intel macos until someone asks for it back
-- add cool feature visualizations!!!!
-  - click view to enable them in the thumbnails and visualize in the preview to see them there
-- update the model selection menu to make it a little more clear what each one does
+- open your gallery from your phone or another computer's browser. turn it on in settings > remote access, then pair with a one-time code
+- https option for remote access. it's recommended and makes thumbnails load faster
+- long press on your phone to share, copy, download, or find similar images
+- add a nicegal shortcut to your phone's home screen
+- minimize or close to tray, and open when you sign in, so your phone can connect anytime
+- search by file type with ext:jpg,png, and leave things out with !ext:gif or !path:old
+- use * and ? in path: and name: searches, like name:IMG_*.jpg

@@ -57,6 +57,7 @@
     matchAreaKey,
     type TileMatchMap,
   } from "../lib/patch-features/tile-match-areas.svelte";
+  import { isRemote } from "../lib/platform";
   import { parseQuery } from "../lib/search-query";
 
   /** Give up on a poster that keeps failing to ensure (corrupt/unreadable source) rather than
@@ -868,11 +869,12 @@
           .join(". ")}
         style={tileStyle(tile)}
         role="button"
-        draggable="true"
+        draggable={isRemote() ? "false" : "true"}
         ondragstart={(event) => input.startFileDrag(event, tile)}
         tabindex="0"
         onclick={(event) => input.activate(tile, event)}
         oncontextmenu={(event) => input.openFileMenu(event, tile)}
+        onpointerdown={(event) => input.onFramePointerDown(event, tile)}
         onkeydown={(event) => input.onFrameKeydown(event, tile)}
         onmouseenter={() => onTileEnter(tile)}
         onmouseleave={() => onTileLeave(tile)}
@@ -1129,6 +1131,8 @@
     position: absolute;
     top: 0;
     left: 0;
+    /* A long press opens the file actions, not iOS's image callout. */
+    -webkit-touch-callout: none;
     padding: var(--space-2);
     border: 1px solid var(--border);
     background: var(--surface-2);
@@ -1172,6 +1176,7 @@
   }
 
   .gallery-tile {
+    -webkit-touch-callout: none;
     display: block;
     width: 100%;
     height: 100%;

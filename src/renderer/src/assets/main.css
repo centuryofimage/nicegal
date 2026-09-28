@@ -3,6 +3,7 @@
 @import "./base.css";
 @import "./about.css";
 @import "./image-model.css";
+@import "./compact.css";
 
 html,
 body {
@@ -12,7 +13,12 @@ body {
 }
 
 #app {
+  box-sizing: border-box;
   height: 100%;
+  /* A home-screen app on a notched phone draws under the status bar and home indicator. Zero in
+     the desktop window and ordinary browser tabs. */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
 }
 
 /* Opt-in shared desktop control. New feature surfaces should use this rather than

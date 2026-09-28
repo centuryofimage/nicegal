@@ -3,6 +3,7 @@ import { SvelteMap } from "svelte/reactivity";
 
 import type { ImageQuery } from "../../../../shared/backend";
 
+import { apiUrl } from "../platform";
 import { colorizeScores } from "./similar";
 
 export interface TileMatchMap {
@@ -127,7 +128,7 @@ export class TileMatchAreas {
     const controller = new AbortController();
     this.active = controller;
     try {
-      const response = await fetch("api://server/v1/image-embeddings/patch-scores", {
+      const response = await fetch(apiUrl("/v1/image-embeddings/patch-scores"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ targets: ids.map(targetFromKey), imageQuery: this.query }),

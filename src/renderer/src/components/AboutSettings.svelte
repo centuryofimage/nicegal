@@ -5,6 +5,7 @@
   import type { AppInfo } from "../../../shared/diagnostics";
 
   import { version } from "../../../../package.json";
+  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
 
   let appInfo = $state<AppInfo | null>(null);
   let collecting = $state(false);
@@ -85,9 +86,21 @@
     Frontend: <a href="https://opensource.org/license/mit" onclick={openLink}>MIT</a>. Backend:
     <a href="https://www.gnu.org/licenses/agpl-3.0.html" onclick={openLink}>AGPL-3.0-only</a>.
   </p>
-  <p><a href="#license-information" onclick={openLicenses}>License information</a></p>
+  <p>
+    {#if isRemote()}
+      <span class="about-desktop-only" title={DESKTOP_ONLY_TITLE}>License information</span>
+    {:else}
+      <a href="#license-information" onclick={openLicenses}>License information</a>
+    {/if}
+  </p>
   <div class="about-diagnostics">
-    <button class="ui-button" type="button" onclick={collectDiagnostics} disabled={collecting}>
+    <button
+      class="ui-button"
+      type="button"
+      onclick={collectDiagnostics}
+      title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+      disabled={collecting || isRemote()}
+    >
       {collecting ? "Collecting…" : "Collect diagnostics"}
     </button>
     <p class="about-warning">

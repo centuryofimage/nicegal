@@ -1,4 +1,32 @@
-import { settings, settingsLimits } from "../settings.svelte";
+import { settings, settingsLimits, type GallerySettings } from "../settings.svelte";
+
+export type SizeKey = "targetRowHeight" | "masonryColumnWidth" | "gridCellWidth";
+
+export function sizeKey(current: GallerySettings): SizeKey {
+  return current.layoutMode === "justified"
+    ? "targetRowHeight"
+    : current.layoutMode === "masonry"
+      ? "masonryColumnWidth"
+      : "gridCellWidth";
+}
+
+/** Sets the current layout's tile size, clamped, and snapped to its slider's step unless `exact`
+ * (a pinch lands wherever the fingers stopped). */
+export function setTileSize(size: (current: number, key: SizeKey) => number, exact = false): void {
+  settings.update((current) => {
+    const key = sizeKey(current);
+    const limit = settingsLimits[key];
+    const requested = size(current[key], key);
+    const next = exact ? requested : Math.round(requested / limit.step) * limit.step;
+    const clamped = Math.max(limit.min, Math.min(limit.max, next));
+    if (clamped === current[key]) return current;
+    return {
+      ...current,
+      [key]: clamped,
+      ...(current.layoutMode === "grid" ? { gridColumns: 0 } : {}),
+    };
+  });
+}
 
 /** Ctrl+wheel changes tile size. The owner supplies whether an overlay blocks the gallery. */
 export function createGalleryWheelZoom(
@@ -24,20 +52,7 @@ export function createGalleryWheelZoom(
       const steps = Math.trunc(accumulated / 80);
       if (!steps) return;
       accumulated -= steps * 80;
-      settings.update((current) => {
-        const key =
-          current.layoutMode === "justified"
-            ? "targetRowHeight"
-            : current.layoutMode === "masonry"
-              ? "masonryColumnWidth"
-              : "gridCellWidth";
-        const limit = settingsLimits[key];
-        return {
-          ...current,
-          [key]: Math.max(limit.min, Math.min(limit.max, current[key] - steps * limit.step * 3)),
-          ...(current.layoutMode === "grid" ? { gridColumns: 0 } : {}),
-        };
-      });
+      setTileSize((size, key) => size - steps * settingsLimits[key].step * 3);
     };
     element.addEventListener("wheel", onWheel, { passive: false });
     return () => element.removeEventListener("wheel", onWheel);

@@ -7,6 +7,7 @@
   import { useApplication } from "../lib/application.svelte";
   import { sameFolder } from "../lib/library-root";
   import { libraryOptionsSummary } from "../lib/library-status";
+  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
   import LibraryEditor from "./LibraryEditor.svelte";
 
   let {
@@ -177,7 +178,8 @@
         <button
           class="ui-button"
           onclick={() => void add()}
-          disabled={createBusy || !catalog.backendStatus.ready}>New library…</button
+          title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+          disabled={createBusy || !catalog.backendStatus.ready || isRemote()}>New library…</button
         >
         <button
           class="ui-button"

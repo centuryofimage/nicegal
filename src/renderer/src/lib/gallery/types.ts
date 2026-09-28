@@ -1,3 +1,5 @@
+import { originalUrl, thumbnailUrl } from "../platform";
+
 export interface GalleryItem {
   id: string;
   path: string;
@@ -63,7 +65,7 @@ export function thumbnailUrlOf(
   });
   if (item.mediaKind === "video" && sampleTimestampMs !== undefined)
     query.set("frame", String(sampleTimestampMs));
-  return `thumb://asset/${encodeURIComponent(item.id)}?${query}`;
+  return thumbnailUrl(`asset/${encodeURIComponent(item.id)}?${query}`);
 }
 
 /**
@@ -73,7 +75,7 @@ export function thumbnailUrlOf(
  */
 export function originalUrlOf(item: GalleryItem): string {
   const query = new URLSearchParams({ mtime: item.modifiedNs, bytes: item.sourceSize });
-  return `original://asset/${encodeURIComponent(item.id)}?${query}`;
+  return originalUrl(`asset/${encodeURIComponent(item.id)}?${query}`);
 }
 
 /** Derives the layout ratio from indexer-supplied dimensions, tolerating missing/degenerate data. */

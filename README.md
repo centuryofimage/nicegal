@@ -10,6 +10,8 @@ it supports visually searching photos and videos with CLIP. you can also search 
 
 you can browse existing folders without moving your files. there are 3 phone style gallery layouts with date navigation, video playback, and a filter for photos or videos.
 
+you can even access it remotely in a web browser or on your phone
+
 visual search works with descriptions, example images, or both together. you can use more than one image in a search.
 
 <img src="docs/images/gallery-all-search.jpg" width="888">

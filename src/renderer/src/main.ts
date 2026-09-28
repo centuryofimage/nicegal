@@ -1,3 +1,4 @@
+import "./lib/install-bridge";
 import { mount } from "svelte";
 
 import "./assets/main.css";

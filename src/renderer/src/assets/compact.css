@@ -1,0 +1,22 @@
+/* Phone-width windows, mostly browsers connected over remote access. The panes already overlay
+   at this width (LibrariesPane, MetadataPanel). Toolbars wrap rather than scroll so their
+   dropdowns are not clipped: search takes the first row, icon-only buttons the next. A button
+   whose icon alone would be ambiguous, such as the viewer's back button beside Previous, keeps
+   its label. */
+@media (max-width: 600px) {
+  .app-toolbar {
+    flex-wrap: wrap;
+  }
+  .app-toolbar .search-bar {
+    flex-basis: 100%;
+  }
+  /* Visually hidden, still the button's accessible name. */
+  .app-toolbar-text-button:has(svg):not(.app-toolbar-keep-label) > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

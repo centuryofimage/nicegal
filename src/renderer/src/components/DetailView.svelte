@@ -28,10 +28,12 @@
 
   import type { ImageQuery } from "../../../shared/backend";
 
+  import { LONG_PRESS_MS, LONG_PRESS_SLOP_PX } from "../lib/gallery/input";
   import { originalUrlOf, type GalleryItem } from "../lib/gallery/types";
   import { TURBO_GRADIENT } from "../lib/patch-features/colormap";
   import { loadMatchMap, type MatchMap } from "../lib/patch-features/match-map";
   import { similarityPixels } from "../lib/patch-features/similar";
+  import { isRemote } from "../lib/platform";
   import VideoPlayer from "./VideoPlayer.svelte";
 
   type ZoomMode = "fit" | "actual" | "custom";
@@ -335,20 +337,85 @@
     setCustomScale(effectiveScale * 1.0015 ** -delta, anchor);
   }
 
+  /** A touch drag while the image fits steps between items; once zoomed in, drags pan. Holding
+   * still opens the file actions, since iOS Safari sends no contextmenu for a long press. */
+  let swipeStart: { pointerId: number; x: number; y: number } | null = null;
+  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+  const SWIPE_MIN_PX = 50;
+
+  /** Fingers on the image, for pinch zoom. Two fingers zoom around the point between them and pan
+   * as it moves; lifting one hands the gesture back to the other as a pan. */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- gesture bookkeeping; nothing renders from it
+  const touches = new Map<number, { x: number; y: number }>();
+  let pinch: { distance: number; midX: number; midY: number } | null = null;
+
+  function pinchState(): { distance: number; midX: number; midY: number } {
+    const [a, b] = [...touches.values()];
+    return {
+      distance: Math.hypot(a.x - b.x, a.y - b.y),
+      midX: (a.x + b.x) / 2,
+      midY: (a.y + b.y) / 2,
+    };
+  }
+
+  function startPan(pointerId: number, x: number, y: number): void {
+    dragPointerId = pointerId;
+    dragStartX = x;
+    dragStartY = y;
+    dragStartPanX = panX;
+    dragStartPanY = panY;
+  }
+
   function handlePointerDown(event: PointerEvent): void {
+    if (event.pointerType === "touch") {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      stage?.setPointerCapture(event.pointerId);
+      if (touches.size === 2 && imageReady) {
+        clearTimeout(longPressTimer);
+        swipeStart = null;
+        dragPointerId = null;
+        hoveredPatch = null;
+        pinch = pinchState();
+        return;
+      }
+      if (touches.size > 2) return;
+    }
+    if (event.pointerType === "touch" && !canPan && event.isPrimary) {
+      swipeStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        swipeStart = null;
+        onfilemenu();
+      }, LONG_PRESS_MS);
+      return;
+    }
     if (event.button !== 0 || dragPointerId !== null || !canPan || !stage) return;
     event.preventDefault();
 
     stage.setPointerCapture(event.pointerId);
     hoveredPatch = null;
-    dragPointerId = event.pointerId;
-    dragStartX = event.clientX;
-    dragStartY = event.clientY;
-    dragStartPanX = panX;
-    dragStartPanY = panY;
+    startPan(event.pointerId, event.clientX, event.clientY);
   }
 
   function handlePointerMove(event: PointerEvent): void {
+    if (touches.has(event.pointerId))
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pinch && touches.size >= 2) {
+      const next = pinchState();
+      const anchor = stagePoint(next.midX, next.midY);
+      if (anchor && pinch.distance > 0)
+        setCustomScale(effectiveScale * (next.distance / pinch.distance), anchor);
+      rawPanX = panX + next.midX - pinch.midX;
+      rawPanY = panY + next.midY - pinch.midY;
+      pinch = next;
+      return;
+    }
+    if (
+      swipeStart?.pointerId === event.pointerId &&
+      Math.abs(event.clientX - swipeStart.x) + Math.abs(event.clientY - swipeStart.y) >
+        LONG_PRESS_SLOP_PX
+    )
+      clearTimeout(longPressTimer);
     if (dragPointerId === null) {
       updateHoveredPatch(event);
       return;
@@ -359,6 +426,31 @@
   }
 
   function endPointerDrag(event: PointerEvent): void {
+    clearTimeout(longPressTimer);
+    touches.delete(event.pointerId);
+    if (pinch) {
+      if (touches.size >= 2) pinch = pinchState();
+      else {
+        pinch = null;
+        const [remaining] = [...touches.entries()];
+        if (remaining && canPan) startPan(remaining[0], remaining[1].x, remaining[1].y);
+      }
+      return;
+    }
+    if (swipeStart?.pointerId === event.pointerId) {
+      const dx = event.clientX - swipeStart.x;
+      const dy = event.clientY - swipeStart.y;
+      swipeStart = null;
+      if (
+        event.type !== "pointerup" ||
+        Math.abs(dx) < SWIPE_MIN_PX ||
+        Math.abs(dx) < 2 * Math.abs(dy)
+      )
+        return;
+      if (dx < 0 && hasNext) onnext();
+      else if (dx > 0 && hasPrev) onprev();
+      return;
+    }
     if (event.pointerId !== dragPointerId) return;
     if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
     dragPointerId = null;
@@ -410,6 +502,8 @@
   aria-label={item.displayName}
   bind:this={viewer}
   oncontextmenu={(event) => {
+    // A remote browser keeps its own menu on videos, which offers save and picture-in-picture.
+    if (isRemote() && event.target instanceof Element && event.target.closest("video")) return;
     event.preventDefault();
     onfilemenu();
   }}
@@ -417,7 +511,7 @@
   <header class="detail-toolbar app-toolbar">
     <div class="app-toolbar-group" role="toolbar" aria-label="Media navigation">
       <button
-        class="app-toolbar-button app-toolbar-text-button"
+        class="app-toolbar-button app-toolbar-text-button app-toolbar-keep-label"
         type="button"
         onclick={onclose}
         title="Return to gallery (Escape)"
@@ -427,7 +521,7 @@
         <span>Gallery</span>
       </button>
       <button
-        class="app-toolbar-button"
+        class="app-toolbar-button step-button"
         type="button"
         onclick={onprev}
         title="Previous"
@@ -437,7 +531,7 @@
         <ChevronLeft size={16} aria-hidden="true" />
       </button>
       <button
-        class="app-toolbar-button"
+        class="app-toolbar-button step-button"
         type="button"
         onclick={onnext}
         title="Next"
@@ -447,7 +541,7 @@
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
-    <div class="app-toolbar-divider" role="separator"></div>
+    <div class="app-toolbar-divider title-divider" role="separator"></div>
     <h1 class="detail-title" title={item.displayName}>{item.displayName}</h1>
 
     {#if isStillImage && !failed}
@@ -679,6 +773,7 @@
   }
 
   .detail-image-stage {
+    -webkit-touch-callout: none;
     position: relative;
     display: flex;
     width: 100%;
@@ -801,5 +896,20 @@
   .actual-size-button {
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
+  }
+  /* At phone width the name would only show a few letters. The status bar and Info pane
+     still show it. */
+  @media (max-width: 600px) {
+    .detail-title,
+    .title-divider {
+      display: none;
+    }
+  }
+  /* Swipes (touch) and arrow keys step between items, so the buttons would only crowd the back
+     button. */
+  @media (max-width: 600px) {
+    .step-button {
+      display: none;
+    }
   }
 </style>
