@@ -6,7 +6,7 @@
       [catcopy] [84 / 103 items] [provider] … [transient message] [98 / 103 scanned]
 
   The item count lives here rather than inside the search field: search-bar width is scarce and
-  the status bar has spare width by construction. One segment carries both readings — the library
+  the status bar can give it room when available. One segment carries both readings — the library
   size at rest, matched-of-total during a search — so there is no duplicated denominator. Indexing
   sits at the far right while image-search coverage is incomplete. Once scanning catches up, that
   segment disappears only when its eligible-image total also duplicates the library count.
@@ -20,6 +20,7 @@
 
   import { jobRateText } from "../lib/job-format";
   import { searchIssue, type SearchIssue } from "../lib/search-issue";
+  import ActivitySpinner from "./ActivitySpinner.svelte";
 
   let {
     libraryName,
@@ -29,6 +30,7 @@
     totalCount,
     filtering,
     searching,
+    mappingPatches,
     selectedCount,
     status,
     message,
@@ -50,6 +52,7 @@
     /** Whether a search is narrowing the gallery, which is what flips the items segment's meaning. */
     filtering: boolean;
     searching: boolean;
+    mappingPatches: boolean;
     selectedCount: number;
     status: LibraryRowStatus | undefined;
     message: string | undefined;
@@ -77,6 +80,10 @@
       ? (providerLabels[runtime.activeProvider] ?? runtime.activeProvider) +
           (runtime.status?.restartRequired ? " ⟳" : "")
       : "",
+  );
+  const imageModelShortName = $derived(
+    runtime.imageModelName?.replace(/ \d{3,4}(?= \(|$)/, "").replace(/ \(experimental\)$/, "") ??
+      "",
   );
   const setupIssue = $derived(searchIssue(runtime));
   // Loaded indexing models share one provider. Before they load, show the launch choice.
@@ -121,9 +128,10 @@
 
 <span class="status-segment library" title={libraryTitle || undefined}>{libraryName}</span>
 {#if hasLibrary}
-  <span class="status-segment count" role="status" title={itemsTitle}>{itemsText}</span>
+  <span class="status-segment count item-count" role="status" title={itemsTitle}>{itemsText}</span>
   {#if selectedCount > 0}
-    <span class="status-segment count" role="status">{selectedCount.toLocaleString()} selected</span
+    <span class="status-segment count selected-count" role="status"
+      >{selectedCount.toLocaleString()} selected</span
     >
   {/if}
 {/if}
@@ -133,6 +141,11 @@
   >
 {:else if runtime.activeProvider}
   <span class="status-segment provider" title={providerTitle}>{providerText}</span>
+  {#if hasLibrary && imageModelShortName}
+    <span class="status-segment image-model" title={runtime.imageModelName}
+      >{imageModelShortName}</span
+    >
+  {/if}
 {/if}
 {#if setupIssue && setupIssue.key !== dismissedSetupErrorKey}
   <span class="status-segment setup-issue">
@@ -147,10 +160,11 @@
     >
   </span>
 {/if}
-<span class="status-segment message" role="status">
-  {#if searching}<span class="index-activity-indicator active" aria-hidden="true"
-    ></span>Searching…{:else}{message ?? ""}{/if}
-</span>
+{#if searching || mappingPatches || message}
+  <span class="status-segment message" role="status">
+    {#if searching}<ActivitySpinner /> Searching…{:else if mappingPatches}<ActivitySpinner /> Mapping…{:else}{message}{/if}
+  </span>
+{/if}
 {#if hasLibrary}
   {#if indexText}
     <span class="status-segment count index-status">{indexText}</span>
@@ -176,59 +190,36 @@
     align-items: center;
   }
 
-  .index-activity-indicator {
-    flex: none;
-    width: 6px;
-    height: 6px;
-    margin-right: var(--space-4);
-    border: 1px solid var(--border-strong);
-    border-radius: 50%;
-    background: var(--surface-1);
-  }
-
-  .index-activity-indicator.active {
-    border-color: var(--accent);
-    border-top-color: transparent;
-    animation: index-activity-spin 850ms linear infinite;
-  }
-
-  @keyframes index-activity-spin {
-    to {
-      transform: rotate(1turn);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .index-activity-indicator.active {
-      border-top-color: var(--accent);
-      background: var(--accent);
-      animation: none;
-    }
-  }
-
-  .provider {
+  .provider,
+  .image-model {
     flex: none;
   }
 
   .backend-crashed {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
     color: var(--danger);
   }
   .status-action {
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
     border: 0;
     background: transparent;
     color: var(--danger);
     font: inherit;
     text-decoration: underline;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     cursor: pointer;
   }
 
   .setup-issue {
     display: inline-flex;
-    flex: none;
+    flex: 0 1 auto;
     align-items: center;
     gap: var(--space-4);
+    min-width: 0;
   }
 
   .dismiss-setup {
@@ -254,8 +245,43 @@
   .message {
     display: inline-flex;
     align-items: center;
+    gap: var(--space-4);
     flex: 1;
     min-width: 0;
     color: var(--text-secondary);
+  }
+
+  /* The details area shrinks before the pane buttons and size slider. Drop optional readings
+     in order while keeping scan throughput and warning actions available. */
+  @container (max-width: 550px) {
+    .library {
+      display: none;
+    }
+  }
+
+  @container (max-width: 480px) {
+    .selected-count {
+      display: none;
+    }
+  }
+
+  @container (max-width: 410px) {
+    .item-count,
+    .image-model {
+      display: none;
+    }
+  }
+
+  @container (max-width: 330px) {
+    .provider,
+    .message {
+      display: none;
+    }
+  }
+
+  @container (max-width: 220px) {
+    .index-status {
+      display: none;
+    }
   }
 </style>

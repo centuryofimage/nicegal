@@ -41,6 +41,10 @@ export interface GallerySettings {
   gridCellAspectRatio: number;
   /** Space between tiles, in pixels. */
   gap: number;
+  /** Whether search result tiles show their vector match score. */
+  matchScores: boolean;
+  /** Whether visual search results show their strongest matching areas on each image tile. */
+  matchAreas: boolean;
   /** Whether eligible animated GIF/video tiles are allowed to play in the grid. Combined at
    * runtime with the OS `prefers-reduced-motion` setting, which always wins when set — this
    * only controls the case where the OS has no motion preference expressed. */
@@ -72,6 +76,8 @@ const defaults: GallerySettings = {
   gridCellWidth: 160,
   gridCellAspectRatio: 1,
   gap: 10,
+  matchScores: true,
+  matchAreas: false,
   playAnimatedPreviews: true,
   debugIndexLimit: 0,
   libraryIndexing: {},

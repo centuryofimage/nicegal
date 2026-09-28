@@ -206,6 +206,14 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleTrustedIpc(IPC_CHANNELS.backend.getSearchModels, context.isTrustedSender, () =>
     requireBackend().getSearchModels(),
   );
+  handleTrustedIpc(
+    IPC_CHANNELS.backend.loadCachedModel,
+    context.isTrustedSender,
+    (_event, model: unknown) => {
+      if (model !== "clipText") throw new TypeError("Invalid cached model");
+      return requireBackend().loadCachedModel(model);
+    },
+  );
   handleTrustedIpc(IPC_CHANNELS.backend.search, context.isTrustedSender, async (event, value) => {
     const request = validateSearchRequest(value);
     ensureSenderTracked(event.sender);

@@ -433,7 +433,7 @@ test("closing preserves terms; clearing and every nonvisual scope discard images
   }
 });
 
-test("Search Like This Image replaces descriptions, dates, weights and old image examples", () => {
+test("Find similar images replaces the search without opening the composer", () => {
   const { search } = fixture();
   search.query = "like: 2:cat - dog during:2026";
   search.addLibraryReferences([photo]);
@@ -445,7 +445,7 @@ test("Search Like This Image replaces descriptions, dates, weights and old image
   assert.equal(search.visualReferences.length, 1);
   assert.equal(search.visualReferences[0].polarity, "more");
   assert.equal(search.visualReferences[0].strength, 1);
-  assert.equal(search.composerOpen, true);
+  assert.equal(search.composerOpen, false);
 });
 
 test("clear and scope changes cancel a queued image search without sending empty text requests", async () => {

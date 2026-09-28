@@ -1,10 +1,10 @@
 /**
  * What a query matches against, named for the target rather than the engine behind it — `meaning`
- * and the CLIP `like` scope are both "semantic", so that word cannot distinguish them.
- * - `all`: file names plus `ocr`'s literal text match, combined — no embeddings involved.
+ * and the visual `like` scope are both "semantic", so that word cannot distinguish them.
+ * - `all`: combines available file name, literal OCR, related text, and visual matches.
  * - `ocr`: words read out of the picture, matched literally (FTS5).
  * - `meaning`: those same words, matched by embedding similarity instead of spelling.
- * - `like`: images matched by the CLIP meaning of a text description.
+ * - `like`: images matched by a text description or example image when the model supports them.
  */
 export type SearchScope = "all" | "name" | "ocr" | "meaning" | "like";
 export type TemporalOperator = "before" | "after" | "during";

@@ -1,6 +1,12 @@
 /* eslint-disable svelte/prefer-svelte-reactivity -- Search collections are immutable snapshots; raw state tracks replacement without per-hit reactive bookkeeping. */
 
-import type { LibraryId, Timeline, SearchResponse, SearchResult } from "../../../shared/backend";
+import type {
+  ImageQuery,
+  LibraryId,
+  Timeline,
+  SearchResponse,
+  SearchResult,
+} from "../../../shared/backend";
 import type { ExternalVisualReference } from "../../../shared/backend";
 import type { CatalogController } from "./catalog.svelte";
 import type { GallerySection } from "./gallery/types";
@@ -9,12 +15,19 @@ import { errorCode, errorMessage } from "./errors";
 import { localDateToExclusiveNs, localDateToNs } from "./job-params";
 import { parseQuery, withScope, type DateFilter, type SearchScope } from "./search-query";
 import {
+  imageQueryComponents,
   isVisualComposition,
   parseVisualTextTerms,
   type VisualReferenceTerm,
 } from "./visual-query";
 
 type CatalogItem = CatalogController["items"][number];
+
+/** A result's cosine similarity to the search, from the visual or related-text vector lane. */
+export interface VectorMatch {
+  kind: "visual" | "text";
+  similarity: number;
+}
 const EMPTY_FRAME_TIMES: ReadonlyMap<string, number> = new Map();
 
 function frameTimes(hits: readonly SearchResult[]): ReadonlyMap<string, number> {
@@ -283,6 +296,55 @@ export class OcrSearchController {
   private readonly parsed = $derived(parseQuery(this.query));
   private readonly searchBody = $derived(normalizeSearchBody(this.parsed.scope, this.parsed.body));
 
+  /** Vector-lane matches by result id; a visual match wins when both lanes found an item. */
+  readonly vectorMatches = $derived.by((): ReadonlyMap<string, VectorMatch> => {
+    const matches = new Map<string, VectorMatch>();
+    const { scope } = this.parsed;
+    if (scope === "like" || scope === "meaning") {
+      const kind = scope === "like" ? "visual" : "text";
+      for (const [id, distance] of this.scores) matches.set(id, { kind, similarity: 1 - distance });
+    } else if (scope === "all") {
+      for (const kind of ["visual", "text"] as const) {
+        const lane = this.broadResults[kind === "visual" ? "visual" : "meaning"];
+        for (const hit of lane.results) {
+          if (hit.distance !== undefined && !matches.has(hit.assetId))
+            matches.set(hit.assetId, { kind, similarity: 1 - hit.distance });
+        }
+      }
+    }
+    return matches;
+  });
+
+  /** {@link visualImageQuery} as the user wrote it, with example images by name. */
+  readonly visualQueryLabel = $derived.by((): string => {
+    const { scope } = this.parsed;
+    if (scope !== "like" && scope !== "all") return "";
+    const references = scope === "like" ? this.visualReferences : [];
+    const parts = this.searchBody ? [this.searchBody] : [];
+    for (const reference of references) {
+      const strength = reference.strength === 1 ? "" : `${reference.strength}:`;
+      const operator = reference.polarity === "less" ? "- " : parts.length ? "+ " : "";
+      parts.push(`${operator}${strength}${reference.displayName}`);
+    }
+    return parts.join(" ");
+  });
+
+  /** The CLIP direction the visual search, or All's visual lane, ranks by; null without one. */
+  readonly visualImageQuery = $derived.by((): ImageQuery | null => {
+    const { scope } = this.parsed;
+    const body = this.searchBody;
+    if (scope === "all") return body ? { components: [{ text: body, weight: 1 }] } : null;
+    if (scope !== "like") return null;
+    const references = this.visualReferences;
+    const components =
+      isVisualComposition(body) || references.length
+        ? imageQueryComponents(parseVisualTextTerms(body), references)
+        : body
+          ? [{ text: body, weight: 1 }]
+          : [];
+    return components.length ? { components } : null;
+  });
+
   /** 0-100 cutoff control value; it is a percentile for text meaning and logarithmic for CLIP. */
   get minMatchPercentile(): number {
     return this.parsed.scope !== "meaning" ? this.clipMatchQuality : this.meaningMinMatchPercentile;
@@ -335,7 +397,7 @@ export class OcrSearchController {
           strength: 1,
         })),
     ]);
-    this.composerOpen = true;
+    this.composerOpen = !replace;
   }
 
   addExternalReferences(items: readonly ExternalVisualReference[]): void {
@@ -723,19 +785,7 @@ export class OcrSearchController {
         const searchQuery =
           searchType === "ocrMatch" && ocrMode === "terms" ? quoteFtsTerms(body) : body;
         const runSearch = (): void => {
-          const visualComponents = [
-            ...visualTerms.map((term) => ({
-              text: term.text,
-              weight: term.polarity === "more" ? term.strength : -term.strength,
-            })),
-            ...references.map((reference) => {
-              const weight =
-                reference.polarity === "more" ? reference.strength : -reference.strength;
-              if (reference.source === "library")
-                return { assetId: Number(reference.assetId), weight };
-              return { externalImage: { bytesBase64: reference.bytesBase64 ?? "" }, weight };
-            }),
-          ];
+          const visualComponents = imageQueryComponents(visualTerms, references);
           void window.nicegal.backend
             .searchOcr({
               query: composedVisual ? "" : searchQuery,

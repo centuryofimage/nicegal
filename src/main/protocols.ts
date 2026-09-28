@@ -22,6 +22,12 @@ const CUSTOM_SCHEMES: CustomScheme[] = [
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
   },
   {
+    // Authenticated pass-through to nicegal-server for binary or streamed responses that should not
+    // cross IPC. The renderer never sees the server's token or port.
+    scheme: "api",
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true },
+  },
+  {
     scheme: "original",
     privileges: {
       standard: true,
@@ -35,6 +41,8 @@ const CUSTOM_SCHEMES: CustomScheme[] = [
 
 export interface ProtocolServices {
   rendererDirectory: string;
+  /** Origins allowed to call `api://`, for CORS. */
+  rendererOrigins: readonly string[];
   getCatalog: () => NicegalServerClient | null;
   getThumbnails: () => ThumbnailReader | null;
 }
@@ -48,6 +56,9 @@ export function registerCustomSchemes(): void {
 export function installProtocolHandlers(services: ProtocolServices): void {
   protocol.handle(APP_SCHEME, (request) => handleAppRequest(request, services.rendererDirectory));
   protocol.handle("thumb", (request) => handleThumbnailRequest(request, services.getThumbnails));
+  protocol.handle("api", (request) =>
+    handleApiRequest(request, services.getCatalog, services.rendererOrigins),
+  );
   // `protocol.handle` cannot expose a seekable file response in Electron yet. Let Chromium's
   // native file handler serve the validated path so its media cache and range seeking work.
   protocol.registerFileProtocol("original", (request, callback) => {
@@ -130,6 +141,58 @@ function handleThumbnailRequest(
   } catch (error) {
     console.error("Thumbnail protocol request failed", error);
     return new Response("Thumbnail request failed", { status: 500 });
+  }
+}
+
+/**
+ * `api://server/v1/...` forwards GET and POST to the same nicegal-server path with the bearer
+ * token, passing the status, content type and body through unchanged.
+ */
+async function handleApiRequest(
+  request: Request,
+  getClient: () => NicegalServerClient | null,
+  rendererOrigins: readonly string[],
+): Promise<Response> {
+  const origin = request.headers.get("origin");
+  const cors: Record<string, string> =
+    origin && rendererOrigins.includes(origin)
+      ? { "access-control-allow-origin": origin, vary: "origin" }
+      : {};
+  try {
+    const url = new URL(request.url);
+    if (url.hostname !== "server" || !url.pathname.startsWith("/v1/")) {
+      return new Response("Not found", { status: 404, headers: cors });
+    }
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          ...cors,
+          "access-control-allow-methods": "GET, POST",
+          "access-control-allow-headers": "content-type",
+        },
+      });
+    }
+    if (request.method !== "GET" && request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405, headers: cors });
+    }
+    const client = getClient();
+    if (!client) return new Response("Backend is starting", { status: 503, headers: cors });
+    const contentType = request.headers.get("content-type");
+    const response = await client.forward(`${url.pathname}${url.search}`, {
+      method: request.method,
+      headers: contentType ? { "content-type": contentType } : undefined,
+      body: request.method === "POST" ? await request.arrayBuffer() : undefined,
+      signal: request.signal,
+    });
+    const headers = new Headers(cors);
+    const responseType = response.headers.get("content-type");
+    if (responseType) headers.set("content-type", responseType);
+    return new Response(response.body, { status: response.status, headers });
+  } catch (error) {
+    if (request.signal.aborted) return new Response(null, { status: 499, headers: cors });
+    console.error("API protocol request failed", error);
+    return new Response("API request failed", { status: 502, headers: cors });
   }
 }
 

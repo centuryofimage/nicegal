@@ -56,9 +56,11 @@ jobs:
           - os: macos-latest
             platform: macos-arm64
             arch: arm64
-          - os: macos-26-intel
-            platform: macos-intel
-            arch: x64
+          # Intel is skipped for now. Restore its row in .github/RELEASE_NOTES_TEMPLATE.md when
+          # re-enabling it.
+          # - os: macos-26-intel
+          #   platform: macos-intel
+          #   arch: x64
     uses: ./.github/workflows/build-macos.yml
     with:
       version: ${{ needs.version.outputs.version }}

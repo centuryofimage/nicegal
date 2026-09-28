@@ -21,6 +21,7 @@
         >Visual search is set up automatically. The first run downloads a search model; your files
         stay on your computer.</span
       >
+      <span>Larger models search more accurately. Pick one in <b>Settings → Search</b>.</span>
       <span>For words inside pictures, turn on <b>Text recognition</b> in Library manager.</span>
     </li>
     <li>

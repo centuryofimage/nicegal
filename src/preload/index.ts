@@ -108,6 +108,9 @@ const backend: NicegalBridge["backend"] = {
   getSearchModels(): Promise<SearchModelsResponse> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.getSearchModels);
   },
+  loadCachedModel(model: "clipText"): Promise<boolean> {
+    return ipcRenderer.invoke(IPC_CHANNELS.backend.loadCachedModel, model);
+  },
   searchOcr(request: SearchRequest): Promise<SearchResponse> {
     return ipcRenderer.invoke(IPC_CHANNELS.backend.search, request);
   },

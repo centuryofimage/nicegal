@@ -4,26 +4,28 @@
 
 nicegal is a super fast desktop gallery for photos and videos. it has powerful search features, and is designed to help people find stuff in gigantic unsorted downloads folders.
 
-it supports searching the text inside images with optical character recognition (PaddleOCR), and visually searching photos and videos with CLIP. you can also search with an image. the OCR and CLIP search indexing uses your gpu if you have one, through DirectML and WebGPU.
+it supports visually searching photos and videos with CLIP. you can also search with an image. search indexing uses your gpu if you have one, through DirectML and WebGPU.
 
 <img src="docs/images/gallery-composer.jpg" width="888">
 
-- 3 different phone style gallery layouts, date navigation
-- browse existing folders without moving your files.
-- browse and play videos alongside photos, with thumbnails and an image/video filter.
-- find exact words, related text (vecsearch), visual concepts, or similar images.
-- combine descriptions and image references in one search
+you can browse existing folders without moving your files. there are 3 phone style gallery layouts with date navigation, video playback, and a filter for photos or videos.
+
+visual search works with descriptions, example images, or both together. you can use more than one image in a search.
 
 <img src="docs/images/gallery-all-search.jpg" width="888">
 
-### Search modes:
-
-- **All** - Show a view with all 3 of the blow.
-- **Exact text `ocr:`** - Words found inside images.
-- **Related text `meaning:`** - Text with a similar meaning to your query.
-- **Visual search `like:`** - Appearance, concepts, and similarity to another image or video.
+you can also search by file name, or enable OCR (PaddleOCR) to search the text inside images.
 
 <img src="docs/images/gallery-search-menu.jpg" width="888">
+
+### See what matched
+
+some models can show which parts of an image match your search. these screenshots use DINOv3, with match areas shown in the gallery and with Visualize on an opened image.
+
+<p>
+  <a href="docs/images/dinov3-match-areas-gallery.jpg"><img src="docs/images/dinov3-match-areas-gallery.jpg" width="49%" alt="DINOv3 match areas across visual search results"></a>
+  <a href="docs/images/dinov3-match-areas-detail-visualize.jpg"><img src="docs/images/dinov3-match-areas-detail-visualize.jpg" width="49%" alt="DINOv3 match areas on an opened image"></a>
+</p>
 
 ## Get Nicegal
 

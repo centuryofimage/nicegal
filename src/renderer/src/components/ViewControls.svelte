@@ -159,6 +159,33 @@
         {/each}
       </div>
     </div>
+    <div class="organization-group">
+      <h3>Search results</h3>
+      <div class="choice-row">
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={$settings.matchScores}
+          title="Show each result's vector match score on its tile"
+          onclick={() => ($settings.matchScores = !$settings.matchScores)}
+        >
+          <span class="choice-mark" aria-hidden="true"
+            >{#if $settings.matchScores}<Check size={12} />{/if}</span
+          >Match scores
+        </button>
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={$settings.matchAreas}
+          title="Show where each visual search result matches, on its tile"
+          onclick={() => ($settings.matchAreas = !$settings.matchAreas)}
+        >
+          <span class="choice-mark" aria-hidden="true"
+            >{#if $settings.matchAreas}<Check size={12} />{/if}</span
+          >Match areas
+        </button>
+      </div>
+    </div>
   </div>
 {/snippet}
 <div class="view-controls" {@attach popoverDismiss(openMenu, () => (openMenu = false))}>

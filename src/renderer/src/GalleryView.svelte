@@ -28,6 +28,9 @@
   const { catalog, runtime, ocrSearch, jobs } = application.services;
   // Offline folders would leave blank tiles, so the whole gallery explains them instead.
   const offline = $derived(offlineFolders(catalog.selectedLibrary));
+  /** Kept across images and viewer sessions; the viewer is recreated for each item. */
+  let showMatchAreas = $state(false);
+  let mappingPatches = $state(false);
   let infoOpen = $state(false);
   let infoButton: HTMLButtonElement;
   function toggleInfo(): void {
@@ -44,6 +47,13 @@
   );
   let toolbarControls = $state<GalleryToolbar>();
   const thumbnailFailures = $derived(gallery?.getThumbnailFailures(catalog.items) ?? []);
+  const visualReferenceIds = $derived(
+    new Set(
+      ocrSearch.visualReferences.flatMap((reference) =>
+        reference.source === "library" && reference.assetId ? [reference.assetId] : [],
+      ),
+    ),
+  );
   // Keep a dismissed warning hidden while moving between the gallery and viewer. A different
   // failure gets a different key and is shown again.
   let dismissedSetupErrorKey = $state<string | null>(null);
@@ -123,9 +133,19 @@
           previewSuspended={Boolean(view.detailItem)}
           snippets={ocrSearch.displaySnippets}
           matchTimes={ocrSearch.matchingFrameTimes}
+          matchScores={$settings.matchScores ? ocrSearch.vectorMatches : null}
+          matchAreas={$settings.matchAreas &&
+          runtime.imageModelVisualizes &&
+          catalog.backendStatus.ready
+            ? ocrSearch.visualImageQuery
+            : null}
+          matchAreaModel={runtime.imageModel?.activeModel ?? ""}
+          matchAreaScores={ocrSearch.vectorMatches}
+          onmappingchange={(active) => (mappingPatches = active)}
           snippetQuery={ocrSearch.query}
           searchQuery={ocrSearch.query}
           selectedIds={view.gallerySelection.ids}
+          referenceIds={visualReferenceIds}
           hideNativeScrollbar
           onScroll={view.handleGalleryScroll}
           onselect={view.selectGalleryItem}
@@ -232,6 +252,12 @@
             }}
             onstatuschange={(status) => (view.detailStatus = status)}
             onfilemenu={() => view.detailIndex !== null && view.openFileMenu(view.detailIndex)}
+            imageQuery={ocrSearch.visualImageQuery}
+            imageQueryLabel={ocrSearch.visualQueryLabel}
+            imageModelName={runtime.imageModelName}
+            imageModelVisualizes={runtime.imageModelVisualizes}
+            backendReady={catalog.backendStatus.ready}
+            bind:showMatchAreas
           />
         {/key}
       {/if}
@@ -239,6 +265,9 @@
     {#if infoOpen}
       <MetadataPanel
         asset={inspectedAsset}
+        vectorMatch={inspectedAsset
+          ? (ocrSearch.vectorMatches.get(inspectedAsset.id) ?? null)
+          : null}
         selectedCount={view.gallerySelection.count}
         ready={catalog.backendStatus.ready}
         onclose={closeInfo}
@@ -269,6 +298,7 @@
         totalCount={catalog.items.length}
         filtering={view.searchView.filtering}
         searching={ocrSearch.pending}
+        {mappingPatches}
         selectedCount={view.gallerySelection.count}
         status={catalog.selectedStatus}
         job={jobs.active}
@@ -329,6 +359,7 @@
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    container-type: inline-size;
   }
   .workspace-row {
     display: flex;

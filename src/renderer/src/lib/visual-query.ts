@@ -1,3 +1,5 @@
+import type { ImageQueryComponent } from "../../../shared/backend";
+
 /** A user-editable CLIP component. The wire serializer lives at the Electron boundary; this
  * deliberately represents only text while the visual editor is being brought up. */
 export type VisualTextTerm = {
@@ -70,4 +72,22 @@ export function formatVisualTextTerms(terms: readonly VisualTextTerm[]): string 
       return `${operator}${strength}${text}`;
     })
     .join("");
+}
+
+/** Signed wire components for a composed visual search: text terms, then example images. */
+export function imageQueryComponents(
+  terms: readonly VisualTextTerm[],
+  references: readonly VisualReferenceTerm[],
+): ImageQueryComponent[] {
+  return [
+    ...terms.map((term) => ({
+      text: term.text,
+      weight: term.polarity === "more" ? term.strength : -term.strength,
+    })),
+    ...references.map((reference): ImageQueryComponent => {
+      const weight = reference.polarity === "more" ? reference.strength : -reference.strength;
+      if (reference.source === "library") return { assetId: Number(reference.assetId), weight };
+      return { externalImage: { bytesBase64: reference.bytesBase64 ?? "" }, weight };
+    }),
+  ];
 }

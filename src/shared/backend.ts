@@ -23,6 +23,8 @@ export interface ImageModelStatus {
     url: string;
     available: boolean;
     supportsTextQueries: boolean;
+    /** Whether the viewer can show where an image matches a visual search. */
+    patchFeatures?: boolean;
   }[];
 }
 
@@ -499,6 +501,8 @@ export interface BackendBridge {
   getCatalogRevision(): Promise<string>;
   getOcrModels(): Promise<OcrModelsResponse>;
   getSearchModels(): Promise<SearchModelsResponse>;
+  /** Load a cached search model if present; never downloads. */
+  loadCachedModel(model: "clipText"): Promise<boolean>;
   searchOcr(request: SearchRequest): Promise<SearchResponse>;
   /** Abort all current searches and close their session. The next session must be newer. */
   cancelSearch(): Promise<void>;

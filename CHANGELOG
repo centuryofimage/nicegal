@@ -1,5 +1,5 @@
-- finally settle on a good sync algorithm that ignores unmodified folders
-  - manual sync is still in settings
-- linked folders (symlinks and junctions) now act like normal folders, and folders with unreadable files no longer resync every time
-- clarify some blocking ui states, including image-only search with DINOv3
-- skip previously failed videos
+- fix video sync algorithm oddities
+- drop intel macos until someone asks for it back
+- add cool feature visualizations!!!!
+  - click view to enable them in the thumbnails and visualize in the preview to see them there
+- update the model selection menu to make it a little more clear what each one does

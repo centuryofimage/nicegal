@@ -90,6 +90,8 @@ class Application implements ApplicationContext {
 
   private started = false;
   private backendInitialized = false;
+  private clipTextWarmupStarted = false;
+  private clipTextWarmupRevision = 0;
   private deferringScans = false;
   /** The library whose scan is held while a settings dialog is open. */
   private deferredScan: LibraryId | null = null;
@@ -191,6 +193,8 @@ class Application implements ApplicationContext {
       catalog.applyBackendStatus(status);
       if (status.error && orchestrator.restartingIndex) orchestrator.backendDisconnected();
       if (disconnected) {
+        this.clipTextWarmupStarted = false;
+        this.clipTextWarmupRevision += 1;
         runtime.reset();
         const providerFallback = status.restartReason === "provider-fallback";
         const resuming = orchestrator.backendDisconnected(providerFallback);
@@ -229,7 +233,10 @@ class Application implements ApplicationContext {
     try {
       await catalog.initialize();
       this.initialized = true;
-      if (catalog.backendStatus.ready) await this.initializeReadyBackend();
+      if (catalog.backendStatus.ready) {
+        this.warmClipTextModel(catalog.selectedId);
+        await this.initializeReadyBackend();
+      }
     } catch (error) {
       this.initialized = true;
       this.problem = {
@@ -243,6 +250,7 @@ class Application implements ApplicationContext {
 
   private async recoverBackend(): Promise<void> {
     await this.services.catalog.loadLibraries();
+    this.warmClipTextModel(this.services.catalog.selectedId);
     await this.initializeReadyBackend();
     const { catalog, orchestrator, jobs } = this.services;
     orchestrator.backendReady();
@@ -254,6 +262,40 @@ class Application implements ApplicationContext {
     if (catalog.selectedId === null) return;
     if (this.deferringScans) this.deferredScan = catalog.selectedId;
     else await orchestrator.scan(catalog.selectedId);
+  }
+
+  /** Warm only when the selected library already has indexed CLIP content. */
+  private warmClipTextModel(libraryId: LibraryId | null): void {
+    const { catalog, runtime } = this.services;
+    if (this.clipTextWarmupStarted || libraryId === null || !catalog.backendStatus.ready) return;
+    const revision = ++this.clipTextWarmupRevision;
+    void (async () => {
+      let indexed: number;
+      try {
+        indexed = (await window.nicegal.backend.getImageEmbeddingCoverage(libraryId)).indexed;
+      } catch {
+        return;
+      }
+      if (
+        !indexed ||
+        revision !== this.clipTextWarmupRevision ||
+        this.clipTextWarmupStarted ||
+        !catalog.backendStatus.ready ||
+        catalog.selectedId !== libraryId
+      )
+        return;
+      this.clipTextWarmupStarted = true;
+      try {
+        const loaded = await window.nicegal.backend.loadCachedModel("clipText");
+        if (revision !== this.clipTextWarmupRevision || !catalog.backendStatus.ready) return;
+        if (loaded) void runtime.refreshModels();
+        else this.clipTextWarmupStarted = false;
+      } catch (error) {
+        if (revision !== this.clipTextWarmupRevision || !catalog.backendStatus.ready) return;
+        console.warn("Cached visual search model could not be loaded", error);
+        void runtime.refreshModels();
+      }
+    })();
   }
 
   /**

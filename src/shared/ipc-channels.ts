@@ -27,6 +27,7 @@ export const IPC_CHANNELS = {
     getImageEmbeddingCoverage: "backend:get-image-embedding-coverage",
     getOcrModels: "backend:get-ocr-models",
     getSearchModels: "backend:get-search-models",
+    loadCachedModel: "backend:load-cached-model",
     search: "backend:search",
     cancelSearch: "backend:cancel-search",
     startJob: "backend:start-job",

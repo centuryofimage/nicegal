@@ -131,7 +131,7 @@ function installContentSecurityPolicy(): void {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' thumb: original:",
       "media-src 'self' thumb: original:",
-      `connect-src ${connectSrc}`,
+      `connect-src ${connectSrc} api:`,
       "object-src 'none'",
       "base-uri 'none'",
       "form-action 'none'",
@@ -382,6 +382,7 @@ if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
     // after startup and can be replaced on backend restart without re-registering the protocols.
     installProtocolHandlers({
       rendererDirectory: join(__dirname, "../renderer"),
+      rendererOrigins: [new URL(rendererEntryUrl).origin],
       getCatalog: () => backendClient,
       getThumbnails: () => thumbnailReader,
     });

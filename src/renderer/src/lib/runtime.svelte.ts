@@ -29,6 +29,13 @@ export class RuntimeController {
   get supportsImageTextQueries(): boolean {
     return this.imageModel?.supportsTextQueries ?? true;
   }
+  /** Whether the active image model can show where an image matches a visual search. */
+  get imageModelVisualizes(): boolean {
+    const imageModel = this.imageModel;
+    return (
+      imageModel?.models.find((model) => model.id === imageModel.activeModel)?.patchFeatures ?? true
+    );
+  }
   /** Display name of the image model in use, for copy that explains what it can search. */
   get imageModelName(): string | null {
     const imageModel = this.imageModel;

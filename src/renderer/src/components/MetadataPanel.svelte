@@ -1,17 +1,21 @@
 <script lang="ts">
   import type { AssetMetadata } from "../../../shared/backend";
   import type { GalleryItem } from "../lib/gallery/types";
+  import type { VectorMatch } from "../lib/ocr-search.svelte";
 
   import { cleanDiagnostic, errorMessage } from "../lib/errors";
   import { formatBytes } from "../lib/job-format";
 
   let {
     asset,
+    vectorMatch = null,
     selectedCount,
     ready,
     onclose,
   }: {
     asset: GalleryItem | null;
+    /** The asset's cosine similarity to the current search, when a vector lane matched it. */
+    vectorMatch?: VectorMatch | null;
     selectedCount: number;
     ready: boolean;
     onclose: () => void;
@@ -131,6 +135,15 @@
           {:else}
             <p>Video metadata unavailable.</p>
           {/if}
+        {/if}
+        {#if vectorMatch}
+          <h3>Current search</h3>
+          <dl>
+            <dt>{vectorMatch.kind === "visual" ? "Visual match" : "Text match"}</dt>
+            <dd class="match-value" title={String(vectorMatch.similarity)}>
+              {vectorMatch.similarity}
+            </dd>
+          </dl>
         {/if}
         <h3>Search availability</h3>
         <dl>
@@ -265,6 +278,13 @@
   dd {
     margin: 0;
     min-width: 0;
+  }
+  /* Full precision, clipped to the pane rather than rounded. */
+  .match-value {
+    overflow: hidden;
+    font-variant-numeric: tabular-nums;
+    text-overflow: clip;
+    white-space: nowrap;
   }
   pre {
     max-height: 180px;

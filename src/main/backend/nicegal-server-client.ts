@@ -109,6 +109,15 @@ export class NicegalServerClient {
     return this.requestJson<SearchModelsResponse>("/v1/models", { method: "GET" });
   }
 
+  async loadCachedModel(model: "clipText"): Promise<boolean> {
+    const response = await this.requestJson<{ loaded: boolean }>("/v1/models/load-cached", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model }),
+    });
+    return response.loaded;
+  }
+
   async getRuntimeStatus(): Promise<RuntimeStatus> {
     return this.requestJson<RuntimeStatus>("/v1/runtime", { method: "GET" });
   }
@@ -450,6 +459,13 @@ export class NicegalServerClient {
     } finally {
       reader.releaseLock();
     }
+  }
+
+  /** Authenticated request whose response, including an error status, is returned unread. */
+  async forward(path: string, init: RequestInit): Promise<Response> {
+    const headers = new Headers(init.headers);
+    headers.set("authorization", `Bearer ${this.token}`);
+    return fetch(new URL(path, this.endpoint), { ...init, headers });
   }
 
   private async requestJson<T>(input: string | URL, init: RequestInit): Promise<T> {

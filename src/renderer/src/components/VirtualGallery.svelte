@@ -27,11 +27,13 @@
   import Video from "@lucide/svelte/icons/video";
   import Volume2 from "@lucide/svelte/icons/volume-2";
   import VolumeX from "@lucide/svelte/icons/volume-x";
-  import { tick, untrack } from "svelte";
+  import { onDestroy, tick, untrack } from "svelte";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
 
+  import type { ImageQuery } from "../../../shared/backend";
   import type { SelectionModifiers } from "../lib/gallery/selection.svelte";
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
+  import type { VectorMatch } from "../lib/ocr-search.svelte";
 
   import { createGalleryInput } from "../lib/gallery/input";
   import { buildLayout } from "../lib/gallery/layout";
@@ -50,6 +52,11 @@
     type GallerySection,
   } from "../lib/gallery/types";
   import { firstVisibleIndex, visibleIndexRange } from "../lib/gallery/visible-range";
+  import {
+    TileMatchAreas,
+    matchAreaKey,
+    type TileMatchMap,
+  } from "../lib/patch-features/tile-match-areas.svelte";
   import { parseQuery } from "../lib/search-query";
 
   /** Give up on a poster that keeps failing to ensure (corrupt/unreadable source) rather than
@@ -90,6 +97,12 @@
      * iBooks-style caption strip over its bottom edge so the user can see *why* it matched. */
     snippets,
     matchTimes,
+    /** Vector match scores by item id, shown as tile chips; null hides them. */
+    matchScores = null,
+    matchAreas = null,
+    matchAreaModel = "",
+    matchAreaScores = null,
+    onmappingchange = () => {},
     /** Raw query text used to highlight matching terms inside the caption. */
     snippetQuery = "",
     /** A changed search starts a new result set, which must begin at the top rather than retain
@@ -98,6 +111,8 @@
     onScroll = () => {},
     /** The app-owned, ID-keyed selection stays stable while this component recycles tile DOM. */
     selectedIds = new SvelteSet<string>(),
+    /** Library photos currently used as visual search examples. */
+    referenceIds = new Set<string>(),
     /** Fires when a tile is modifier-selected without opening it. */
     onselect = () => {},
     /** ViSelect's live marquee hit set, expressed as stable asset IDs instead of pooled DOM nodes. */
@@ -130,10 +145,16 @@
     previewSuspended?: boolean;
     snippets?: ReadonlyMap<string, string>;
     matchTimes?: ReadonlyMap<string, number>;
+    matchScores?: ReadonlyMap<string, VectorMatch> | null;
+    matchAreas?: ImageQuery | null;
+    matchAreaModel?: string;
+    matchAreaScores?: ReadonlyMap<string, VectorMatch> | null;
+    onmappingchange?: (active: boolean) => void;
     snippetQuery?: string;
     searchQuery?: string;
     onScroll?: (state: { scrollTop: number; layout: GalleryLayout }) => void;
     selectedIds?: ReadonlySet<string>;
+    referenceIds?: ReadonlySet<string>;
     onselect?: (index: number, modifiers: SelectionModifiers) => void;
     onmarqueestart?: (modifiers: SelectionModifiers) => void;
     onmarqueechange?: (ids: readonly string[]) => void;
@@ -177,6 +198,78 @@
   let previousViewKey: string | undefined;
   const viewOffsets = new SvelteMap<string, { top: number; anchor: typeof anchor }>();
   let tiles = $state.raw<PoolTile[]>([]);
+  const tileMatchAreas = new TileMatchAreas();
+  onDestroy(() => tileMatchAreas.dispose());
+  $effect(() => onmappingchange(tileMatchAreas.busy));
+  function matchAreaTarget(tile: PoolTile): string | null {
+    if (tile.mediaKind === "image") return tile.itemId;
+    if (
+      tile.mediaKind === "video" &&
+      tile.matchTimestampMs !== undefined &&
+      missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs &&
+      previewVideoId !== tile.itemId
+    ) {
+      return matchAreaKey(tile.itemId, tile.matchTimestampMs);
+    }
+    return null;
+  }
+  $effect(() => {
+    const visible = tiles
+      .filter(
+        (tile) =>
+          matchAreaTarget(tile) !== null &&
+          matchAreaScores?.get(tile.itemId)?.kind === "visual" &&
+          tile.y + tile.height >= scrollTop &&
+          tile.y <= scrollTop + viewportHeight,
+      )
+      .map((tile) => matchAreaTarget(tile)!);
+    const query = matchAreas;
+    const model = matchAreaModel;
+    untrack(() => tileMatchAreas.configure(model, query, visible));
+  });
+  const matchAreaRange = $derived.by(() => {
+    const values = Array.from(matchAreaScores?.values() ?? [])
+      .filter((match) => match.kind === "visual")
+      .map((match) => match.similarity);
+    return values.length ? { min: Math.min(...values), max: Math.max(...values) } : null;
+  });
+  function matchAreaFade(id: string): number {
+    const range = matchAreaRange;
+    const score = matchAreaScores?.get(id)?.similarity;
+    return range && score !== undefined && range.max > range.min
+      ? 0.4 + (0.6 * (score - range.min)) / (range.max - range.min)
+      : 1;
+  }
+  function paintTileMap(map: TileMatchMap) {
+    return (canvas: HTMLCanvasElement): void => {
+      canvas.getContext("2d")?.putImageData(new ImageData(map.pixels, map.columns, map.rows), 0, 0);
+    };
+  }
+  function tileMapPlacement(
+    tile: PoolTile,
+    map: TileMatchMap,
+  ): {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } {
+    const contentWidth = Math.max(1, tile.width - 6);
+    const contentHeight = Math.max(1, tile.height - 6);
+    const sourceWidth = tile.naturalWidth || contentWidth;
+    const sourceHeight = tile.naturalHeight || contentHeight;
+    const fit = layout.mode === "grid" ? Math.max : Math.min;
+    const scale = fit(contentWidth / sourceWidth, contentHeight / sourceHeight);
+    const imageWidth = sourceWidth * scale;
+    const imageHeight = sourceHeight * scale;
+    const [x, y, width, height] = map.region;
+    return {
+      left: (contentWidth - imageWidth) / 2 + x * imageWidth,
+      top: (contentHeight - imageHeight) / 2 + y * imageHeight,
+      width: width * imageWidth,
+      height: height * imageHeight,
+    };
+  }
 
   // Animated-image promotion. Video previews are attached only for the hovered tile.
   const media = new GalleryMediaLifecycle();
@@ -698,6 +791,14 @@
   }
 </script>
 
+{#snippet matchScore(match: VectorMatch)}
+  <span
+    class="match-score"
+    title={`${match.kind === "visual" ? "Visual" : "Text meaning"} match ${match.similarity}`}
+    >{match.similarity.toFixed(3)}</span
+  >
+{/snippet}
+
 <svelte:window
   onpointerup={() => oninteractionchange(false)}
   onpointercancel={() => oninteractionchange(false)}
@@ -737,11 +838,13 @@
       {@const matchingFrameAvailable =
         tile.matchTimestampMs !== undefined &&
         missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs}
+      {@const areaKey = matchAreaTarget(tile)}
       <div
         class={{
           "gallery-frame": true,
           "is-pixelated": isPixelArt(tile),
           "is-selected": selectedIds.has(tile.itemId),
+          "is-visual-reference": referenceIds.has(tile.itemId),
         }}
         data-gallery-item-id={tile.itemId}
         title={[
@@ -753,11 +856,16 @@
         ]
           .filter(Boolean)
           .join("\n")}
-        aria-label={thumbnailFailures.has(tile.itemId)
-          ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
-          : tile.matchTimestampMs === undefined
-            ? tile.alt
-            : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`}
+        aria-label={[
+          thumbnailFailures.has(tile.itemId)
+            ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
+            : tile.matchTimestampMs === undefined
+              ? tile.alt
+              : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`,
+          referenceIds.has(tile.itemId) ? "Visual search example" : "",
+        ]
+          .filter(Boolean)
+          .join(". ")}
         style={tileStyle(tile)}
         role="button"
         draggable="true"
@@ -782,6 +890,30 @@
           }}
           use:tileImage={currentSrc}
         />
+        {#if matchAreas && areaKey && matchAreaScores?.get(tile.itemId)?.kind === "visual" && tileMatchAreas.entries.has(areaKey)}
+          {#key areaKey}
+            {@const map = tileMatchAreas.entries.get(areaKey)!}
+            {@const placement = tileMapPlacement(tile, map)}
+            <div
+              class="tile-match-clip"
+              aria-hidden="true"
+              style:--match-fade={matchAreaFade(tile.itemId)}
+            >
+              {#each ["tint", "cover"] as layer (layer)}
+                <canvas
+                  class={["tile-match-map", `tile-match-${layer}`]}
+                  width={map.columns}
+                  height={map.rows}
+                  style:left={`${placement.left}px`}
+                  style:top={`${placement.top}px`}
+                  style:width={`${placement.width}px`}
+                  style:height={`${placement.height}px`}
+                  {@attach paintTileMap(map)}
+                ></canvas>
+              {/each}
+            </div>
+          {/key}
+        {/if}
         {#if tile.mediaKind === "video"}
           {#if previewVideoId === tile.itemId}
             <video
@@ -834,6 +966,9 @@
         {/if}
         {#if thumbnailFailures.has(tile.itemId)}
           <span class="thumbnail-failed">Thumbnail unavailable</span>
+        {/if}
+        {#if matchScores?.has(tile.itemId)}
+          {@render matchScore(matchScores.get(tile.itemId)!)}
         {/if}
         {#if tile.snippetSegments}
           <span class="match-caption">
@@ -938,6 +1073,23 @@
     background: var(--search-section-rule);
   }
 
+  .match-score {
+    position: absolute;
+    top: var(--media-badge-inset);
+    left: var(--media-badge-inset);
+    display: inline-flex;
+    align-items: center;
+    height: var(--space-14);
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--media-badge-bg);
+    color: var(--media-badge-fg);
+    font-size: 9px;
+    font-weight: var(--font-weight-semibold);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+  }
+
   .thumbnail-failed {
     position: absolute;
     inset: var(--space-4);
@@ -996,6 +1148,15 @@
     z-index: var(--z-raised);
   }
 
+  .gallery-frame.is-visual-reference {
+    border: 2px solid var(--visual-reference-border);
+    z-index: var(--z-raised);
+  }
+
+  .gallery-frame.is-selected.is-visual-reference {
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+
   /* ViSelect appends this element imperatively, so its class must be global. The compact,
      translucent band follows the existing Win32 selection accent rather than adding a second
      selection color. */
@@ -1017,6 +1178,27 @@
     object-fit: contain;
     /* Revealed by the tileImage action once this element's current src has loaded. */
     visibility: hidden;
+  }
+
+  .tile-match-clip {
+    position: absolute;
+    inset: calc(var(--space-2) + 1px);
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .tile-match-map {
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .tile-match-tint {
+    opacity: calc(var(--tile-match-map-opacity) * var(--match-fade));
+    mix-blend-mode: var(--match-map-blend);
+  }
+
+  .tile-match-cover {
+    opacity: calc(var(--tile-match-map-cover-opacity) * var(--match-fade));
   }
 
   .gallery-viewport.crop-grid-tiles .gallery-tile {

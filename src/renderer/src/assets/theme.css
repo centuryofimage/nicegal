@@ -81,6 +81,7 @@
   /* Accent — a selection blue distinct from stock Win7 (#3399ff) and stock Win11 (#0078d4) */
   --accent: #1971c2;
   --accent-active: #0f4f8f;
+  --visual-reference-border: #7654a3;
 
   /* Status */
   --danger: #c42b1c;
@@ -165,6 +166,16 @@
   --thumb-height: 16px;
   --tick-mark: #9a9a9a;
   --tick-mark-major: #6e6e6e;
+
+  /* Viewer match-area heatmap, colored by the Turbo map in lib/patch-features. The tint layer's
+     `color` blend keeps the photo's brightness and takes hue and saturation from the map (weak
+     areas blue, strong areas red); the cover layer draws the same colors normally on top. */
+  --match-map-blend: color;
+  --match-map-opacity: 1;
+  --match-map-cover-opacity: 0.35;
+  --match-map-hover-outline: #ffffff;
+  --tile-match-map-opacity: 1;
+  --tile-match-map-cover-opacity: 0.35;
 
   /* Type — Segoe UI: this is a Windows-native app, not a cross-platform web app. */
   --font-ui: "Segoe UI", "Segoe UI Fallback", sans-serif;

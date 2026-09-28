@@ -382,7 +382,9 @@
           <button class="ui-button ui-button-compact" onclick={onopensearchsettings}
             >Search settings…</button
           >
-          <span class="hint">Image model and execution provider apply to all libraries.</span>
+          <span class="hint"
+            >Choose the image model and execution provider; applies to all libraries.</span
+          >
         </div>
       </fieldset>
 

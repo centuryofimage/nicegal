@@ -42,6 +42,7 @@ win:
         - "*.dll"
         - onnxruntime/directml/*.dll
         - onnxruntime/openvino/*.dll
+        # - onnxruntime/cuda/*.dll
   sign: false
 nsis:
   include: build/installer.nsh
