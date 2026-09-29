@@ -1,6 +1,7 @@
 import type { Http2ServerRequest, Http2ServerResponse } from "node:http2";
 import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 
+import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import {
@@ -12,7 +13,7 @@ import {
 import { constants, createSecureServer } from "node:http2";
 import { createServer as createNetServer, type Server as NetServer, type Socket } from "node:net";
 import { extname } from "node:path";
-import { Readable } from "node:stream";
+import { Readable, pipeline } from "node:stream";
 
 import type { NicegalServerClient } from "../backend/nicegal-server-client";
 import type { ThumbnailReader } from "../backend/thumbnail-reader";
@@ -326,6 +327,8 @@ ${client.browser}`,
         new URL(`${url.pathname}${url.search}`, this.host.devRendererUrl),
         {
           headers: { accept: request.headers.accept ?? "*/*" },
+          method: request.method,
+          signal: abortOnClose(response),
         },
       );
       const headers: OutgoingHttpHeaders = { "cache-control": "no-store" };
@@ -333,7 +336,7 @@ ${client.browser}`,
       if (type) headers["content-type"] = type;
       response.writeHead(upstream.status, headers);
       if (!upstream.body || request.method === "HEAD") return void response.end();
-      Readable.fromWeb(upstream.body as NodeReadableStream).pipe(response);
+      pipeResponse(response, upstream.body);
       return;
     }
     const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
@@ -372,12 +375,15 @@ class RemoteClient implements BridgeClient {
   private readonly closeListeners: Array<() => void> = [];
   browser = "Browser";
 
+  readonly id: string;
+
   constructor(
-    readonly id: string,
+    browserId: string,
     readonly deviceId: string,
     private readonly onClose: () => void,
     private readonly onStreamingChanged: () => void,
   ) {
+    this.id = `${browserId}:${randomUUID()}`;
     // A client that makes calls but never opens its event stream still gets cleaned up.
     this.scheduleClose();
   }
@@ -534,7 +540,14 @@ function sendResponse(response: ServerResponse, source: Response): void {
   });
   response.writeHead(source.status, headers);
   if (!source.body) return void response.end();
-  Readable.fromWeb(source.body as NodeReadableStream).pipe(response);
+  pipeResponse(response, source.body);
+}
+
+function pipeResponse(response: ServerResponse, body: Response["body"] & {}): void {
+  pipeline(Readable.fromWeb(body as NodeReadableStream), response, (error) => {
+    if (error && error.code !== "ERR_STREAM_PREMATURE_CLOSE" && error.name !== "AbortError")
+      console.error("Remote response stream failed", error);
+  });
 }
 
 function sendText(response: ServerResponse, status: number, text: string): void {

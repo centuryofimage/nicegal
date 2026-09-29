@@ -50,8 +50,18 @@
   const selected = $derived(catalog.selectedLibrary);
   const ready = $derived(catalog.backendStatus.ready);
   let menuOpen = $state(false);
-  let folders = $state.raw<FolderEntry[]>([]);
-  let folderError = $state("");
+  /** The last folder read, kept with its library so a switch never shows another library's tree. */
+  let loadedFolders = $state.raw<{
+    libraryId: LibraryId;
+    entries: FolderEntry[];
+    error: string;
+  } | null>(null);
+  const folders = $derived(
+    loadedFolders?.libraryId === catalog.selectedId ? loadedFolders.entries : [],
+  );
+  const folderError = $derived(
+    loadedFolders?.libraryId === catalog.selectedId ? loadedFolders.error : "",
+  );
   let expanded = $state<Record<string, boolean>>({});
   let filter = $state("");
   let cursor = $state(ALL);
@@ -63,21 +73,19 @@
   $effect(() => {
     const libraryId = catalog.selectedId;
     void jobs.completedScanRevision;
-    if (libraryId === null || !ready) {
-      folders = [];
-      return () => {};
-    }
+    // Definitions are replaced only when they change, so this reruns after a folder edit.
+    void selected?.include;
+    if (libraryId === null || !ready) return () => {};
     let current = true;
     void window.nicegal.backend
       .listFolders(libraryId)
       .then((entries) => {
-        if (current) {
-          folders = entries;
-          folderError = "";
-        }
+        if (current) loadedFolders = { libraryId, entries, error: "" };
       })
       .catch(() => {
-        if (current) folderError = "Couldn't load folders.";
+        if (!current) return;
+        const previous = loadedFolders?.libraryId === libraryId ? loadedFolders.entries : [];
+        loadedFolders = { libraryId, entries: previous, error: "Couldn't load folders." };
       });
     return () => {
       current = false;
@@ -85,10 +93,8 @@
   });
 
   const roots = $derived(selected?.include.map((folder) => folder.path) ?? []);
-  const imagePaths = $derived(
-    catalog.items.filter((item) => item.mediaKind === "image").map((item) => item.path),
-  );
-  const tree = $derived(buildFolderTree(roots, folders, $settings.folderSort, imagePaths));
+  const itemPaths = $derived(catalog.items.map((item) => item.path));
+  const tree = $derived(buildFolderTree(roots, folders, $settings.folderSort, itemPaths));
   const rows = $derived(visibleFolderRows(tree, expanded, focused, filter));
   /** Cursor order: the All folders row, then every visible folder. */
   const order = $derived([ALL, ...rows.map((row) => row.node.path)]);

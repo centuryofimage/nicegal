@@ -8,13 +8,16 @@
   let connected = $state.raw<RemoteConnection[]>([]);
 
   onMount(() => {
+    // Subscribe before reading the snapshot; an intervening event is newer than that read.
+    let receivedEvent = false;
     let disposed = false;
-    const unsubscribe = window.nicegal.remote.onStatusChanged(
-      (status) => (connected = status.connected),
-    );
+    const unsubscribe = window.nicegal.remote.onStatusChanged((status) => {
+      receivedEvent = true;
+      connected = status.connected;
+    });
     void window.nicegal.remote.getStatus().then(
       (status) => {
-        if (!disposed) connected = status.connected;
+        if (!disposed && !receivedEvent) connected = status.connected;
       },
       () => {},
     );

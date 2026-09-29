@@ -13,8 +13,5 @@ export const SETTINGS_STORAGE_KEY = "nicegal.settings.v1";
 /** Set after the first-start orientation splash has been dismissed. */
 export const ONBOARDING_DISMISSED_STORAGE_KEY = "nicegal.onboardingDismissed.v1";
 
-/** Pending resumable-job intent, retained across an interrupted indexing job. */
-export const JOB_RESUME_STORAGE_KEY = "nicegal.jobResume.v1";
-
 /** File errors acknowledged by dismissing a job, so the same errors do not raise it again. */
 export const ACKNOWLEDGED_JOB_ERRORS_STORAGE_KEY = "nicegal.acknowledgedJobErrors.v1";

@@ -1,4 +1,5 @@
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from "electron";
+import { randomUUID } from "node:crypto";
 
 import { encodeIpcError } from "../shared/ipc-error";
 
@@ -21,20 +22,42 @@ export type BridgeHandler = (client: BridgeClient, ...args: unknown[]) => unknow
 
 const windowClients = new WeakMap<WebContents, BridgeClient>();
 
-/** Stable per WebContents, so handlers can compare clients by identity. */
+/** A client lives for one renderer document; hash navigation keeps the same client. */
 export function windowClient(sender: WebContents): BridgeClient {
-  let client = windowClients.get(sender);
-  if (!client) {
-    client = {
-      id: `window:${sender.id}`,
-      send: (channel, ...args) => {
-        if (!sender.isDestroyed()) sender.send(channel, ...args);
-      },
-      isClosed: () => sender.isDestroyed(),
-      onceClosed: (listener) => sender.once("destroyed", listener),
-    };
-    windowClients.set(sender, client);
-  }
+  const existing = windowClients.get(sender);
+  if (existing) return existing;
+  let closed = false;
+  const listeners = new Set<() => void>();
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    windowClients.delete(sender);
+    sender.removeListener("destroyed", close);
+    sender.removeListener("render-process-gone", close);
+    sender.removeListener("did-start-navigation", navigating);
+    for (const listener of listeners) listener();
+    listeners.clear();
+  };
+  const navigating = (
+    event: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>,
+  ): void => {
+    if (event.isMainFrame && !event.isSameDocument) close();
+  };
+  const client: BridgeClient = {
+    id: `window:${sender.id}:${randomUUID()}`,
+    send: (channel, ...args) => {
+      if (!closed && !sender.isDestroyed()) sender.send(channel, ...args);
+    },
+    isClosed: () => closed || sender.isDestroyed(),
+    onceClosed: (listener) => {
+      if (closed || sender.isDestroyed()) listener();
+      else listeners.add(listener);
+    },
+  };
+  sender.once("destroyed", close);
+  sender.once("render-process-gone", close);
+  sender.on("did-start-navigation", navigating);
+  windowClients.set(sender, client);
   return client;
 }
 

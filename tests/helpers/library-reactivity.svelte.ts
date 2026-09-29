@@ -166,6 +166,88 @@ view.galleryScroll.onScroll({ scrollTop: 120, layout: replacement });
 flushSync();
 assert.equal(view.galleryScroll.layout, replacement);
 assert.equal(view.galleryScroll.scrollTop, 120);
+// Opening captures the item immediately, even if results vanish before the first render.
+catalog.items = first;
+flushSync();
+view.openDetail(0);
+catalog.items = [];
+flushSync();
+assert.equal(view.detailItem?.id, "first", "viewer survives results disappearing before render");
+assert.equal(view.detailIndex, null);
+view.dismissSelectionOrDetail();
+flushSync();
+assert.equal(view.detailItem, undefined, "Escape closes a retained viewer with no result index");
+catalog.items = latest;
+flushSync();
+view.openDetail(0);
+view.showNextDetail();
+flushSync();
+assert.equal(view.detailItem?.id, "second", "navigation captures the next item");
+ocrSearch.composerOpen = true;
+flushSync();
+assert.equal(view.detailItem, undefined, "opening the composer explicitly dismisses the viewer");
+view.openDetail(0);
+ocrSearch.composerOpen = false;
+flushSync();
+assert.equal(view.detailItem?.id, "first", "closing the composer does not close the viewer");
 view.dispose();
+ocrSearch.composerOpen = true;
+assert.equal(view.detailItem?.id, "first", "disposed view no longer receives navigation actions");
 stop();
 console.log("Library reactivity checks passed");
+
+// A pending browser Back must not dismiss an image opened after the close action.
+// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Browser event listener bookkeeping, not reactive UI state.
+const listeners = new Set<() => void>();
+let backs = 0;
+const fakeLocation = { pathname: "/index.html", search: "", hash: "" };
+const fakeHistory = {
+  state: null as Record<string, unknown> | null,
+  pushState(state: Record<string, unknown>, _title: string, url: string): void {
+    this.state = state;
+    fakeLocation.hash = url;
+  },
+  replaceState(state: Record<string, unknown> | null, _title: string, url: string): void {
+    this.state = state;
+    fakeLocation.hash = url.startsWith("#") ? url : "";
+  },
+  back(): void {
+    backs++;
+  },
+};
+Object.assign(globalThis, {
+  location: fakeLocation,
+  history: fakeHistory,
+  window: {
+    nicegal: { backend: { cancelSearch: async () => {} } },
+    addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+    removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+  },
+});
+const historyApp = createApplication();
+historyApp.services.catalog.items = latest;
+let historyView!: LibraryViewController;
+const stopHistory = $effect.root(() => {
+  historyView = createLibraryViewController(historyApp, () => {});
+});
+flushSync();
+historyView.openDetail(0);
+flushSync();
+historyView.closeDetail();
+flushSync();
+assert.equal(backs, 1);
+historyView.openDetail(1);
+flushSync();
+fakeHistory.state = null;
+fakeLocation.hash = "";
+for (const listener of listeners) listener();
+flushSync();
+assert.equal(historyView.detailItem?.id, "second");
+assert.equal(fakeLocation.hash, "#item=second");
+fakeHistory.state = null;
+fakeLocation.hash = "";
+for (const listener of listeners) listener();
+flushSync();
+assert.equal(historyView.detailItem, undefined, "user Back closes the current viewer");
+historyView.dispose();
+stopHistory();

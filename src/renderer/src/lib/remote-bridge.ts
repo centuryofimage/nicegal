@@ -21,6 +21,15 @@ type Listener = (...args: unknown[]) => void;
 const RECONNECTING_GRACE_MS = 1000;
 /** A phone that suspended the tab this long may hold a stream that looks open but is dead. */
 const STALE_AFTER_HIDDEN_MS = 5000;
+/** A suspended phone can leave a request hanging on a dead connection. Polls skip while their
+ * previous request is pending, so their cheap reads give up and let the next poll run. */
+const POLL_TIMEOUT_MS = 15_000;
+const POLLED_CHANNELS: ReadonlySet<string> = new Set([
+  IPC_CHANNELS.backend.status,
+  IPC_CHANNELS.backend.catalogRevision,
+  IPC_CHANNELS.backend.getImageEmbeddingCoverage,
+  IPC_CHANNELS.backend.listJobs,
+]);
 
 /**
  * `window.nicegal` for a browser connected over remote access. Calls become `POST /rpc/<channel>`
@@ -29,6 +38,8 @@ const STALE_AFTER_HIDDEN_MS = 5000;
  */
 export function createRemoteBridge(): NicegalBridge {
   const clientId = uuid();
+  let viewGeneration = 0;
+  const subscriptions = new Map<string, () => void>();
   const listeners = new Map<string, Set<Listener>>();
 
   const on = (channel: string, listener: Listener): (() => void) => {
@@ -37,38 +48,46 @@ export function createRemoteBridge(): NicegalBridge {
     set.add(listener);
     return () => set.delete(listener);
   };
+  let statusRevision = 0;
   const emit = (channel: string, args: unknown[]): void => {
+    if (channel === IPC_CHANNELS.backend.statusChanged) statusRevision += 1;
     for (const listener of listeners.get(channel) ?? []) listener(...args);
   };
 
   const call = async <T>(channel: string, ...args: unknown[]): Promise<T> => {
-    while (args.length && args[args.length - 1] === undefined) args.pop();
-    let response: Response;
     try {
-      response = await fetch(`/rpc/${encodeURIComponent(channel)}`, {
-        method: "POST",
-        headers: { "content-type": "application/json", [REMOTE_CLIENT_HEADER]: clientId },
-        body: JSON.stringify(args),
-      });
-    } catch {
-      throw new Error("Can't reach Nicegal on your PC.");
-    }
-    if (response.status === 401) {
-      location.assign("/pair");
-      throw new Error("This device is no longer paired.");
-    }
-    if (!response.ok)
-      throw new Error((await response.text()) || `Request failed (${response.status})`);
-    const body = (await response.json()) as {
-      value?: unknown;
-      error?: { name: string; message: string };
-    };
-    if (body.error) {
-      const error = new Error(body.error.message);
-      error.name = body.error.name;
+      while (args.length && args[args.length - 1] === undefined) args.pop();
+      let response: Response;
+      try {
+        response = await fetch(`/rpc/${encodeURIComponent(channel)}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", [REMOTE_CLIENT_HEADER]: clientId },
+          body: JSON.stringify(args),
+          signal: POLLED_CHANNELS.has(channel) ? AbortSignal.timeout(POLL_TIMEOUT_MS) : undefined,
+        });
+      } catch (cause) {
+        throw new Error("Can't reach Nicegal on your PC.", { cause });
+      }
+      if (response.status === 401) {
+        location.assign("/pair");
+        throw new Error("This device is no longer paired.");
+      }
+      if (!response.ok)
+        throw new Error((await response.text()) || `Request failed (${response.status})`);
+      const body = (await response.json()) as {
+        value?: unknown;
+        error?: { name: string; message: string };
+      };
+      if (body.error) {
+        const error = new Error(body.error.message);
+        error.name = body.error.name;
+        throw error;
+      }
+      return body.value as T;
+    } catch (error) {
+      console.error(`IPC ${channel} failed`, error);
       throw error;
     }
-    return body.value as T;
   };
 
   // The event stream is the connection's heartbeat. While it is down the status bar says
@@ -82,20 +101,30 @@ export function createRemoteBridge(): NicegalBridge {
     reconnecting = value;
     for (const listener of reconnectingListeners) listener(value);
   };
-  connectEvents(clientId, emit, {
-    reopened: async () => {
-      // Events sent while the stream was down (phone asleep, PC app restarted) may be gone.
-      // Backend status is the one the UI cannot recover on its own.
-      try {
-        emit(IPC_CHANNELS.backend.statusChanged, [
-          await call<BackendStatus>(IPC_CHANNELS.backend.status),
-        ]);
-        setReconnecting(false);
-      } catch {
-        // The stream reconnects again; the next open retries.
+  let connectionRevision = 0;
+  let recoveryTimer: ReturnType<typeof setTimeout> | undefined;
+  const recoverStatus = async (revision: number): Promise<void> => {
+    const statusAtStart = statusRevision;
+    try {
+      const status = await call<BackendStatus>(IPC_CHANNELS.backend.status);
+      if (revision === connectionRevision) {
+        if (statusAtStart === statusRevision) emit(IPC_CHANNELS.backend.statusChanged, [status]);
+        for (const subscribe of subscriptions.values()) subscribe();
       }
+    } catch {
+      if (revision === connectionRevision && statusAtStart === statusRevision)
+        recoveryTimer = setTimeout(() => void recoverStatus(revision), 3000);
+    }
+  };
+  connectEvents(clientId, emit, {
+    reopened: () => {
+      clearTimeout(recoveryTimer);
+      setReconnecting(false);
+      void recoverStatus(++connectionRevision);
     },
     dropped: () => {
+      ++connectionRevision;
+      clearTimeout(recoveryTimer);
       if (reconnecting) return;
       clearTimeout(lostTimer);
       lostTimer = setTimeout(() => setReconnecting(true), RECONNECTING_GRACE_MS);
@@ -104,6 +133,7 @@ export function createRemoteBridge(): NicegalBridge {
   const connection: ConnectionBridge = {
     onReconnectingChanged(listener) {
       reconnectingListeners.add(listener);
+      listener(reconnecting);
       return () => reconnectingListeners.delete(listener);
     },
   };
@@ -118,6 +148,7 @@ export function createRemoteBridge(): NicegalBridge {
     setImageModel: (model) => call(channels.setImageModel, model),
     setExecutionProvider: (provider) => call(channels.setExecutionProvider, provider),
     listLibraries: () => call(channels.listLibraries),
+    setLibraryView: (libraryId) => call(channels.setLibraryView, libraryId, ++viewGeneration),
     createLibrary: (request) => call(channels.createLibrary, request),
     updateLibrary: (libraryId, definition) => call(channels.updateLibrary, libraryId, definition),
     deleteLibrary: (libraryId) => call(channels.deleteLibrary, libraryId),
@@ -129,37 +160,52 @@ export function createRemoteBridge(): NicegalBridge {
     getOcrModels: () => call(channels.getOcrModels),
     getSearchModels: () => call(channels.getSearchModels),
     loadCachedModel: (model) => call(channels.loadCachedModel, model),
-    searchOcr: (request) => call(channels.search, request),
-    cancelSearch: () => call(channels.cancelSearch),
+    searchOcr: (request) => call(channels.search, request, clientId),
+    cancelSearch: (throughSession) => call(channels.cancelSearch, throughSession, clientId),
     getTextEmbeddingCoverage: (libraryId) => call(channels.getTextEmbeddingCoverage, libraryId),
     getImageEmbeddingCoverage: (libraryId) => call(channels.getImageEmbeddingCoverage, libraryId),
-    startJob: (request) => call(channels.startJob, request),
+    startJob: (request, requestId = uuid()) => call(channels.startJob, request, requestId),
     listJobs: () => call(channels.listJobs),
     cancelJob: (jobId) => call(channels.cancelJob, jobId),
     ensureThumbnails: (request) => call(channels.ensureThumbnails, request),
     subscribeJob(jobId, listener, onConnection) {
       let disposed = false;
+      const subscriptionId = uuid();
       const offSnapshot = on(channels.jobSnapshot, (message) => {
-        const { jobId: id, snapshot } = message as { jobId: string; snapshot: JobSnapshot };
-        if (id === jobId) listener(snapshot);
+        const { subscriptionId: id, snapshot } = message as {
+          subscriptionId: string;
+          snapshot: JobSnapshot;
+        };
+        if (!disposed && id === subscriptionId) listener(snapshot);
       });
       const offConnection = on(channels.jobConnection, (message) => {
-        const { jobId: id, error } = message as { jobId: string; error: string | null };
-        if (!disposed && id === jobId) onConnection?.(error);
+        const { subscriptionId: id, error } = message as {
+          subscriptionId: string;
+          error: string | null;
+        };
+        if (!disposed && id === subscriptionId) onConnection?.(error);
       });
-      void call(channels.subscribeJob, jobId)
-        .then(() => {
-          if (disposed) void call(channels.unsubscribeJob, jobId);
-        })
-        .catch((error: unknown) => {
-          if (!disposed) onConnection?.(error instanceof Error ? error.message : String(error));
-        });
+      let pending: Promise<void> = Promise.resolve();
+      const subscribe = (): void => {
+        pending = pending
+          .then(async () => {
+            if (!disposed) await call(channels.subscribeJob, jobId, subscriptionId);
+          })
+          .catch((error: unknown) => {
+            if (!disposed) onConnection?.(error instanceof Error ? error.message : String(error));
+          });
+      };
+      subscriptions.set(subscriptionId, subscribe);
+      subscribe();
       return () => {
         if (disposed) return;
         disposed = true;
+        subscriptions.delete(subscriptionId);
         offSnapshot();
         offConnection();
-        void call(channels.unsubscribeJob, jobId).catch(() => undefined);
+        void pending
+          .then(() => call(channels.unsubscribeJob, jobId, subscriptionId))
+          .catch(() => undefined);
       };
     },
   };
@@ -215,18 +261,20 @@ function connectEvents(
   connection: { reopened: () => void; dropped: () => void },
 ): void {
   let source: EventSource | null = null;
-  let everOpened = false;
   let hiddenAt = 0;
 
   const open = (): void => {
-    source?.close();
+    if (source) {
+      connection.dropped();
+      source.close();
+    }
     const current = new EventSource(`/events?client=${clientId}`);
     source = current;
     current.onopen = () => {
-      if (everOpened) connection.reopened();
-      everOpened = true;
+      if (source === current) connection.reopened();
     };
     current.onmessage = (message: MessageEvent<string>) => {
+      if (source !== current) return;
       const event = JSON.parse(message.data) as RemoteEvent;
       emit(event.channel, event.args);
     };
@@ -240,6 +288,7 @@ function connectEvents(
         }, 3000);
       };
       void fetch("/", { method: "HEAD" }).then((response) => {
+        if (source !== current) return;
         if (response.status === 401) location.assign("/pair");
         else retry();
       }, retry);

@@ -140,7 +140,25 @@ export interface SearchView {
 
 export class OcrSearchController {
   private queryValue = $state("");
-  composerOpen = $state(false);
+  private composerVisible = $state(false);
+  private readonly composerListeners = new Set<() => void>();
+
+  get composerOpen(): boolean {
+    return this.composerVisible;
+  }
+  set composerOpen(open: boolean) {
+    if (open === this.composerVisible) return;
+    this.composerVisible = open;
+    if (open) for (const listener of this.composerListeners) listener();
+  }
+
+  /** Opening the composer is a navigation action, including native "add to search" actions. */
+  onComposerOpened(listener: () => void): () => void {
+    this.composerListeners.add(listener);
+    return () => {
+      this.composerListeners.delete(listener);
+    };
+  }
   /** Invalidates file reads/pickers when the user clears or leaves the visual search. */
   visualSessionRevision = 0;
 
@@ -301,6 +319,7 @@ export class OcrSearchController {
   private filenameMatches = $state.raw<ReadonlySet<string> | null>(null);
   private filenameOrderedIds = $state.raw<string[]>([]);
   private generation = 0;
+  private searchIdentity: string | null = null;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private lastLibraryId: LibraryId | null = null;
   /** `id -> item` for `rankItems`, memoized by array identity. `filterItemsByDates` returns the
@@ -533,10 +552,18 @@ export class OcrSearchController {
     items: CatalogItem[],
     timeline: Timeline,
     supportsImageTextQueries = true,
-    hasOcr = true,
-    hasImages = true,
+    hasOcr: boolean | null = true,
+    hasImages: boolean | null = true,
+    imageModel: string | null = null,
   ): void {
-    const { generation, searchSession } = this.beginRun(libraryId);
+    const identity = JSON.stringify([
+      libraryId,
+      this.query,
+      this.visualReferenceRevision,
+      timeline,
+      imageModel,
+    ]);
+    const { generation, searchSession } = this.beginRun(libraryId, identity);
     const { scope, body: rawBody, dates, folder, filters, media } = this.parsed;
     const body = normalizeSearchBody(scope, rawBody);
     const references = scope === "like" ? this.visualReferences : [];
@@ -544,11 +571,11 @@ export class OcrSearchController {
     // Media filtering uses the loaded catalog. With no eligible assets, every backend lane
     // would produce an empty displayed result, so avoid loading models just to discard hits.
     if (media && !items.some((item) => item.mediaKind === media)) {
-      this.total = 0;
+      this.clearResults();
       return;
     }
     if (scope === "like" && body && !supportsImageTextQueries) {
-      this.total = 0;
+      this.clearResults();
       this.error =
         "This model supports image examples only. Remove text descriptions and add an image example.";
       return;
@@ -594,7 +621,10 @@ export class OcrSearchController {
       this.timer = setTimeout(() => this.searchFiles(run, field, true), SEARCH_DEBOUNCE_MS);
       return;
     }
-    if (scope === "like" && !hasImages) {
+    // Unknown coverage is not a negative result. Its next successful read schedules this query.
+    if (scope === "like" && hasImages === null) return;
+    if (scope === "like" && hasImages === false) {
+      this.clearResults();
       this.imageSetupRequired = true;
       this.setupNotice = "Visual search isn't ready for this library yet.";
       this.total = 0;
@@ -604,10 +634,12 @@ export class OcrSearchController {
     this.pending = true;
     this.filePending = scope === "all" || scope === "meaning";
     if (scope === "all") {
-      const visual = supportsImageTextQueries && hasImages;
-      this.broadPending = { meaning: hasOcr, visual };
+      const visual = supportsImageTextQueries && hasImages === true;
+      if (!hasOcr) this.broadResults = { ...this.broadResults, meaning: { results: [], total: 0 } };
+      if (!visual) this.broadResults = { ...this.broadResults, visual: { results: [], total: 0 } };
+      this.broadPending = { meaning: hasOcr !== false, visual };
       this.broadTimer = setTimeout(() => {
-        if (hasOcr) this.searchBroad(run, "meaning");
+        if (hasOcr !== false) this.searchBroad(run, "meaning");
         if (visual) this.searchBroad(run, "visual");
       }, 400);
     }
@@ -615,7 +647,7 @@ export class OcrSearchController {
     this.timer = setTimeout(
       () => {
         // All without OCR has only file names to show, so they carry the total.
-        const namesOnly = scope === "all" && !hasOcr;
+        const namesOnly = scope === "all" && hasOcr === false;
         if (scope === "all" || scope === "meaning") this.searchFiles(run, "name", namesOnly);
         if (namesOnly) this.pending = false;
         else if (scope === "like") this.searchPrimary(run);
@@ -625,14 +657,18 @@ export class OcrSearchController {
     );
   }
 
-  /** Cancels the previous run and clears every result it could still publish. */
-  private beginRun(libraryId: LibraryId | null): { generation: number; searchSession: number } {
+  private searchSession = 0;
+
+  /** Supersede requests on every run, but retain displayed data when refreshing the same search. */
+  private beginRun(
+    libraryId: LibraryId | null,
+    identity: string,
+  ): { generation: number; searchSession: number } {
     if (this.timer) clearTimeout(this.timer);
     if (this.broadTimer) clearTimeout(this.broadTimer);
-    void window.nicegal.backend.cancelSearch?.().catch(() => {});
+    void window.nicegal.backend.cancelSearch?.(this.searchSession).catch(() => {});
     this.deferredResults = [];
     this.broadPending = { meaning: false, visual: false };
-    this.broadResults = { meaning: { results: [], total: 0 }, visual: { results: [], total: 0 } };
     this.broadErrors = { meaning: "", visual: "" };
     this.broadSetup = { meaning: "", visual: "" };
     // Sort mode and the percentile cutoff describe one library's result set, so they reset with
@@ -649,9 +685,18 @@ export class OcrSearchController {
     this.limitNotice = "";
     this.textSetupRequired = false;
     this.imageSetupRequired = false;
-    this.semanticAvailable = false;
     this.pending = false;
     this.filePending = false;
+    if (identity !== this.searchIdentity) this.clearResults();
+    this.searchIdentity = identity;
+    this.searchSession = ++nextSearchSession;
+    return { generation: ++this.generation, searchSession: this.searchSession };
+  }
+
+  private clearResults(): void {
+    this.total = 0;
+    this.semanticAvailable = false;
+    this.broadResults = { meaning: { results: [], total: 0 }, visual: { results: [], total: 0 } };
     this.snippets = new Map<string, string>();
     this.filenameSnippets = new Map<string, string>();
     this.rankedIds = [];
@@ -660,7 +705,6 @@ export class OcrSearchController {
     this.filenameMatches = new Set<string>();
     this.filenameOrderedIds = [];
     this.matches = new Set<string>();
-    return { generation: ++this.generation, searchSession: ++nextSearchSession };
   }
 
   /** Sends one lane's request and publishes its outcome only while `run` is current. */
@@ -725,7 +769,6 @@ export class OcrSearchController {
         if (lane === "visual") this.noteLimit(response);
       },
       error: (error) => {
-        console.warn(`${lane} search failed`, error);
         if (errorCode(error) !== "models_not_ready") {
           this.broadErrors[lane] = errorMessage(error);
         } else if (lane === "visual") {
@@ -810,7 +853,6 @@ export class OcrSearchController {
         this.noteLimit(response);
       },
       error: (error) => {
-        console.warn("Search failed", error);
         if (errorCode(error) !== "models_not_ready") return this.setQueryError(error);
         if (scope === "like") this.imageSetupRequired = true;
         if (scope === "meaning") this.textSetupRequired = true;
@@ -981,6 +1023,7 @@ export class OcrSearchController {
   }
 
   dispose(): void {
+    this.composerListeners.clear();
     this.suspend();
   }
 
@@ -992,7 +1035,7 @@ export class OcrSearchController {
     this.interacting = false;
     if (this.timer) clearTimeout(this.timer);
     if (this.broadTimer) clearTimeout(this.broadTimer);
-    void window.nicegal.backend.cancelSearch?.().catch(() => {});
+    void window.nicegal.backend.cancelSearch?.(this.searchSession).catch(() => {});
     this.broadPending = { meaning: false, visual: false };
     this.timer = null;
     this.pending = false;

@@ -189,6 +189,14 @@
           <button class="ui-button" onclick={onmanagelibraries}>Library manager…</button>
         </div>
       </section>
+      <section class="settings-group" aria-labelledby="tags-title">
+        <h2 id="tags-title">Tags</h2>
+        <label class="row"
+          ><span class="setting-label"
+            >Hide offensive tags<small>Turn off to see every tag, for research.</small></span
+          ><input type="checkbox" bind:checked={$settings.hideOffensiveTags} /></label
+        >
+      </section>
       <section class="settings-group advanced-settings" aria-labelledby="advanced-search-title">
         <h2 id="advanced-search-title">Advanced search settings</h2>
         <div class="row segmented-row">

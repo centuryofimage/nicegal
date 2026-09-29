@@ -31,28 +31,14 @@ interface BackendIpcContext {
 }
 
 interface JobSubscription {
-  listeners: Set<BridgeClient>;
+  listeners: Map<BridgeClient, Set<string>>;
   abort: AbortController;
-}
-
-interface SenderSearches {
-  session: number;
-  closed: boolean;
-  lanes: Map<NonNullable<SearchRequest["searchLane"]> | "legacy", AbortController>;
-}
-
-function abortSearches(searches: SenderSearches | undefined): void {
-  if (!searches) return;
-  for (const abort of searches.lanes.values()) abort.abort();
-  searches.lanes.clear();
-  searches.closed = true;
 }
 
 export function registerBackendIpc(context: BackendIpcContext): void {
   const subscriptions = new Map<string, JobSubscription>();
-  const searchRequests = new Map<string, SenderSearches>();
   // Senders that already have a one-shot "destroyed" cleanup hook registered — see
-  // `ensureSenderTracked`. Prevents accumulating one listener per subscribeJob/search call.
+  // `ensureSenderTracked`. Prevents accumulating one listener per subscription call.
   const trackedSenders = new Set<BridgeClient>();
 
   const requireBackend = (): NicegalServerClient => {
@@ -62,10 +48,12 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     return context.client;
   };
 
-  const removeSubscription = (jobId: string, sender: BridgeClient): void => {
+  const removeSubscription = (jobId: string, sender: BridgeClient, token?: string): void => {
     const subscription = subscriptions.get(jobId);
     if (!subscription) return;
-    subscription.listeners.delete(sender);
+    const tokens = subscription.listeners.get(sender);
+    if (token) tokens?.delete(token);
+    if (!token || !tokens?.size) subscription.listeners.delete(sender);
     if (subscription.listeners.size === 0) {
       subscription.abort.abort();
       subscriptions.delete(jobId);
@@ -74,12 +62,14 @@ export function registerBackendIpc(context: BackendIpcContext): void {
 
   const removeSender = (sender: BridgeClient): void => {
     for (const [jobId] of subscriptions) removeSubscription(jobId, sender);
-    abortSearches(searchRequests.get(sender.id));
-    searchRequests.delete(sender.id);
+    if (context.client)
+      void context.client
+        .releaseLibraryView(sender.id)
+        .catch((error: unknown) => console.error("Could not release library view", error));
   };
 
   // Registers the closed-cleanup hook for `sender` exactly once, no matter how many times
-  // (or from which handler — search, subscribeJob, ...) it is called for that sender.
+  // it is called for that sender.
   const ensureSenderTracked = (sender: BridgeClient): void => {
     if (trackedSenders.has(sender)) return;
     trackedSenders.add(sender);
@@ -126,6 +116,21 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     (_client, value: unknown) => {
       const provider = validateExecutionProvider(value);
       return changeRuntime((client) => client.setExecutionProvider(provider));
+    },
+  );
+  handleRemotableIpc(
+    IPC_CHANNELS.backend.setLibraryView,
+    context.isTrustedSender,
+    (client, libraryId, generation) => {
+      if (client.isClosed()) throw new Error("Client disconnected");
+      if (typeof generation !== "number" || !Number.isSafeInteger(generation) || generation < 1)
+        throw new TypeError("Invalid view generation");
+      ensureSenderTracked(client);
+      return requireBackend().setLibraryView(
+        client.id,
+        generation,
+        libraryId === null ? null : validateLibraryId(libraryId),
+      );
     },
   );
   handleRemotableIpc(IPC_CHANNELS.backend.listLibraries, context.isTrustedSender, () =>
@@ -213,49 +218,22 @@ export function registerBackendIpc(context: BackendIpcContext): void {
       return requireBackend().loadCachedModel(model);
     },
   );
+  handleRemotableIpc(IPC_CHANNELS.backend.search, context.isTrustedSender, (client, value, scope) =>
+    requireBackend().search(validateSearchRequest(value), `${client.id}:${validateToken(scope)}`),
+  );
   handleRemotableIpc(
-    IPC_CHANNELS.backend.search,
+    IPC_CHANNELS.backend.cancelSearch,
     context.isTrustedSender,
-    async (client, value) => {
-      const request = validateSearchRequest(value);
-      ensureSenderTracked(client);
-      let searches = searchRequests.get(client.id);
-      if (!searches) {
-        searches = { session: -1, closed: true, lanes: new Map() };
-        searchRequests.set(client.id, searches);
-      }
-      const { searchSession, searchLane, ...backendRequest } = request;
-      if (searchSession === undefined) {
-        abortSearches(searches);
-      } else {
-        if (
-          searchSession < searches.session ||
-          (searchSession === searches.session && searches.closed)
-        ) {
-          throw new DOMException("Search session was superseded", "AbortError");
-        }
-        if (searchSession > searches.session) {
-          abortSearches(searches);
-          searches.session = searchSession;
-          searches.closed = false;
-        }
-      }
-      const lane = searchLane ?? "legacy";
-      searches.lanes.get(lane)?.abort();
-      const abort = new AbortController();
-      searches.lanes.set(lane, abort);
-      try {
-        const response = await requireBackend().search(backendRequest, abort.signal);
-        abort.signal.throwIfAborted();
-        return response;
-      } finally {
-        if (searches.lanes.get(lane) === abort) searches.lanes.delete(lane);
-      }
+    (client, throughSession: unknown, scope) => {
+      if (
+        typeof throughSession !== "number" ||
+        !Number.isSafeInteger(throughSession) ||
+        throughSession < 0
+      )
+        throw new TypeError("Invalid search cancellation session");
+      return requireBackend().cancelSearch(`${client.id}:${validateToken(scope)}`, throughSession);
     },
   );
-  handleRemotableIpc(IPC_CHANNELS.backend.cancelSearch, context.isTrustedSender, (client) => {
-    abortSearches(searchRequests.get(client.id));
-  });
   // Deliberately not cancelled by a later call, unlike search: an in-flight ensure represents
   // real generation work already committed toward SQLite, so aborting it would only throw away
   // completed work and force a retry. The renderer's own flush loop already serializes its calls;
@@ -271,11 +249,11 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(
     IPC_CHANNELS.backend.startJob,
     context.isTrustedSender,
-    async (_client, value) => {
+    async (_client, value, requestId) => {
       if (changingRuntime) throw new Error("Search settings change already in progress");
       startingJobs += 1;
       try {
-        return await requireBackend().startJob(validateJobRequest(value));
+        return await requireBackend().startJob(validateJobRequest(value), validateToken(requestId));
       } finally {
         startingJobs -= 1;
       }
@@ -290,7 +268,8 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(
     IPC_CHANNELS.backend.subscribeJob,
     context.isTrustedSender,
-    (client, value) => {
+    (client, value, tokenValue) => {
+      const token = validateToken(tokenValue);
       const jobId = validateJobId(value);
       const backend = requireBackend();
       let subscription = subscriptions.get(jobId);
@@ -301,7 +280,7 @@ export function registerBackendIpc(context: BackendIpcContext): void {
         // watch whose promise settles late can delete a *newer* subscription that has since taken
         // its place at the same jobId key, orphaning the new watch's snapshots (see finding notes).
         const created: JobSubscription = {
-          listeners: new Set<BridgeClient>(),
+          listeners: new Map<BridgeClient, Set<string>>(),
           abort: new AbortController(),
         };
         subscription = created;
@@ -311,18 +290,28 @@ export function registerBackendIpc(context: BackendIpcContext): void {
             jobId,
             (snapshot: JobSnapshot) => {
               if (subscriptions.get(jobId) !== created) return;
-              for (const listener of created.listeners) {
+              for (const [listener, tokens] of created.listeners) {
                 if (!listener.isClosed()) {
-                  listener.send(IPC_CHANNELS.backend.jobSnapshot, { jobId, snapshot });
+                  for (const subscriptionId of tokens)
+                    listener.send(IPC_CHANNELS.backend.jobSnapshot, {
+                      jobId,
+                      snapshot,
+                      subscriptionId,
+                    });
                 }
               }
             },
             created.abort.signal,
             (error) => {
               if (subscriptions.get(jobId) !== created) return;
-              for (const listener of created.listeners) {
+              for (const [listener, tokens] of created.listeners) {
                 if (!listener.isClosed())
-                  listener.send(IPC_CHANNELS.backend.jobConnection, { jobId, error });
+                  for (const subscriptionId of tokens)
+                    listener.send(IPC_CHANNELS.backend.jobConnection, {
+                      jobId,
+                      error,
+                      subscriptionId,
+                    });
               }
             },
           )
@@ -335,15 +324,17 @@ export function registerBackendIpc(context: BackendIpcContext): void {
             if (subscriptions.get(jobId) === created) subscriptions.delete(jobId);
           });
       }
-      subscription.listeners.add(client);
+      let tokens = subscription.listeners.get(client);
+      if (!tokens) subscription.listeners.set(client, (tokens = new Set()));
+      tokens.add(token);
       ensureSenderTracked(client);
     },
   );
   handleRemotableIpc(
     IPC_CHANNELS.backend.unsubscribeJob,
     context.isTrustedSender,
-    (client, value) => {
-      removeSubscription(validateJobId(value), client);
+    (client, value, token) => {
+      removeSubscription(validateJobId(value), client, validateToken(token));
     },
   );
 }
@@ -436,7 +427,8 @@ function validateExecutionProvider(value: unknown): ExecutionProviderId {
 }
 
 function validateJobId(value: unknown): string {
-  if (typeof value !== "string" || !/^\d+$/.test(value)) throw new TypeError("Invalid job ID");
+  if (typeof value !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(value))
+    throw new TypeError("Invalid job ID");
   return value;
 }
 
@@ -652,11 +644,18 @@ function validateJobRequest(value: unknown): JobRequest {
     };
   }
   if (request.type === "libraryPurge") {
-    const params = requireJobParams(value, ["libraryId", "folders"], "Invalid library purge job");
+    const params = requireJobParams(
+      value,
+      ["libraryId", "folders", "removeLibrary"],
+      "Invalid library purge job",
+    );
+    if (params.removeLibrary !== undefined && typeof params.removeLibrary !== "boolean")
+      throw new TypeError("Invalid library removal option");
     const job: LibraryPurgeJobRequest = {
       type: "libraryPurge",
       params: {
         libraryId: validateLibraryId(params.libraryId),
+        ...(params.removeLibrary === undefined ? {} : { removeLibrary: params.removeLibrary }),
         // Folders removed from or excluded by an edit; omitted to purge the whole library.
         ...(params.folders === undefined
           ? {}
@@ -738,4 +737,10 @@ function isTimelineRange(value: unknown): boolean {
       (value.fromNs === undefined || typeof value.fromNs === "string") &&
       (value.toNs === undefined || typeof value.toNs === "string"))
   );
+}
+
+function validateToken(value: unknown): string {
+  if (typeof value !== "string" || !/^[a-zA-Z0-9-]{1,64}$/.test(value))
+    throw new TypeError("Invalid operation token");
+  return value;
 }

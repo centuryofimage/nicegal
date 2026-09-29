@@ -144,24 +144,6 @@
     <p class="sheet-title">{single ? single.displayName : `${items.length} items`}</p>
     <div class="sheet-actions">
       {#if single}
-        <a
-          class="sheet-row"
-          href={originalUrlOf(single)}
-          target="_blank"
-          rel="noopener"
-          onclick={onclose}><ExternalLink size={16} aria-hidden="true" />Open in new tab</a
-        >
-        <a
-          class="sheet-row"
-          href={originalUrlOf(single)}
-          download={single.displayName}
-          onclick={onclose}><Download size={16} aria-hidden="true" />Download</a
-        >
-        {#if canCopyImages && single.mediaKind === "image"}
-          <button class="sheet-row" type="button" onclick={() => copyImage(single)}
-            ><Copy size={16} aria-hidden="true" />Copy image</button
-          >
-        {/if}
         {#if canShareFiles}
           <button
             class="sheet-row"
@@ -175,6 +157,24 @@
                 : "Share…"}</button
           >
         {/if}
+        {#if canCopyImages && single.mediaKind === "image"}
+          <button class="sheet-row" type="button" onclick={() => copyImage(single)}
+            ><Copy size={16} aria-hidden="true" />Copy image</button
+          >
+        {/if}
+        <a
+          class="sheet-row"
+          href={originalUrlOf(single)}
+          download={single.displayName}
+          onclick={onclose}><Download size={16} aria-hidden="true" />Download</a
+        >
+        <a
+          class="sheet-row"
+          href={originalUrlOf(single)}
+          target="_blank"
+          rel="noopener"
+          onclick={onclose}><ExternalLink size={16} aria-hidden="true" />Open in new tab</a
+        >
       {/if}
       <button class="sheet-row" type="button" onclick={() => act(() => onvisualsearch(true))}
         ><ScanSearch size={16} aria-hidden="true" />Find similar images</button

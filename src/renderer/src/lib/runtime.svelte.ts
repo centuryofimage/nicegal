@@ -13,7 +13,15 @@ import { errorCode, errorMessage } from "./errors";
  * Indexing Options switcher and the status bar's provider segment never disagree.
  */
 export class RuntimeController {
-  status = $state<RuntimeStatus | null>(null);
+  private statusValue = $state<RuntimeStatus | null>(null);
+  get status(): RuntimeStatus | null {
+    return this.statusValue;
+  }
+  set status(value: RuntimeStatus | null) {
+    if (this.disposed) return;
+    this.statusValue = value;
+    if (value?.imageModel) this.onImageModel(value.imageModel.activeModel);
+  }
   loading = $state(true);
   /** True while a `setExecutionProvider` call is in flight. The server persists the setting with
    * a fixed temp-file path, so two overlapping writes can race each other's rename — serialize
@@ -45,15 +53,24 @@ export class RuntimeController {
   imageModelError = $state<string | null>(null);
   /** True while a switch waits for running indexing to stop. */
   stoppingJobs = $state(false);
+  private disposed = false;
   private statusGeneration = 0;
   private modelGeneration = 0;
 
   constructor(
     /** Stops jobs that block a model or provider switch; returns why it could not, or null. */
     private readonly stopJobs: () => Promise<string | null> = async () => null,
+    private readonly onImageModel: (model: string) => void = () => {},
   ) {}
 
+  dispose(): void {
+    this.disposed = true;
+    this.statusGeneration += 1;
+    this.modelGeneration += 1;
+  }
+
   reset(): void {
+    if (this.disposed) return;
     this.statusGeneration += 1;
     this.modelGeneration += 1;
     this.imageModelBeforeRestart = this.imageModelSaving ? this.imageModel : null;
@@ -71,7 +88,7 @@ export class RuntimeController {
 
   async refresh(): Promise<void> {
     // A read started during a provider write can return the old configuration and win the race.
-    if (this.saving || this.imageModelSaving) return;
+    if (this.disposed || this.saving || this.imageModelSaving) return;
     const generation = ++this.statusGeneration;
     this.loading = true;
     this.error = null;
@@ -87,7 +104,7 @@ export class RuntimeController {
 
   /** Refresh the shared provider after a model load without toggling the settings loading state. */
   async refreshLoadedProvider(): Promise<void> {
-    if (this.saving || this.imageModelSaving) return;
+    if (this.disposed || this.saving || this.imageModelSaving) return;
     const generation = ++this.statusGeneration;
     try {
       const status = await window.nicegal.backend.getRuntimeStatus();
@@ -102,6 +119,7 @@ export class RuntimeController {
   }
 
   async refreshModels(): Promise<void> {
+    if (this.disposed) return;
     const generation = ++this.modelGeneration;
     try {
       const models = await window.nicegal.backend.getSearchModels();
@@ -115,12 +133,13 @@ export class RuntimeController {
   }
 
   async setImageModel(model: string): Promise<void> {
-    if (this.imageModelSaving || this.saving) return;
+    if (this.disposed || this.imageModelSaving || this.saving) return;
     this.statusGeneration += 1;
     this.imageModelSaving = true;
     this.imageModelError = null;
     try {
       const blocked = await this.stopBlockingJobs();
+      if (this.disposed) return;
       if (blocked) {
         this.imageModelError = blocked;
         return;
@@ -137,12 +156,13 @@ export class RuntimeController {
   }
 
   async setExecutionProvider(executionProvider: ExecutionProviderId): Promise<void> {
-    if (this.saving || this.imageModelSaving) return;
+    if (this.disposed || this.saving || this.imageModelSaving) return;
     this.statusGeneration += 1;
     this.saving = true;
     this.error = null;
     try {
       const blocked = await this.stopBlockingJobs();
+      if (this.disposed) return;
       if (blocked) {
         this.error = blocked;
         return;

@@ -60,7 +60,7 @@ test("provider and model changes share restart and exclude overlapping job start
     },
   });
   const invoke = async (channel: string, value: unknown): Promise<unknown> =>
-    handlers.get(channel)!(windowEvent, value);
+    handlers.get(channel)!(windowEvent, value, "test-request");
   const channels = IPC_CHANNELS.backend;
   const change = invoke(channels.setExecutionProvider, "cpu");
   await Promise.resolve();

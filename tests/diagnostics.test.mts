@@ -131,18 +131,23 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
 });
 
 test("collectDiagnostics stops when the save dialog is canceled", async () => {
+  const flushesBefore = calls.flushes;
   dialogResult.canceled = true;
-  const savedPath = await diagnostics.collectDiagnostics(
-    {},
-    {
-      backendStatus: { ready: false, error: "offline" },
-      flushBackendLog: async () => {
-        calls.flushes += 1;
+  try {
+    const savedPath = await diagnostics.collectDiagnostics(
+      {},
+      {
+        backendStatus: { ready: false, error: "offline" },
+        flushBackendLog: async () => {
+          calls.flushes += 1;
+        },
       },
-    },
-  );
-  assert.equal(savedPath, null);
-  assert.equal(calls.flushes, 1, "canceling does not start a second collection");
+    );
+    assert.equal(savedPath, null);
+    assert.equal(calls.flushes, flushesBefore, "canceling does not collect diagnostics");
+  } finally {
+    dialogResult.canceled = false;
+  }
 });
 
 test("recentBackendLog keeps local paths in the last twelve complete lines", async () => {

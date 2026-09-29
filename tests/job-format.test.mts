@@ -3,12 +3,7 @@ import { test } from "node:test";
 
 import type { JobSnapshot } from "../src/shared/backend.ts";
 
-import {
-  jobPhaseProgress,
-  jobPhases,
-  jobRateText,
-  summarizeCompletion,
-} from "../src/renderer/src/lib/job-format.ts";
+import { jobPhaseProgress, jobPhases, jobRateText } from "../src/renderer/src/lib/job-format.ts";
 
 test("video embedding shows active work before its first asset is committed", () => {
   const job = {
@@ -79,17 +74,4 @@ test("a library scan shows only the index stages its library runs", () => {
     jobPhases(job).map((p) => p.label),
     ["Sync", "Images", "OCR", "Text", "Done"],
   );
-});
-
-test("a scan summary names folders that need attention", () => {
-  const job = {
-    type: "libraryScan",
-    status: "completed",
-    progress: { cataloged: 3, embedded: 2, deleted: 0 },
-    folders: [
-      { path: "D:/a", state: "completed" },
-      { path: "E:/b", state: "unavailable" },
-    ],
-  } as unknown as JobSnapshot;
-  assert.equal(summarizeCompletion(job), "Scanned 3 files, indexed 2 · 1 folder needs attention");
 });

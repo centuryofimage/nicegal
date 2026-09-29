@@ -55,10 +55,6 @@ export interface ApplicationCommands {
   readonly removeLibrary: (libraryId: LibraryId, purge: boolean) => Promise<boolean>;
   readonly dismissWelcome: () => void;
   readonly showWelcome: () => void;
-  /** Holds scans that library or search settings changes would start until the dialog closes,
-   * then runs one scan of the selected library. */
-  readonly beginDeferringScans: () => void;
-  readonly endDeferringScans: () => void;
   /** Shows a failure that is not a job's, such as adding a folder, in the gallery overlay. */
   readonly showProblem: (problem: AppProblem) => void;
   readonly dismissProblem: () => void;
@@ -97,35 +93,32 @@ class Application implements ApplicationContext {
   fileSheet = $state.raw<readonly string[] | null>(null);
 
   private started = false;
+  private disposed = false;
+  private initializationRevision = 0;
+  private recoveryRevision = 0;
+  private recoveryTask: Promise<void> | null = null;
   private backendInitialized = false;
   private clipTextWarmupStarted = false;
   private clipTextWarmupRevision = 0;
-  private deferringScans = false;
-  /** The library whose scan is held while a settings dialog is open. */
-  private deferredScan: LibraryId | null = null;
+  private runtimeChangePending = false;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
-    // Only the library on screen is indexed: leaving one stops its scan, and opening one scans
-    // whatever its folders still need.
-    const catalog = new CatalogController((previous, next) => {
-      if (!catalog.backendStatus.ready) return;
-      void jobs.cancelLibraryScans(previous);
-      if (next !== null) this.requestPendingScan(next);
+    const catalog = new CatalogController((_previous, next) => {
+      this.librarySelectionRevision += 1;
+      if (catalog.backendStatus.ready)
+        void window.nicegal.backend.setLibraryView(next).catch(() => {});
     });
-    const runtime = new RuntimeController(() => this.stopJobsForRuntimeSwitch());
+    const runtime = new RuntimeController(
+      () => this.stopJobsForRuntimeSwitch(),
+      (model) => catalog.setImageModel(model),
+    );
     const jobs: JobTracker = new JobTracker(
       (delay) => catalog.scheduleRefresh(delay),
       () => catalog.bumpThumbnailRevision(),
-      (snapshot) => {
-        orchestrator.handleTerminalJob(snapshot);
-        void runtime.refreshModels();
-        void this.afterJob();
-      },
+      () => void this.afterJob(),
     );
-    const orchestrator = new JobOrchestrator(jobs, async (libraryId) => {
-      await this.deleteLibrary(libraryId);
-    });
+    const orchestrator = new JobOrchestrator(jobs);
 
     this.services = Object.freeze({ catalog, runtime, ocrSearch, jobs, orchestrator });
     this.commands = Object.freeze({
@@ -156,7 +149,6 @@ class Application implements ApplicationContext {
         libraryId: LibraryId,
         options: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean } = {},
       ) => {
-        if (this.deferredScan === libraryId) this.deferredScan = null;
         void orchestrator.scan(libraryId, { scanMode: "full", ...options });
       },
       startThumbnailBackfill: (libraryId: LibraryId, options: ThumbnailBackfillOptions) =>
@@ -166,9 +158,6 @@ class Application implements ApplicationContext {
       dismissWelcome: () => this.dismissWelcome(),
       showWelcome: () => {
         this.welcomeVisible = true;
-      },
-      beginDeferringScans: () => {
-        this.deferringScans = true;
       },
       showProblem: (problem: AppProblem) => {
         this.problem = problem;
@@ -180,18 +169,12 @@ class Application implements ApplicationContext {
         this.problem = null;
         void this.initialize();
       },
-      endDeferringScans: () => {
-        this.deferringScans = false;
-        const libraryId = this.deferredScan;
-        this.deferredScan = null;
-        if (libraryId !== null && libraryId === catalog.selectedId)
-          void orchestrator.scan(libraryId);
-      },
     });
   }
 
   start(): () => void {
-    if (this.started) throw new Error("Application lifecycle already started");
+    if (this.started || this.disposed)
+      throw new Error("Application lifecycle already started or disposed");
     this.started = true;
 
     const { catalog, runtime, orchestrator, jobs } = this.services;
@@ -202,23 +185,34 @@ class Application implements ApplicationContext {
       this.commands.addToVisualSearch,
     );
     const unsubscribeBackendStatus = window.nicegal.backend.onBackendStatusChanged((status) => {
-      const recovered = !catalog.backendStatus.ready && status.ready;
-      const disconnected = catalog.backendStatus.ready && !status.ready;
+      const replaced =
+        status.ready &&
+        !!status.instanceId &&
+        !!catalog.backendStatus.instanceId &&
+        status.instanceId !== catalog.backendStatus.instanceId;
+      const recovered = status.ready && (!catalog.backendStatus.ready || replaced);
+      const disconnected = catalog.backendStatus.ready && (!status.ready || replaced);
+      if (replaced) catalog.applyBackendStatus({ ready: false, error: null });
       catalog.applyBackendStatus(status);
       if (status.error && orchestrator.restartingIndex) orchestrator.backendDisconnected();
       if (disconnected) {
+        this.recoveryRevision += 1;
+        this.recoveryTask = null;
+        this.runtimeChangePending = status.restartReason === "runtime-change";
         this.clipTextWarmupStarted = false;
         this.clipTextWarmupRevision += 1;
         runtime.reset();
+        this.services.ocrSearch.suspend();
         const providerFallback = status.restartReason === "provider-fallback";
         const resuming = orchestrator.backendDisconnected(providerFallback);
         this.services.jobs.backendDisconnected(resuming);
       }
       if (recovered) {
-        if (this.backendInitialized) {
-          void runtime.refresh();
-          void runtime.refreshModels();
-        }
+        const runtimeChanged = this.runtimeChangePending;
+        this.runtimeChangePending = false;
+        void this.recoverBackend(runtimeChanged);
+      } else if (status.ready) {
+        // A reconnect can miss edits even when Rust did not restart.
         void this.recoverBackend();
       }
     });
@@ -231,6 +225,13 @@ class Application implements ApplicationContext {
     void this.initialize();
 
     return () => {
+      this.started = false;
+      this.disposed = true;
+      this.initializationRevision += 1;
+      this.recoveryRevision += 1;
+      this.recoveryTask = null;
+      this.clipTextWarmupRevision += 1;
+      runtime.dispose();
       unsubscribeSettings();
       unsubscribeVisualSearch();
       unsubscribeBackendStatus();
@@ -238,20 +239,23 @@ class Application implements ApplicationContext {
       this.services.ocrSearch.dispose();
       catalog.dispose();
       this.services.jobs.dispose();
-      this.started = false;
     };
   }
 
   private async initialize(): Promise<void> {
+    if (!this.started) return;
+    const revision = ++this.initializationRevision;
+    const current = (): boolean => this.started && revision === this.initializationRevision;
     const { catalog } = this.services;
     try {
       await catalog.initialize();
+      if (!current()) return;
       this.initialized = true;
       if (catalog.backendStatus.ready) {
-        this.warmClipTextModel(catalog.selectedId);
-        await this.initializeReadyBackend();
+        await this.recoverBackend();
       }
     } catch (error) {
+      if (!current()) return;
       this.initialized = true;
       this.problem = {
         title: "Couldn't open the gallery",
@@ -262,36 +266,71 @@ class Application implements ApplicationContext {
     }
   }
 
-  private async recoverBackend(): Promise<void> {
-    await this.services.catalog.loadLibraries();
-    this.warmClipTextModel(this.services.catalog.selectedId);
-    await this.initializeReadyBackend();
-    const { catalog, orchestrator, jobs } = this.services;
-    orchestrator.backendReady();
-    await jobs.sync();
-    // A restart drops running and queued scans. A routine scan may have started with no
-    // pending folder flag, so rescan every folder. The directory check is enough: indexing
-    // covers every asset the current models still lack, including after a model change. A
-    // restart from Settings (model or provider change) waits until the dialog closes.
-    if (catalog.selectedId === null) return;
-    if (this.deferringScans) this.deferredScan = catalog.selectedId;
-    else await orchestrator.scan(catalog.selectedId);
+  /** Startup and reconnect share one operation per backend lifetime. */
+  private recoverBackend(runtimeChanged = false): Promise<void> {
+    if (!this.started || !this.services.catalog.backendStatus.ready) return Promise.resolve();
+    if (this.recoveryTask) return this.recoveryTask;
+    const revision = this.recoveryRevision;
+    const current = (): boolean =>
+      this.started &&
+      revision === this.recoveryRevision &&
+      this.services.catalog.backendStatus.ready;
+    const task = this.restoreBackend(current, runtimeChanged)
+      .catch((error: unknown) => {
+        if (!current()) return;
+        this.problem = {
+          title: "Couldn't reconnect to the gallery",
+          guidance: "Try again to refresh the library and resume indexing.",
+          message: errorMessage(error),
+          retry: true,
+        };
+      })
+      .finally(() => {
+        if (this.recoveryTask === task) this.recoveryTask = null;
+      });
+    this.recoveryTask = task;
+    return task;
   }
 
-  /** Warm only when the selected library already has indexed CLIP content. */
-  private warmClipTextModel(libraryId: LibraryId | null): void {
+  private async restoreBackend(current: () => boolean, runtimeChanged: boolean): Promise<void> {
+    const { catalog, runtime, orchestrator, jobs } = this.services;
+    await catalog.loadLibraries();
+    if (!current()) return;
+    if (catalog.librariesError) throw new Error(catalog.librariesError);
+    const libraryId = catalog.selectedId;
+    await Promise.all([runtime.refresh(), runtime.refreshModels()]);
+    if (!current()) return;
+    await catalog.refreshLibraryStatuses();
+    if (!current()) return;
+    this.warmClipTextModel(libraryId, runtimeChanged);
+    await jobs.sync();
+    if (!current()) return;
+    if (!this.backendInitialized) {
+      this.welcomeVisible =
+        catalog.librariesLoaded && !catalog.libraries.length && !this.welcomeWasDismissed();
+      this.backendInitialized = true;
+    }
+    orchestrator.backendReady();
+    // A selection made during recovery has already told the backend through `onSelectionChanged`.
+    if (libraryId === catalog.selectedId) await window.nicegal.backend.setLibraryView(libraryId);
+  }
+
+  /** At startup, warm only for indexed content. A runtime switch warms the new cached model
+   * before its first scan has produced any vectors. */
+  private warmClipTextModel(libraryId: LibraryId | null, runtimeChanged = false): void {
     const { catalog, runtime } = this.services;
-    if (this.clipTextWarmupStarted || libraryId === null || !catalog.backendStatus.ready) return;
+    if (!this.started || this.clipTextWarmupStarted || !catalog.backendStatus.ready) return;
     const revision = ++this.clipTextWarmupRevision;
     void (async () => {
-      let indexed: number;
-      try {
-        indexed = (await window.nicegal.backend.getImageEmbeddingCoverage(libraryId)).indexed;
-      } catch {
-        return;
+      if (!runtimeChanged) {
+        if (libraryId === null) return;
+        try {
+          if (!(await window.nicegal.backend.getImageEmbeddingCoverage(libraryId)).indexed) return;
+        } catch {
+          return;
+        }
       }
       if (
-        !indexed ||
         revision !== this.clipTextWarmupRevision ||
         this.clipTextWarmupStarted ||
         !catalog.backendStatus.ready ||
@@ -314,19 +353,17 @@ class Application implements ApplicationContext {
 
   /**
    * Stops indexing so a model or provider switch can restart the gallery service. The restart
-   * resumes the selected library's scan once Settings closes; holding it here as well covers a
-   * switch that fails. Returns why the switch has to wait, or null.
+   * lets Rust recover background work. Returns why the switch has to wait, or null.
    */
   private async stopJobsForRuntimeSwitch(): Promise<string | null> {
-    const { catalog, jobs, orchestrator } = this.services;
+    const { jobs, orchestrator } = this.services;
     if (!jobs.running) return null;
     if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
       return "Switch after the current job finishes.";
-    if (this.deferringScans && catalog.selectedId !== null) this.deferredScan = catalog.selectedId;
     // Cancelling is cooperative, and the backend refuses the switch until the job has ended. A
     // scan the backend had queued can start in the meantime, so cancel whatever is running.
     const deadline = Date.now() + 30_000;
-    while (jobs.running && Date.now() < deadline) {
+    while (this.started && jobs.running && Date.now() < deadline) {
       if (jobs.active?.status !== "cancelling") await orchestrator.cancel();
       await new Promise((resolve) => setTimeout(resolve, 250));
       await jobs.sync();
@@ -334,37 +371,14 @@ class Application implements ApplicationContext {
     return jobs.running ? "Indexing didn't stop in time. Try again." : null;
   }
 
-  private async initializeReadyBackend(): Promise<void> {
-    if (this.backendInitialized) return;
-    this.backendInitialized = true;
-    const { catalog, runtime, orchestrator, jobs } = this.services;
-    this.welcomeVisible =
-      catalog.librariesLoaded && !catalog.libraries.length && !this.welcomeWasDismissed();
-    void catalog.refreshLibraryStatuses();
-    void runtime.refresh();
-    void runtime.refreshModels();
-    try {
-      // Follow whatever the backend is already running or has queued from its last session.
-      await jobs.sync();
-      await orchestrator.resumeInterruptedJob(catalog.selectedId);
-      // Opening the app checks the selected library's directories for changes.
-      if (catalog.selectedId !== null) await orchestrator.scan(catalog.selectedId);
-    } catch (error) {
-      this.problem = {
-        title: "Couldn't check the library for changes",
-        guidance: "Rescan the library to try again.",
-        message: errorMessage(error),
-      };
-    }
-  }
-
-  /** Called after every terminal job: library state may have moved, and the backend may have
-   * started the next queued scan. */
   private async afterJob(): Promise<void> {
+    if (!this.started) return;
+    const revision = this.recoveryRevision;
     const { catalog, jobs, runtime } = this.services;
     // A scan may have prepared a model or failed to; the status bar's search warning reads this.
     void runtime.refreshModels();
     await catalog.loadLibraries();
+    if (!this.started || revision !== this.recoveryRevision) return;
     void catalog.refreshLibraryStatuses();
     await jobs.sync();
   }
@@ -382,10 +396,7 @@ class Application implements ApplicationContext {
         `That folder is already in “${existing.displayName}”. Select that library or add a different folder.`,
       );
     }
-    const library = await catalog.createLibrary(folder);
-    this.librarySelectionRevision += 1;
-    this.requestPendingScan(library.id);
-    return library;
+    return catalog.createLibrary(folder);
   }
 
   private async saveLibrary(
@@ -396,18 +407,11 @@ class Application implements ApplicationContext {
     const { catalog } = this.services;
     const current = catalog.definitions.find((library) => library.id === libraryId);
     if (current && definitionChanged(current, definition)) {
-      const updated = await catalog.updateLibrary(libraryId, definition);
+      await catalog.updateLibrary(libraryId, definition);
       catalog.updateLibraryViewState(libraryId, { name });
-      if (this.deferringScans || updated.include.some((folder) => folder.scanPending))
-        this.requestPendingScan(libraryId);
     } else {
       catalog.updateLibraryViewState(libraryId, { name });
     }
-  }
-
-  private requestPendingScan(libraryId: LibraryId): void {
-    if (this.deferringScans) this.deferredScan = libraryId;
-    else void this.services.orchestrator.scan(libraryId, { pendingOnly: true });
   }
 
   private async startThumbnailBackfill(
@@ -418,7 +422,7 @@ class Application implements ApplicationContext {
     if (jobs.running) return;
     const buckets = this.toBucketList(options.buckets);
     const { sortField } = get(settings);
-    await orchestrator.startResumableJob({
+    await orchestrator.startJob({
       type: "thumbnailGenerate",
       params: {
         libraryId,
@@ -432,20 +436,13 @@ class Application implements ApplicationContext {
     });
   }
 
-  private async deleteLibrary(libraryId: LibraryId): Promise<boolean> {
-    const { catalog } = this.services;
-    const selected = catalog.selectedId === libraryId;
-    await catalog.deleteLibrary(libraryId);
-    if (selected) this.librarySelectionRevision += 1;
-    return true;
-  }
-
   private async removeLibrary(libraryId: LibraryId, purge: boolean): Promise<boolean> {
     const { jobs, orchestrator } = this.services;
     if (jobs.running) return false;
     // A purge deletes the definition itself once it completes; see `JobOrchestrator`.
     if (purge) return orchestrator.purgeLibrary(libraryId);
-    return this.deleteLibrary(libraryId);
+    await this.services.catalog.deleteLibrary(libraryId);
+    return true;
   }
 
   private welcomeWasDismissed(): boolean {

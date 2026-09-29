@@ -25,7 +25,7 @@ import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
 import { registerRemoteIpc } from "./remote/ipc";
 import { RemoteAccess } from "./remote/remote-access";
-import { APP_ENTRY_URL } from "./renderer-location";
+import { APP_ENTRY_URL, isRendererEntryUrl } from "./renderer-location";
 import { HIDDEN_LAUNCH_ARG, TrayController } from "./tray";
 import { startUpdates } from "./updates";
 
@@ -266,7 +266,7 @@ function isTrustedRendererUrl(url: string): boolean {
       return false;
     }
   }
-  return url === rendererEntryUrl;
+  return isRendererEntryUrl(url, rendererEntryUrl);
 }
 
 function focusMainWindow(): void {
@@ -372,7 +372,7 @@ async function initializeBackend(): Promise<void> {
     thumbnailDatabase,
   });
   backendClient = new NicegalServerClient(connection.endpoint, connection.token, backendLog);
-  await backendClient.health();
+  backendStatus.instanceId = (await backendClient.health()).instanceId;
   thumbnailReader = new ThumbnailReader(thumbnailDatabase);
   backendStatus.ready = true;
   backendStatus.error = null;
@@ -392,7 +392,9 @@ function shutdownBackend(): Promise<void> {
 
 async function drainBackend(): Promise<void> {
   backendStatus.ready = false;
-  broadcastBackendStatus();
+  // During quit the renderer remains visible until the server has stopped. Keep its last
+  // useful state instead of briefly showing the startup screen before the window closes.
+  if (!shutdownStarted) broadcastBackendStatus();
   thumbnailReader?.close();
   thumbnailReader = null;
   backendClient = null;

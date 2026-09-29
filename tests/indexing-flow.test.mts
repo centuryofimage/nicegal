@@ -1,6 +1,7 @@
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
+import { get } from "svelte/store";
 import { createServer } from "vite";
 
 import type { CatalogController as Catalog } from "../src/renderer/src/lib/catalog.svelte.ts";
@@ -93,8 +94,6 @@ function fixture(responses: JobSnapshot[]): {
       assert.ok(result, "unexpected extra job request");
       this.active = result;
       this.running = result.status === "running";
-      if (result.status === "completed" || result.status === "failed")
-        orchestrator.handleTerminalJob(result);
       return result;
     },
     async cancelAll(): Promise<void> {
@@ -103,7 +102,7 @@ function fixture(responses: JobSnapshot[]): {
     },
   };
   globalThis.window = { nicegal: { backend: {} } } as unknown as Window & typeof globalThis;
-  const orchestrator = new JobOrchestrator(jobs as unknown as JobTracker, async () => {});
+  const orchestrator = new JobOrchestrator(jobs as unknown as JobTracker);
   return { orchestrator, jobs, requests };
 }
 
@@ -133,7 +132,7 @@ test("a provider fallback during a scan shows recovery until the backend returns
   assert.equal(f.orchestrator.restartingIndex, true);
   f.orchestrator.backendReady();
   assert.equal(f.orchestrator.restartingIndex, false);
-  assert.deepEqual(f.requests, [], "application recovery requests pending folders after reconnect");
+  assert.deepEqual(f.requests, [], "Rust owns scan recovery after reconnect");
 });
 
 test("an ordinary crash, or a fallback with no scan running, shows no recovery", () => {
@@ -151,34 +150,6 @@ test("Stop cancels the active job and every queued scan", async () => {
   await f.orchestrator.cancel();
   assert.equal(f.jobs.cancelledAll, 1);
   assert.equal(f.orchestrator.restartingIndex, false);
-});
-
-for (const status of ["completed", "failed", "cancelled"] as const) {
-  test(`immediately ${status} thumbnail job clears the resume record`, async () => {
-    const f = fixture([snapshot("thumbnailGenerate", status)]);
-    const request = { type: "thumbnailGenerate", params: { libraryId: 3 } } as const;
-    storage.set("nicegal.jobResume.v1", JSON.stringify({ libraryId: 3, request }));
-    await f.orchestrator.startResumableJob(request);
-    assert.equal(storage.has("nicegal.jobResume.v1"), false);
-  });
-}
-
-test("running thumbnail job remains resumable until its terminal snapshot", async () => {
-  const f = fixture([snapshot("thumbnailGenerate", "running")]);
-  await f.orchestrator.startResumableJob({ type: "thumbnailGenerate", params: { libraryId: 3 } });
-  assert.equal(storage.has("nicegal.jobResume.v1"), true);
-  f.orchestrator.handleTerminalJob(snapshot("thumbnailGenerate", "completed"));
-  assert.equal(storage.has("nicegal.jobResume.v1"), false);
-});
-
-test("an interrupted thumbnail job resumes only for its own library", async () => {
-  const f = fixture([snapshot("thumbnailGenerate", "running")]);
-  const request = { type: "thumbnailGenerate", params: { libraryId: 3 } } as const;
-  storage.set("nicegal.jobResume.v1", JSON.stringify({ libraryId: 3, request }));
-  await f.orchestrator.resumeInterruptedJob(4);
-  assert.deepEqual(f.requests, []);
-  await f.orchestrator.resumeInterruptedJob(3);
-  assert.deepEqual(f.requests, [request]);
 });
 
 function trackerBackend(overrides: Record<string, unknown>): void {
@@ -500,7 +471,66 @@ test("automatic catalog refresh and coverage polling remain available", async ()
   catalog.dispose();
 });
 
-test("v2 roots import once as one-folder libraries with their view state", async () => {
+test("failed catalog polls retain coverage; a successful zero still clears it", async () => {
+  storage.clear();
+  let failure: "revision" | "coverage" | null = null;
+  let indexed = 5;
+  catalogBackend({
+    getCatalogRevision: async () => {
+      if (failure === "revision") throw new Error("IPC unavailable");
+      return "1";
+    },
+    getImageEmbeddingCoverage: async () => {
+      if (failure === "coverage") throw new Error("Coverage unavailable");
+      return { total: 5, indexed };
+    },
+  });
+  const catalog = new CatalogController();
+  catalog.definitions = [{ id: 1, include: [], exclude: [], ocr: false, image: true }];
+  catalog.selectedId = 1;
+  catalog.backendStatus = { ready: true, error: null };
+  await catalog.pollRevision();
+  assert.equal(catalog.selectedStatus?.imageCoverage?.indexed, 5);
+  for (const stage of ["revision", "coverage"] as const) {
+    failure = stage;
+    await catalog.pollRevision();
+    assert.equal(catalog.selectedStatus?.imageCoverage?.indexed, 5, stage);
+  }
+  failure = null;
+  indexed = 0;
+  await catalog.pollRevision();
+  assert.equal(catalog.selectedStatus?.imageCoverage?.indexed, 0);
+  catalog.dispose();
+});
+
+test("startup loads a restored library after the initial settings emission", async () => {
+  storage.clear();
+  storage.set(
+    "nicegal.libraries.v3",
+    JSON.stringify({ selectedId: 1, importedV2: true, views: {} }),
+  );
+  let reads = 0;
+  catalogBackend({
+    listLibraries: async () => [library(1, "C:/Pictures")],
+    listAssets: async () => {
+      reads++;
+      return [];
+    },
+  });
+  const catalog = new CatalogController();
+  const { settings } = await vite.ssrLoadModule("/src/renderer/src/lib/settings.svelte.ts");
+  const unsubscribe = settings.subscribe((value: Parameters<Catalog["onSettingsChange"]>[0]) =>
+    catalog.onSettingsChange(value),
+  );
+  await catalog.initialize();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(reads, 1, "remembering the desired timeline must not count as a loaded catalog");
+  assert.equal(catalog.loading, false);
+  unsubscribe();
+  catalog.dispose();
+});
+
+test("v2 roots import once with their indexing choices and view state", async (t) => {
   storage.clear();
   storage.set(
     "nicegal.libraries.v2",
@@ -512,10 +542,18 @@ test("v2 roots import once as one-folder libraries with their view state", async
       ],
     }),
   );
-  storage.set(
-    "nicegal.settings.v1",
-    JSON.stringify({ libraryIndexing: { "d:/phone": { ocr: true, image: false } } }),
-  );
+  const { settings } = (await vite.ssrLoadModule(
+    "/src/renderer/src/lib/settings.svelte.ts",
+  )) as typeof import("../src/renderer/src/lib/settings.svelte.ts");
+  const { rootKey } = (await vite.ssrLoadModule(
+    "/src/renderer/src/lib/library-root.ts",
+  )) as typeof import("../src/renderer/src/lib/library-root.ts");
+  const previousSettings = get(settings);
+  settings.set({
+    ...previousSettings,
+    libraryIndexing: { [rootKey("D:/Phone")]: { ocr: true, image: false } },
+  });
+  t.after(() => settings.set(previousSettings));
   const created: CreateLibraryRequest[] = [];
   const backend: Library[] = [];
   catalogBackend({
@@ -533,6 +571,13 @@ test("v2 roots import once as one-folder libraries with their view state", async
   await catalog.initialize();
   assert.equal(created.length, 2);
   assert.ok(created.every((request) => request.importKey?.startsWith("nicegal.libraries.v2:")));
+  assert.deepEqual(
+    created.map(({ include, ocr, image }) => ({ include, ocr, image })),
+    [
+      { include: ["C:/Pictures"], ocr: false, image: true },
+      { include: ["D:/Phone"], ocr: true, image: false },
+    ],
+  );
   assert.deepEqual(
     catalog.libraries.map(({ id, displayName }) => ({
       id,
@@ -653,4 +698,131 @@ test("repeated reloads during a slow catalog load coalesce into one follow-up", 
   await new Promise((resolve) => setTimeout(resolve, 0));
   assert.equal(catalog.loading, false);
   catalog.dispose();
+});
+
+test("coverage from an old model or disposed catalog cannot publish", async () => {
+  storage.clear();
+  const oldCoverage = Promise.withResolvers<{ total: number; indexed: number }>();
+  catalogBackend({ getImageEmbeddingCoverage: () => oldCoverage.promise });
+  const catalog = new CatalogController();
+  catalog.definitions = [{ id: 1, include: [], exclude: [], ocr: false, image: true }];
+  catalog.selectedId = 1;
+  catalog.backendStatus = { ready: true, error: null };
+  catalog.setImageModel("a");
+  const pending = catalog.pollRevision();
+  await Promise.resolve();
+  // Isolate the in-flight poll from the separate status refresh scheduled by a model change.
+  catalog.refreshLibraryStatuses = async () => {};
+  catalog.setImageModel("b");
+  oldCoverage.resolve({ total: 5, indexed: 5 });
+  await pending;
+  assert.equal(catalog.selectedStatus?.imageCoverage ?? null, null);
+  const lateCoverage = Promise.withResolvers<{ total: number; indexed: number }>();
+  window.nicegal.backend.getImageEmbeddingCoverage = () => lateCoverage.promise;
+  const late = catalog.pollRevision();
+  await Promise.resolve();
+  catalog.dispose();
+  lateCoverage.resolve({ total: 10, indexed: 10 });
+  await late;
+  assert.equal(catalog.selectedStatus?.imageCoverage ?? null, null);
+});
+
+test("pushed backend status supersedes an older startup snapshot", async () => {
+  storage.clear();
+  const initial = Promise.withResolvers<{ ready: boolean; error: null }>();
+  let lists = 0;
+  catalogBackend({
+    getBackendStatus: () => initial.promise,
+    listLibraries: async () => {
+      lists++;
+      return [];
+    },
+  });
+  const catalog = new CatalogController();
+  const pending = catalog.initialize();
+  catalog.applyBackendStatus({ ready: false, error: "disconnected" });
+  initial.resolve({ ready: true, error: null });
+  await pending;
+  assert.equal(catalog.backendStatus.ready, false);
+  assert.equal(lists, 0);
+  catalog.dispose();
+});
+
+test("first catalog load still runs after an initial disconnected status", async () => {
+  storage.clear();
+  let lists = 0;
+  const definition = { id: 1, include: [], exclude: [], ocr: false, image: true };
+  catalogBackend({
+    listLibraries: async () => [definition],
+    listAssets: async () => {
+      lists++;
+      return [];
+    },
+  });
+  const catalog = new CatalogController();
+  catalog.selectedId = 1;
+  catalog.definitions = [definition];
+  catalog.applyBackendStatus({ ready: false, error: null });
+  catalog.applyBackendStatus({ ready: true, error: null });
+  await catalog.loadLibraries();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(lists, 1);
+  catalog.dispose();
+});
+
+test("a library list read that started before a mutation does not republish the old list", async () => {
+  storage.clear();
+  const stale = Promise.withResolvers<Library[]>();
+  let reads = 0;
+  catalogBackend({
+    listLibraries: () => (++reads === 1 ? stale.promise : Promise.resolve([])),
+    createLibrary: async () => library(2, "C:/new"),
+  });
+  const catalog = new CatalogController();
+  catalog.backendStatus = { ready: true, error: null };
+  catalog.definitions = [library(1, "C:/old")];
+  catalog.selectedId = 1;
+  const load = catalog.loadLibraries();
+  await catalog.createLibrary("C:/new");
+  stale.resolve([library(1, "C:/old")]);
+  await load;
+  assert.deepEqual(
+    catalog.definitions.map(({ id }) => id),
+    [1, 2],
+  );
+  assert.equal(catalog.selectedId, 2);
+  catalog.dispose();
+});
+
+test("a job poll that started before a pushed snapshot does not roll progress back", async () => {
+  const listed = Promise.withResolvers<JobListResponse>();
+  let push!: (snapshot: JobSnapshot) => void;
+  const progress = (cataloged: number): JobSnapshot => ({
+    ...snapshot("libraryScan", "running", "7", 1),
+    progress: { cataloged, thumbnailsGenerated: 0 } as JobSnapshot["progress"],
+  });
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        startJob: async () => progress(0),
+        listJobs: () => listed.promise,
+        subscribeJob: (_id: string, listener: typeof push) => {
+          push = listener;
+          return () => {};
+        },
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+  const jobs = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  await jobs.start({ type: "libraryScan", params: { libraryId: 1 } } as JobRequest);
+  const sync = jobs.sync();
+  push(progress(50));
+  listed.resolve({ activeJobId: "7", jobs: [progress(10)] } as JobListResponse);
+  await sync;
+  assert.equal(jobs.active?.progress.cataloged, 50);
+  jobs.dispose();
 });

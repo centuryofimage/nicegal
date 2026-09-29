@@ -32,6 +32,7 @@ const vite = await createServer({
 after(() => vite.close());
 const { handleRemotableIpc, handleTrustedIpc } = await vite.ssrLoadModule("/src/main/ipc.ts");
 const { RemoteAccess } = await vite.ssrLoadModule("/src/main/remote/remote-access.ts");
+const { RemoteServer } = await vite.ssrLoadModule("/src/main/remote/remote-server.ts");
 
 const CLIENT = "11111111-2222-4333-8444-555555555555";
 
@@ -45,6 +46,77 @@ function freePort(): Promise<number> {
     });
   });
 }
+
+test(
+  "API stream failures are contained and browser disconnects cancel upstream",
+  { timeout: 5000 },
+  async (t) => {
+    let controller: ReadableStreamDefaultController<Uint8Array>;
+    let upstreamSignal: AbortSignal;
+    let cancelled!: () => void;
+    const cancellation = new Promise<void>((resolve) => {
+      cancelled = resolve;
+    });
+    let logged!: () => void;
+    const failureLogged = new Promise<void>((resolve) => {
+      logged = resolve;
+    });
+    const log = t.mock.method(console, "error", () => logged());
+    const server = new RemoteServer(
+      {
+        authenticate: () => ({ id: "phone", name: "Phone", pairedAt: 0, lastSeenAt: 0 }),
+        pair: () => ({ error: "unused" }),
+        rendererDirectory: "unused",
+        iconPath: "unused",
+        devRendererUrl: null,
+        onConnectionsChanged() {
+          /* No event streams in this test. */
+        },
+        getThumbnails: () => null,
+        getCatalog: () => ({
+          forward: async (_path: string, options: { signal: AbortSignal }) => {
+            upstreamSignal = options.signal;
+            return new Response(
+              new ReadableStream<Uint8Array>({
+                start(stream) {
+                  controller = stream;
+                  stream.enqueue(new TextEncoder().encode("first chunk"));
+                },
+                cancel() {
+                  cancelled();
+                },
+              }),
+            );
+          },
+        }),
+      },
+      null,
+    );
+    const port = await freePort();
+    await server.listen(port);
+    t.after(() => server.close());
+    const request = (): Promise<Response> =>
+      fetch(`http://127.0.0.1:${port}/api/v1/test`, {
+        headers: { cookie: "nicegal_device=test" },
+      });
+    const first = await request();
+    const firstReader = first.body!.getReader();
+    assert.equal(new TextDecoder().decode((await firstReader.read()).value), "first chunk");
+    controller!.error(new Error("upstream socket failed"));
+    await assert.rejects(firstReader.read());
+    await failureLogged;
+    assert.equal(log.mock.callCount(), 1);
+    assert.match(String(log.mock.calls[0].arguments[0]), /Remote response stream failed/);
+
+    // The server still accepts requests after the failed response.
+    const second = await request();
+    const secondReader = second.body!.getReader();
+    await secondReader.read();
+    await secondReader.cancel();
+    await cancellation;
+    assert.equal(upstreamSignal!.aborted, true);
+  },
+);
 
 test("remote access pairs, authenticates, serves calls, events and media, and revokes", async () => {
   const directory = await mkdtemp(join(tmpdir(), "nicegal-remote-"));

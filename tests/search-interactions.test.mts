@@ -10,6 +10,7 @@ const vite = await createServer({
   configFile: false,
   cacheDir: "node_modules/.vite-search-tests",
   plugins: [svelte()],
+  optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false, ws: false, watch: null },
   appType: "custom",
 });
@@ -193,7 +194,7 @@ test("visual search waits for image coverage, then runs the unchanged query when
   search.dispose();
 });
 
-test("adding a library creates it with the default search types and scans its folders", async () => {
+test("adding a library creates it with the default search types", async () => {
   const { createApplication } = await vite.ssrLoadModule(
     "/src/renderer/src/lib/application.svelte.ts",
   );
@@ -227,6 +228,7 @@ test("adding a library creates it with the default search types and scans its fo
           created.push(request);
           return library;
         },
+        setLibraryView: async () => {},
         listLibraries: async () => [],
         listJobs: async () => ({ activeJobId: null, jobs: [] }),
         subscribeJob: () => () => {},
@@ -242,10 +244,7 @@ test("adding a library creates it with the default search types and scans its fo
     { include: ["C:/new-pictures"], exclude: [], ocr: false, image: true },
   ]);
   assert.equal(app.services.catalog.selectedId, 5);
-  assert.deepEqual(started, [
-    { type: "libraryScan", params: { libraryId: 5, scanMode: "fast", pendingOnly: true } },
-  ]);
-  assert.equal(app.services.jobs.scanState(5), "scanning");
+  assert.deepEqual(started, []);
   app.services.jobs.dispose();
   app.services.ocrSearch.dispose();
 });
@@ -258,6 +257,7 @@ test("adding an existing folder is blocked before creating another library", asy
   globalThis.window = {
     nicegal: {
       backend: {
+        setLibraryView: async () => {},
         listLibraries: async () => [
           {
             id: 3,
@@ -285,7 +285,7 @@ test("adding an existing folder is blocked before creating another library", asy
   app.services.ocrSearch.dispose();
 });
 
-test("switching libraries stops the old library's scan and scans the new one's pending folders", async () => {
+test("switching libraries leaves backend work alone", async () => {
   const { createApplication } = await vite.ssrLoadModule(
     "/src/renderer/src/lib/application.svelte.ts",
   );
@@ -317,6 +317,7 @@ test("switching libraries stops the old library's scan and scans the new one's p
           cancelled.push(id);
           return { jobId: id, type: "libraryScan", status: "cancelling", errors: [], progress: {} };
         },
+        setLibraryView: async () => {},
         listLibraries: async () => [library(1), library(2)],
         listJobs: async () => ({ activeJobId: null, jobs: [] }),
         subscribeJob: () => () => {},
@@ -333,21 +334,8 @@ test("switching libraries stops the old library's scan and scans the new one's p
   await orchestrator.scan(1);
   await catalog.selectLibrary(2);
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(cancelled, ["1"]);
-  assert.deepEqual(started.at(-1), {
-    type: "libraryScan",
-    params: { libraryId: 2, scanMode: "fast", pendingOnly: true },
-  });
-  app.commands.beginDeferringScans();
-  await catalog.selectLibrary(1);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(started.length, 2, "switching inside management does not start a scan");
-  app.commands.endDeferringScans();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.deepEqual(started.at(-1), {
-    type: "libraryScan",
-    params: { libraryId: 1, scanMode: "fast" },
-  });
+  assert.deepEqual(cancelled, []);
+  assert.equal(started.length, 1);
   app.services.jobs.dispose();
   app.services.ocrSearch.dispose();
 });
@@ -501,4 +489,161 @@ test("partial weighted expressions do not send empty compositions", async () => 
   assert.deepEqual(requests, []);
   assert.equal(search.pending, false);
   search.dispose();
+});
+
+test("refresh keeps results through pending and failure, but new queries and models clear them", async () => {
+  const { search } = fixture();
+  const items = [{ id: "1", path: "cat.jpg", date: 1, mediaKind: "image" }] as Parameters<
+    Controller["apply"]
+  >[0];
+  let response = Promise.resolve({
+    total: 1,
+    results: [{ assetId: "1", snippet: "cat", rank: 1 }],
+  });
+  window.nicegal.backend.searchOcr = () => response;
+  search.query = "like: cat";
+  search.schedule(1, items, "modified", true, true, true, "model-a");
+  await pause();
+  assert.equal(search.apply(items).items.length, 1);
+  const deferred = Promise.withResolvers<Awaited<typeof response>>();
+  response = deferred.promise;
+  search.schedule(1, items, "modified", true, true, true, "model-a");
+  assert.equal(search.apply(items).items.length, 1, "refresh retains visible results");
+  await pause();
+  deferred.reject(new Error("temporary failure"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(search.apply(items).items.length, 1, "failed refresh preserves results");
+  assert.equal(search.error, "temporary failure");
+  response = Promise.resolve({ total: 0, results: [] });
+  search.schedule(1, items, "modified", true, true, true, "model-a");
+  await pause();
+  assert.equal(
+    search.apply(items).items.length,
+    0,
+    "successful empty response replaces old results",
+  );
+  response = Promise.resolve({ total: 1, results: [{ assetId: "1", snippet: "cat", rank: 1 }] });
+  search.schedule(1, items, "modified", true, true, true, "model-a");
+  await pause();
+  search.schedule(1, items, "modified", true, true, null, "model-b");
+  assert.equal(search.apply(items).items.length, 0, "another model cannot reuse old rankings");
+  assert.equal(search.imageSetupRequired, false, "unknown coverage is not zero coverage");
+  await pause();
+  search.query = "like: dog";
+  search.schedule(1, items, "modified", true, true, true, "model-b");
+  assert.equal(search.apply(items).items.length, 0, "new queries clear previous results");
+  search.dispose();
+});
+
+for (const scenario of ["dispose", "reconnect", "coalesce", "new instance"] as const) {
+  test(`application recovery ignores obsolete work: ${scenario}`, async () => {
+    const { createApplication } = await vite.ssrLoadModule(
+      "/src/renderer/src/lib/application.svelte.ts",
+    );
+    let pushStatus!: (status: { ready: boolean; error: null; instanceId?: string }) => void;
+    Object.assign(globalThis, {
+      document: { visibilityState: "visible" },
+      window: {
+        nicegal: {
+          native: { onAddToVisualSearch: () => () => {} },
+          backend: {
+            onBackendStatusChanged: (listener: typeof pushStatus) => {
+              pushStatus = listener;
+              return () => {};
+            },
+            getImageEmbeddingCoverage: async () => ({ total: 0, indexed: 0 }),
+            cancelSearch: async () => {},
+            setLibraryView: async () => {},
+          },
+        },
+      },
+    });
+    const app = createApplication();
+    const { catalog, runtime, jobs, orchestrator } = app.services;
+    catalog.selectedId = 1;
+    catalog.onSettingsChange = () => {};
+    const initialization = Promise.withResolvers<void>();
+    catalog.initialize = () => initialization.promise;
+    const first = Promise.withResolvers<void>();
+    let loads = 0;
+    let scans = 0;
+    catalog.loadLibraries = () => (++loads === 1 ? first.promise : Promise.resolve());
+    catalog.refreshLibraryStatuses = async () => {};
+    runtime.refresh = async () => {};
+    runtime.refreshModels = async () => {};
+    jobs.sync = async () => {};
+    orchestrator.scan = async () => {
+      scans++;
+    };
+    const stop = app.start();
+    try {
+      pushStatus({ ready: true, error: null, instanceId: "first" });
+      assert.equal(loads, 1);
+      if (scenario === "dispose") stop();
+      else if (scenario === "reconnect") {
+        pushStatus({ ready: false, error: null });
+        pushStatus({ ready: true, error: null });
+      } else if (scenario === "new instance") {
+        pushStatus({ ready: true, error: null, instanceId: "second" });
+      }
+      initialization.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      first.resolve();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(scans, 0);
+      assert.equal(loads, scenario === "reconnect" || scenario === "new instance" ? 2 : 1);
+      if (scenario === "dispose") assert.equal(app.initialized, false);
+    } finally {
+      stop();
+    }
+  });
+}
+
+test("recovery finishes when the user switches library while it runs", async () => {
+  const { createApplication } = await vite.ssrLoadModule(
+    "/src/renderer/src/lib/application.svelte.ts",
+  );
+  let pushStatus!: (status: { ready: boolean; error: null }) => void;
+  const views: (number | null)[] = [];
+  Object.assign(globalThis, {
+    document: { visibilityState: "visible" },
+    window: {
+      nicegal: {
+        native: { onAddToVisualSearch: () => () => {} },
+        backend: {
+          onBackendStatusChanged: (listener: typeof pushStatus) => {
+            pushStatus = listener;
+            return () => {};
+          },
+          getImageEmbeddingCoverage: async () => ({ total: 0, indexed: 0 }),
+          cancelSearch: async () => {},
+          setLibraryView: async (libraryId: number | null) => {
+            views.push(libraryId);
+          },
+        },
+      },
+    },
+  });
+  const app = createApplication();
+  const { catalog, runtime, jobs, orchestrator } = app.services;
+  catalog.selectedId = 1;
+  catalog.onSettingsChange = () => {};
+  catalog.initialize = async () => {};
+  catalog.loadLibraries = async () => {};
+  catalog.refreshLibraryStatuses = async () => {};
+  runtime.refresh = async () => {};
+  runtime.refreshModels = async () => {};
+  jobs.sync = async () => {
+    catalog.selectedId = 2; // The user picks another library before recovery completes.
+  };
+  orchestrator.restartingIndex = true;
+  const stop = app.start();
+  try {
+    pushStatus({ ready: true, error: null });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(orchestrator.restartingIndex, false, "the interrupted scan notice clears");
+    assert.ok(!views.includes(1), "recovery does not reselect the library the user left");
+  } finally {
+    stop();
+  }
 });

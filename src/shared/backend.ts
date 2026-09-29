@@ -1,6 +1,8 @@
 export type Timeline = "modified" | "capture";
 
 export interface BackendStatus {
+  /** Changes on every Rust process start. */
+  instanceId?: string;
   ready: boolean;
   error: string | null;
   /** A deliberate provider fallback may resume the user's indexing intent once ready. */
@@ -132,7 +134,7 @@ export type FileFilter =
   | { kind: "ext"; extensions: string[]; exclude?: boolean };
 
 export interface SearchRequest {
-  /** IPC-only generation, increasing within this renderer's lifetime. Supply with searchLane. */
+  /** Search generation enforced by Rust, increasing within this renderer's lifetime. Supply with searchLane. */
   searchSession?: number;
   /** Independent requests in one session may run concurrently; each lane is latest-wins. */
   searchLane?: "literal" | "files" | "meaning" | "visual";
@@ -459,6 +461,8 @@ export interface LibraryPurgeJobRequest {
   type: "libraryPurge";
   params: {
     libraryId: LibraryId;
+    /** Remove the definition only after the backend completes the whole purge. */
+    removeLibrary?: boolean;
     /** When supplied, remove only indexed files in these former library folders. */
     folders?: string[];
   };
@@ -499,6 +503,7 @@ export interface BackendBridge {
   setImageModel(model: string): Promise<RuntimeStatus>;
   setExecutionProvider(executionProvider: ExecutionProviderId): Promise<RuntimeStatus>;
   listLibraries(): Promise<Library[]>;
+  setLibraryView(libraryId: LibraryId | null): Promise<void>;
   createLibrary(request: CreateLibraryRequest): Promise<Library>;
   updateLibrary(libraryId: LibraryId, definition: LibraryDefinition): Promise<Library>;
   deleteLibrary(libraryId: LibraryId): Promise<void>;
@@ -513,10 +518,11 @@ export interface BackendBridge {
   loadCachedModel(model: "clipText"): Promise<boolean>;
   searchOcr(request: SearchRequest): Promise<SearchResponse>;
   /** Abort all current searches and close their session. The next session must be newer. */
-  cancelSearch(): Promise<void>;
+  /** Cancel sessions through this token; never cancel a newer search. */
+  cancelSearch(throughSession: number): Promise<void>;
   getTextEmbeddingCoverage(libraryId: LibraryId): Promise<TextEmbeddingCoverage>;
   getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage>;
-  startJob(request: JobRequest): Promise<JobSnapshot>;
+  startJob(request: JobRequest, requestId?: string): Promise<JobSnapshot>;
   listJobs(): Promise<JobListResponse>;
   cancelJob(jobId: string): Promise<JobSnapshot>;
   subscribeJob(

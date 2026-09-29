@@ -43,6 +43,11 @@ export class JobTracker {
   private currentJobId: string | null = null;
   private generation = 0;
   private cancelRequested = false;
+  /** Orders overlapping polls: a response older than one already applied is dropped. */
+  private nextSync = 0;
+  private appliedSync = 0;
+  /** Counts pushed snapshots, so a poll that started before one cannot overwrite it. */
+  private pushedSnapshots = 0;
 
   constructor(
     private readonly onCatalogRefresh: (delay: number) => void,
@@ -134,13 +139,16 @@ export class JobTracker {
   async sync(): Promise<void> {
     if (this.starting) return;
     const generation = this.generation;
+    const sync = ++this.nextSync;
+    const pushedSnapshots = this.pushedSnapshots;
     let list;
     try {
       list = await window.nicegal.backend.listJobs();
     } catch {
       return; // The next sync retries; a failed poll must not blank known job state.
     }
-    if (generation !== this.generation || this.starting) return;
+    if (generation !== this.generation || this.starting || sync < this.appliedSync) return;
+    this.appliedSync = sync;
     // Polled every two seconds; republish only when the queue actually changed.
     const queued = list.jobs.filter((job) => job.status === "queued");
     if (
@@ -164,9 +172,12 @@ export class JobTracker {
       this.failure = null;
       this.completionMessage = "";
       this.attach(active, ++this.generation);
-    } else if (active?.jobId === this.currentJobId) {
+    } else if (
+      active?.jobId === this.currentJobId &&
+      (pushedSnapshots === this.pushedSnapshots || isTerminalJobStatus(active.status))
+    ) {
       // The event stream can disconnect or miss its final event. Keep the visible job current
-      // from the same poll that discovers newly active jobs.
+      // from the same poll that discovers newly active jobs, unless a newer snapshot was pushed.
       this.handleSnapshot(active);
     }
   }
@@ -208,7 +219,9 @@ export class JobTracker {
       this.unsubscribe = window.nicegal.backend.subscribeJob(
         snapshot.jobId,
         (next) => {
-          if (generation === this.generation) this.handleSnapshot(next);
+          if (generation !== this.generation) return;
+          this.pushedSnapshots += 1;
+          this.handleSnapshot(next);
         },
         (error) => {
           if (generation === this.generation)
@@ -343,6 +356,7 @@ export class JobTracker {
           .filter(Boolean)
           .join(" · ");
         this.active = null;
+        if (this.completionTimer) clearTimeout(this.completionTimer);
         this.completionTimer = setTimeout(() => {
           this.completionMessage = "";
           this.completionTimer = null;

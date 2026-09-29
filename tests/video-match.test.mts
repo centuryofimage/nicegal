@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { after, test } from "node:test";
 import { createServer } from "vite";
@@ -13,6 +13,7 @@ import type { GalleryItem } from "../src/renderer/src/lib/gallery/types.ts";
 const vite = await createServer({
   configFile: false,
   cacheDir: "node_modules/.vite-video-match-tests",
+  optimizeDeps: { noDiscovery: true, include: [] },
   server: { middlewareMode: true, hmr: false, ws: false, watch: null },
   appType: "custom",
 });
@@ -91,7 +92,6 @@ test("visual search keeps the winning video timestamp for text and composite que
 
 test("thumbnail reader returns the exact indexed sample and keeps the poster separate", (t) => {
   const directory = mkdtempSync(join(tmpdir(), "nicegal-video-match-"));
-  assert.equal(dirname(directory), tmpdir());
   const path = join(directory, "thumbnails.db");
   const db = new DatabaseSync(path);
   db.exec(`

@@ -1,7 +1,7 @@
-- open your gallery from your phone or another computer's browser. turn it on in settings > remote access, then pair with a one-time code
-- https option for remote access. it's recommended and makes thumbnails load faster
-- long press on your phone to share, copy, download, or find similar images
-- add a nicegal shortcut to your phone's home screen
-- minimize or close to tray, and open when you sign in, so your phone can connect anytime
-- search by file type with ext:jpg,png, and leave things out with !ext:gif or !path:old
-- use * and ? in path: and name: searches, like name:IMG_*.jpg
+- fix all the bugs the last release added and make everything more stable
+- reduce ram usage by 2gb by mmapping model text encoders
+  - i've updated the model files, it will redownload and delete the old ones on startup
+  - i also fixed siglip2 which apparently wants lowercase inputs only
+- add a "tag generator". its extremely quirky and not how CLIP is meant to be used, so the results are TRULY strange. it took a while to get something kind of resembling the gallery images
+  - check the info panel when viewing an image. only supports the non experimental models
+- cleanup ui a tiny bit

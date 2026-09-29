@@ -541,27 +541,22 @@
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
-    <div class="app-toolbar-divider title-divider" role="separator"></div>
-    <h1 class="detail-title" title={item.displayName}>{item.displayName}</h1>
-
     {#if isStillImage && !failed}
-      <div class="app-toolbar-group">
+      <div class="app-toolbar-group image-tools" role="toolbar" aria-label="Image viewer controls">
         <button
-          class={["app-toolbar-button", "app-toolbar-text-button", showMatchAreas && "active"]}
+          class={["app-toolbar-button", showMatchAreas && "active"]}
           type="button"
           onclick={toggleMatchAreas}
           title={visualizeUnavailable ??
             (showMatchAreas
               ? "Hide patch similarity and match areas (H)"
               : "Show patch similarity and match areas (H)")}
+          aria-label="Visualize match areas (H)"
           aria-pressed={showMatchAreas && canShowMatchAreas}
           disabled={!canShowMatchAreas}
         >
-          <ScanEye size={13} aria-hidden="true" /><span>Visualize</span>
+          <ScanEye size={16} aria-hidden="true" />
         </button>
-      </div>
-      <div class="app-toolbar-divider" role="separator"></div>
-      <div class="app-toolbar-group image-tools" role="toolbar" aria-label="Image viewer controls">
         <button
           class="app-toolbar-button"
           type="button"
@@ -603,7 +598,6 @@
           1:1
         </button>
       </div>
-      <span class="app-toolbar-readout" aria-live="polite">{zoomLabel}</span>
       <div class="app-toolbar-group">
         <button
           class="app-toolbar-button"
@@ -746,18 +740,6 @@
     background: var(--surface-2);
   }
 
-  .detail-title {
-    overflow: hidden;
-    min-width: 0;
-    flex: 1;
-    margin: 0;
-    color: var(--text-primary);
-    font-size: var(--font-size-md);
-    font-weight: var(--font-weight-semibold);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .image-tools {
     margin-left: auto;
   }
@@ -896,14 +878,6 @@
   .actual-size-button {
     font-size: var(--font-size-xs);
     font-variant-numeric: tabular-nums;
-  }
-  /* At phone width the name would only show a few letters. The status bar and Info pane
-     still show it. */
-  @media (max-width: 600px) {
-    .detail-title,
-    .title-divider {
-      display: none;
-    }
   }
   /* Swipes (touch) and arrow keys step between items, so the buttons would only crowd the back
      button. */

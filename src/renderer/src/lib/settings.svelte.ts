@@ -45,6 +45,8 @@ export interface GallerySettings {
   matchScores: boolean;
   /** Whether visual search results show their strongest matching areas on each image tile. */
   matchAreas: boolean;
+  /** Whether image tags rated offensive (slurs, crude or sexualizing labels) are hidden. */
+  hideOffensiveTags: boolean;
   /** Whether eligible animated GIF/video tiles are allowed to play in the grid. Combined at
    * runtime with the OS `prefers-reduced-motion` setting, which always wins when set — this
    * only controls the case where the OS has no motion preference expressed. */
@@ -78,6 +80,7 @@ const defaults: GallerySettings = {
   gap: 10,
   matchScores: true,
   matchAreas: false,
+  hideOffensiveTags: true,
   playAnimatedPreviews: true,
   debugIndexLimit: 0,
   libraryIndexing: {},
@@ -184,13 +187,17 @@ function loadInitial(): GallerySettings {
             value && typeof value.ocr === "boolean" && typeof value.image === "boolean",
         ),
       ),
-      indexOcr: typeof parsed.indexOcr === "boolean" ? parsed.indexOcr : true,
-      indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : true,
+      indexOcr: typeof parsed.indexOcr === "boolean" ? parsed.indexOcr : defaults.indexOcr,
+      indexImage: typeof parsed.indexImage === "boolean" ? parsed.indexImage : defaults.indexImage,
       librariesPaneOpen:
         typeof parsed.librariesPaneOpen === "boolean"
           ? parsed.librariesPaneOpen
           : settingsDefaults.librariesPaneOpen,
       folderSort: parsed.folderSort === "newest" ? "newest" : "name",
+      hideOffensiveTags:
+        typeof parsed.hideOffensiveTags === "boolean"
+          ? parsed.hideOffensiveTags
+          : defaults.hideOffensiveTags,
     });
   } catch {
     return defaults;

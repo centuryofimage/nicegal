@@ -10,11 +10,16 @@
   let error = $state<string | null>(null);
 
   onMount(() => {
+    // Subscribe before reading the snapshot; an intervening event is newer than that read.
+    let receivedEvent = false;
     let disposed = false;
-    const unsubscribe = window.nicegal.remote.onStatusChanged((value) => (status = value));
+    const unsubscribe = window.nicegal.remote.onStatusChanged((value) => {
+      receivedEvent = true;
+      status = value;
+    });
     void window.nicegal.remote.getStatus().then(
       (value) => {
-        if (!disposed) status = value;
+        if (!disposed && !receivedEvent) status = value;
       },
       (cause: unknown) => {
         if (!disposed) error = errorMessage(cause);

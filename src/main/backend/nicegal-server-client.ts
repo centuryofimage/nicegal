@@ -44,6 +44,26 @@ export class NicegalServerClient {
     private readonly log?: BackendLog,
   ) {}
 
+  async setLibraryView(
+    client: string,
+    generation: number,
+    libraryId: LibraryId | null,
+  ): Promise<void> {
+    await this.request("/v1/library-view", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client, generation, libraryId }),
+    });
+  }
+
+  async releaseLibraryView(client: string): Promise<void> {
+    await this.request("/v1/library-view", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client }),
+    });
+  }
+
   async listLibraries(): Promise<Library[]> {
     return this.requestJson<Library[]>("/v1/libraries", { method: "GET" });
   }
@@ -97,8 +117,8 @@ export class NicegalServerClient {
     return this.requestJson<AssetMetadata>(url, { method: "GET" });
   }
 
-  async health(): Promise<void> {
-    await this.request("/v1/health", { method: "GET" });
+  async health(): Promise<{ instanceId: string }> {
+    return this.requestJson("/v1/health", { method: "GET" });
   }
 
   async getOcrModels(): Promise<OcrModelsResponse> {
@@ -169,10 +189,27 @@ export class NicegalServerClient {
 
   /** One mode through `POST /v1/search`, the route that carries structured filters and visual
    * compositions. */
-  async search(request: SearchRequest, signal?: AbortSignal): Promise<SearchResponse> {
-    const response = await this.request("/v1/search", {
+  async cancelSearch(client: string, throughGeneration: number): Promise<void> {
+    await this.request("/v1/search/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client, throughGeneration }),
+    });
+  }
+
+  async search(request: SearchRequest, clientId: string): Promise<SearchResponse> {
+    const response = await this.request("/v1/search", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...(request.searchSession === undefined
+          ? {}
+          : {
+              "x-nicegal-search-client": clientId,
+              "x-nicegal-search-generation": String(request.searchSession),
+              "x-nicegal-search-lane": request.searchLane!,
+            }),
+      },
       body: JSON.stringify({
         libraryId: request.libraryId,
         ...(request.folder === undefined ? {} : { folder: request.folder }),
@@ -187,7 +224,6 @@ export class NicegalServerClient {
             : { key: "search", type: request.type, q: request.query },
         ],
       }),
-      signal,
     });
     const value = (await response.json()) as {
       queries?: Array<{ key?: string; total?: number; results?: SearchResponse["results"] }>;
@@ -300,36 +336,20 @@ export class NicegalServerClient {
     };
   }
 
-  async startJob(request: JobRequest): Promise<JobSnapshot> {
-    try {
-      const response = await this.request("/v1/jobs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(request),
-      });
-      const snapshot = (await response.json()) as JobSnapshot;
-      this.log?.write("job", "started", {
-        jobId: snapshot.jobId,
-        type: snapshot.type,
-        params: request.params,
-      });
-      this.logJobSnapshot(snapshot);
-      return snapshot;
-    } catch (error) {
-      if (!(error instanceof NicegalServerError)) throw error;
-      if (error.code !== "job_busy") throw error;
-
-      const activeJob = await this.getActiveJob().catch(() => null);
-      if (!activeJob) throw error;
-      this.log?.write("job", "attached", {
-        jobId: activeJob.jobId,
-        requestedType: request.type,
-        activeType: activeJob.type,
-        params: request.params,
-      });
-      this.logJobSnapshot(activeJob);
-      return activeJob;
-    }
+  async startJob(request: JobRequest, requestId: string): Promise<JobSnapshot> {
+    const response = await this.request("/v1/jobs", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-nicegal-request-id": requestId },
+      body: JSON.stringify(request),
+    });
+    const snapshot = (await response.json()) as JobSnapshot;
+    this.log?.write("job", "started", {
+      jobId: snapshot.jobId,
+      type: snapshot.type,
+      params: request.params,
+    });
+    this.logJobSnapshot(snapshot);
+    return snapshot;
   }
 
   async getJob(jobId: string): Promise<JobSnapshot> {
@@ -346,13 +366,6 @@ export class NicegalServerClient {
 
   async listJobs(): Promise<JobListResponse> {
     return this.requestJson<JobListResponse>("/v1/jobs", { method: "GET" });
-  }
-
-  private async getActiveJob(): Promise<JobSnapshot | null> {
-    const { activeJobId, jobs } = await this.listJobs();
-    if (!activeJobId) return null;
-    const activeJob = jobs.find((snapshot) => snapshot.jobId === activeJobId);
-    return activeJob && !TERMINAL_STATUSES[activeJob.status] ? activeJob : null;
   }
 
   async watchJob(

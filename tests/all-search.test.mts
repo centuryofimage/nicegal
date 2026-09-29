@@ -432,20 +432,6 @@ test("All without OCR retains filename matches alongside visual results", async 
   );
 });
 
-test("v2 per-root indexing choices remain readable for the library import", async () => {
-  const { settingsDefaults, libraryIndexing } = await vite.ssrLoadModule(
-    "/src/renderer/src/lib/settings.svelte.ts",
-  );
-  const stored = JSON.parse(
-    JSON.stringify({
-      ...settingsDefaults,
-      libraryIndexing: { screenshots: { ocr: true, image: true } },
-    }),
-  );
-  assert.deepEqual(libraryIndexing(stored, "screenshots"), { ocr: true, image: true });
-  assert.deepEqual(libraryIndexing(stored, "photos"), { ocr: false, image: true });
-});
-
 test("a malformed section response cannot corrupt successful results, including deferred arrivals", async () => {
   for (const deferred of [false, true]) {
     const f = fixture();

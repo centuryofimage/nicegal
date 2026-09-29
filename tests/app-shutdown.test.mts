@@ -80,7 +80,8 @@ for (const scenario of [
         "export function registerBackendIpc(context) { globalThis.__shutdownMocks.state.restartFailedBackend = context.restartFailedBackend; }",
       "./protocols":
         "export function registerCustomSchemes() {} export function installProtocolHandlers() {}",
-      "./backend/nicegal-server-client": "export class NicegalServerClient { async health() {} }",
+      "./backend/nicegal-server-client":
+        "export class NicegalServerClient { async health() { return { instanceId: 'test-instance' }; } }",
       "./backend/nicegal-server-process": `
       const s = globalThis.__shutdownMocks.state;
       export const RESTART_EXIT_CODE = 99;
@@ -88,6 +89,7 @@ for (const scenario of [
         constructor(_log, onExit) { s.onExit = onExit; }
         async start() { if (++s.starts === 2) s.respawned.resolve(); return { endpoint: '', token: '' }; }
         stop() { return s.stop(); }
+        getDiagnostic() { return null; }
       }
     `,
       "./backend/thumbnail-reader": "export class ThumbnailReader { close() {} }",

@@ -18,8 +18,9 @@ loads BGE and the active CLIP model's image/text towers, not every CLIP option.
 Serial execution avoids loading duplicate sessions concurrently. Run it separately
 from model benchmarks so test inference does not distort benchmark timings.
 
-`library-reactivity.test.mjs` runs the real library controller with Svelte's client runtime
-in an isolated Node process. Its local loader compiles `.svelte.ts` runes without a DOM shim.
-It checks that scroll persistence and unchanged/loading/failed status snapshots do not
-restart searches, while query changes and new OCR data do. `all-search.test.mts` also
+`svelte-client.test.mjs` runs library reactivity and gallery selection checks with Svelte's
+client runtime in isolated Node processes. Its local loader compiles `.svelte.ts` runes
+without a DOM shim. The library check verifies that scroll persistence and
+unchanged/loading/failed status snapshots do not restart searches, while query changes
+and new OCR data do. `all-search.test.mts` also
 covers malformed and deferred section responses and collapsed layouts in all three modes.

@@ -44,6 +44,8 @@ export type LibraryViewStatePatch = Partial<LibraryViewState>;
 /** Independent catalog and embedding counts rendered beside each library. */
 export interface LibraryRowStatus {
   imageCoverage?: ImageEmbeddingCoverage | null;
+  imageCoverageError?: string | null;
+  textCoverageKnown?: boolean;
   cataloged: number;
   indexed: number;
   embedded: number;
@@ -73,6 +75,7 @@ interface V2LibraryRecord {
 function emptyLibraryRowStatus(): LibraryRowStatus {
   return {
     cataloged: 0,
+    textCoverageKnown: false,
     indexed: 0,
     embedded: 0,
     pending: 0,
@@ -244,7 +247,12 @@ export class CatalogController {
   private thumbnailRevision = $state(0);
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** Prevents the two-second revision interval from stacking requests behind a slow backend. */
-  private revisionPollPending = false;
+  private revisionPollPending: number | null = null;
+  private nextRevisionPoll = 0;
+  private disposed = false;
+  private backendStatusRevision = 0;
+  private imageCoverageGeneration = 0;
+  imageModelId = $state<string | null>(null);
   /** Invalidates every outstanding row-status pass when a newer pass starts. */
   private libraryStatusGeneration = 0;
   /** Invalidates status completions for one library when its cataloged count can change. */
@@ -254,13 +262,12 @@ export class CatalogController {
   private libraryStatusRefreshRequested = false;
 
   /**
-   * @param onSelectionChanged Called when the selection moves from one library to another,
-   *   whether the user picked it or a deletion or reload replaced it. Not called for the first
-   *   selection a load makes from nothing.
+   * @param onSelectionChanged Called whenever the selection changes, whether the user picked a
+   *   library, a new library was created, or a deletion or reload replaced it.
    */
   constructor(
     private readonly onSelectionChanged: (
-      previous: LibraryId,
+      previous: LibraryId | null,
       next: LibraryId | null,
     ) => void = () => {},
   ) {
@@ -272,7 +279,16 @@ export class CatalogController {
 
   /** Fetches backend status and, if ready, loads libraries and the catalog. Call once. */
   async initialize(): Promise<void> {
-    this.backendStatus = await window.nicegal.backend.getBackendStatus();
+    const revision = this.backendStatusRevision;
+    try {
+      const status = await window.nicegal.backend.getBackendStatus();
+      if (this.disposed) return;
+      // A pushed status supersedes a startup read that was already in flight.
+      if (revision === this.backendStatusRevision) this.applyBackendStatus(status);
+    } catch (error) {
+      if (this.disposed) return;
+      if (revision === this.backendStatusRevision) throw error;
+    }
     if (this.backendStatus.ready) await this.loadLibraries();
     else this.loading = false;
   }
@@ -280,7 +296,44 @@ export class CatalogController {
   /** Applies a status pushed live from the main process — today, only an nicegal-server crash.
    * See `onBackendStatusChanged` wiring in `application.svelte.ts`. */
   applyBackendStatus(status: BackendStatus): void {
+    this.backendStatusRevision += 1;
+    if (!status.ready) this.invalidateRequests();
     this.backendStatus = status;
+  }
+
+  /** Coverage belongs to a library and active model, never to a failed read. */
+  setImageModel(model: string): void {
+    if (model === this.imageModelId) return;
+    const changed = this.imageModelId !== null;
+    this.imageModelId = model;
+    if (!changed) return;
+    this.imageCoverageGeneration += 1;
+    this.libraryStatusGeneration += 1;
+    for (const [id, status] of this.libraryStatuses) {
+      this.updateLibraryStatus(id, {
+        ...status,
+        imageCoverage: null,
+        imageCoverageError: null,
+        loading: false,
+      });
+    }
+    void this.refreshLibraryStatuses();
+  }
+
+  private invalidateRequests(): void {
+    this.generation += 1;
+    this.librariesGeneration += 1;
+    this.libraryStatusGeneration += 1;
+    this.imageCoverageGeneration += 1;
+    this.inFlightRefresh = null;
+    this.revisionPollPending = null;
+    this.refreshAgain = false;
+    this.libraryStatusRefreshRequested = false;
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = undefined;
+    this.loading = false;
+    for (const [id, status] of this.libraryStatuses)
+      if (status.loading) this.updateLibraryStatus(id, { ...status, loading: false });
   }
 
   /**
@@ -289,15 +342,19 @@ export class CatalogController {
    * only when the selection changed or nothing is loaded yet.
    */
   async loadLibraries(): Promise<void> {
-    if (!this.backendStatus.ready) return;
+    if (this.disposed || !this.backendStatus.ready) return;
     const generation = ++this.librariesGeneration;
     try {
-      if (!this.importedV2) await this.importV2Registry();
+      if (!this.importedV2) await this.importV2Registry(generation);
+      if (generation !== this.librariesGeneration) return;
       const definitions = await window.nicegal.backend.listLibraries();
       if (generation !== this.librariesGeneration) return;
       this.librariesError = "";
       // Reloaded after every job; an unchanged list must not rebuild every library record.
-      if (JSON.stringify(definitions) !== JSON.stringify(this.definitions) || this.generation === 0)
+      if (
+        JSON.stringify(definitions) !== JSON.stringify(this.definitions) ||
+        this.loadedTimeline === null
+      )
         this.applyDefinitions(definitions);
     } catch (error) {
       if (generation !== this.librariesGeneration) return;
@@ -314,7 +371,7 @@ export class CatalogController {
    * frequent requests during a scan cannot keep restarting a large catalog load.
    */
   async refresh(timeline: Timeline = get(settings).sortField): Promise<void> {
-    if (!this.backendStatus.ready) return;
+    if (this.disposed || !this.backendStatus.ready) return;
     const key = `${this.selectedId}:${timeline}`;
     if (this.inFlightRefresh === key) {
       this.refreshAgain = true;
@@ -376,6 +433,7 @@ export class CatalogController {
 
   /** Debounced refresh, used after a job reports catalog progress. */
   scheduleRefresh(delay: number): void {
+    if (this.disposed) return;
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = undefined;
@@ -386,13 +444,17 @@ export class CatalogController {
   /** Cheap poll for a changed catalog revision (e.g. another window indexed); refreshes on change. */
   async pollRevision(): Promise<void> {
     if (
-      this.revisionPollPending ||
+      this.disposed ||
+      this.revisionPollPending !== null ||
       !this.backendStatus.ready ||
       document.visibilityState !== "visible"
     )
       return;
-    this.revisionPollPending = true;
+    const poll = ++this.nextRevisionPoll;
+    this.revisionPollPending = poll;
     const generation = this.generation;
+    const imageGeneration = this.imageCoverageGeneration;
+    const selectedId = this.selectedId;
     try {
       const revision = await window.nicegal.backend.getCatalogRevision();
       if (generation !== this.generation) return;
@@ -401,27 +463,39 @@ export class CatalogController {
       const libraryId = this.selectedId;
       if (libraryId !== null && generation === this.generation) {
         const imageCoverage = await window.nicegal.backend.getImageEmbeddingCoverage(libraryId);
-        if (generation === this.generation && libraryId === this.selectedId) {
-          this.updateLibraryStatus(libraryId, { ...this.statusFor(libraryId), imageCoverage });
+        if (
+          generation === this.generation &&
+          imageGeneration === this.imageCoverageGeneration &&
+          libraryId === this.selectedId
+        ) {
+          this.updateLibraryStatus(libraryId, {
+            ...this.statusFor(libraryId),
+            imageCoverage,
+            imageCoverageError: null,
+          });
         }
       }
     } catch (error) {
-      console.warn("Catalog revision poll failed", error);
-      if (generation === this.generation && this.selectedId !== null) {
-        this.updateLibraryStatus(this.selectedId, {
-          ...this.statusFor(this.selectedId),
-          imageCoverage: null,
+      if (
+        generation === this.generation &&
+        imageGeneration === this.imageCoverageGeneration &&
+        selectedId !== null &&
+        selectedId === this.selectedId
+      )
+        this.updateLibraryStatus(selectedId, {
+          ...this.statusFor(selectedId),
+          imageCoverageError: errorMessage(error),
         });
-      }
+      // A failed read says nothing about the indexed images. Retain the last successful
+      // coverage so a transient error cannot clear visual search results or its viewer.
     } finally {
-      this.revisionPollPending = false;
+      if (this.revisionPollPending === poll) this.revisionPollPending = null;
     }
   }
 
   /** Re-loads when the settings store's sort field changes; a no-op for any other settings change. */
   onSettingsChange(value: GallerySettings): void {
     if (value.sortField === this.loadedTimeline) return;
-    this.loadedTimeline = value.sortField;
     if (this.backendStatus.ready) void this.refresh(value.sortField);
   }
 
@@ -435,7 +509,7 @@ export class CatalogController {
    * their row so a malformed response for one library cannot blank otherwise healthy rows.
    */
   async refreshLibraryStatuses(): Promise<void> {
-    if (!this.backendStatus.ready) return;
+    if (this.disposed || !this.backendStatus.ready) return;
 
     const generation = ++this.libraryStatusGeneration;
     const ids = this.definitions.map((library) => library.id);
@@ -470,7 +544,9 @@ export class CatalogController {
           this.updateLibraryStatus(id, {
             cataloged,
             imageCoverage,
+            imageCoverageError: null,
             ...coverage,
+            textCoverageKnown: true,
             loading: false,
             error: null,
           });
@@ -478,9 +554,9 @@ export class CatalogController {
           if (!this.isCurrentLibraryStatusRequest(id, generation, idGeneration)) return;
           this.updateLibraryStatus(id, {
             ...this.statusFor(id),
-            imageCoverage: null,
             loading: false,
             error: errorMessage(error),
+            imageCoverageError: errorMessage(error),
           });
         }
       }),
@@ -490,6 +566,7 @@ export class CatalogController {
   /** Creates a one-folder library with the default search types and selects it. */
   async createLibrary(folder: string): Promise<LibraryRecord> {
     const { indexOcr, indexImage } = get(settings);
+    this.supersedeLibraryLoads();
     const library = await window.nicegal.backend.createLibrary({
       include: [folder],
       exclude: [],
@@ -503,6 +580,7 @@ export class CatalogController {
 
   /** Replaces a library's folders and search types; the caller decides whether to scan. */
   async updateLibrary(id: LibraryId, definition: LibraryDefinition): Promise<Library> {
+    this.supersedeLibraryLoads();
     const updated = await window.nicegal.backend.updateLibrary(id, definition);
     this.applyDefinitions(
       this.definitions.map((library) => (library.id === id ? updated : library)),
@@ -516,6 +594,7 @@ export class CatalogController {
 
   /** Deletes a library definition. Its indexed data stays; see `libraryPurge` for removal. */
   async deleteLibrary(id: LibraryId): Promise<void> {
+    this.supersedeLibraryLoads();
     await window.nicegal.backend.deleteLibrary(id);
     this.applyDefinitions(this.definitions.filter((library) => library.id !== id));
   }
@@ -532,7 +611,7 @@ export class CatalogController {
       this.invalidateLibraryStatusRequest(id);
       this.selectedId = id;
       this.persistViewRegistry();
-      if (previous !== null) this.onSelectionChanged(previous, id);
+      this.onSelectionChanged(previous, id);
     }
     await this.refreshSelectedLibrary();
     return true;
@@ -572,7 +651,8 @@ export class CatalogController {
   }
 
   dispose(): void {
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.disposed = true;
+    this.invalidateRequests();
   }
 
   /**
@@ -608,12 +688,17 @@ export class CatalogController {
       this.selectedId = definitions[0]?.id ?? null;
     }
     this.persistViewRegistry();
-    if (previousSelection !== null && this.selectedId !== previousSelection)
+    if (this.selectedId !== previousSelection)
       this.onSelectionChanged(previousSelection, this.selectedId);
     // Reload only for a new selection, or when nothing was ever loaded. A mid-refresh reload of
     // the list must not clear the gallery and load it again.
-    if (this.selectedId !== previousSelection || this.generation === 0)
+    if (this.selectedId !== previousSelection || this.loadedTimeline === null)
       void this.refreshSelectedLibrary();
+  }
+
+  /** A list read that started before a library mutation must not republish the old list. */
+  private supersedeLibraryLoads(): void {
+    this.librariesGeneration += 1;
   }
 
   /**
@@ -621,11 +706,12 @@ export class CatalogController {
    * library the first import created, so an interrupted import resumes without duplicates.
    * The v2 key is left in place as rollback material.
    */
-  private async importV2Registry(): Promise<void> {
+  private async importV2Registry(generation: number): Promise<void> {
     const { libraries, selectedRoot } = readV2Registry();
     const preferences = get(settings);
     let complete = true;
     for (const record of libraries) {
+      if (generation !== this.librariesGeneration) return;
       try {
         const library = await window.nicegal.backend.createLibrary({
           include: [record.root],
@@ -633,6 +719,7 @@ export class CatalogController {
           ...libraryIndexing(preferences, record.root),
           importKey: `${LIBRARIES_STORAGE_KEY}:${rootKey(record.root)}`,
         });
+        if (generation !== this.librariesGeneration) return;
         if (!this.views[library.id]) {
           const derived = derivedLibraryName(library.include);
           this.setViews({

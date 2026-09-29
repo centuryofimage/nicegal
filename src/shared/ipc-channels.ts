@@ -15,6 +15,7 @@ export const IPC_CHANNELS = {
     setImageModel: "backend:set-image-model",
     setExecutionProvider: "backend:set-execution-provider",
     listLibraries: "backend:list-libraries",
+    setLibraryView: "backend:set-library-view",
     createLibrary: "backend:create-library",
     updateLibrary: "backend:update-library",
     deleteLibrary: "backend:delete-library",

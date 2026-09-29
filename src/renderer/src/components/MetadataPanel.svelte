@@ -4,7 +4,9 @@
   import type { VectorMatch } from "../lib/ocr-search.svelte";
 
   import { cleanDiagnostic, errorMessage } from "../lib/errors";
+  import { loadImageTags, type ImageTag, type ImageTags } from "../lib/image-tags";
   import { formatBytes } from "../lib/job-format";
+  import { settings } from "../lib/settings.svelte";
 
   let {
     asset,
@@ -28,6 +30,14 @@
     void retry; // Explicit refresh also reloads an unchanged selection.
     return ready && asset ? window.nicegal.backend.getAssetMetadata(asset.id) : null;
   });
+  const tagsRequest = $derived.by((): Promise<ImageTags> | null => {
+    void retry;
+    return ready && asset ? loadImageTags(asset.id, $settings.hideOffensiveTags) : null;
+  });
+  function tagTitle(tag: ImageTag): string {
+    const rating = tag.sensitivity === "ok" ? "" : ` · ${tag.sensitivity}`;
+    return `Score ${tag.score.toFixed(3)} · cosine ${tag.similarity.toFixed(3)} · ${tag.source}${rating}`;
+  }
   function date(value: string | null): string {
     if (value === null) return "Unknown";
     const timestamp = new Date(Number(BigInt(value) / 1_000_000n));
@@ -186,17 +196,13 @@
             The file could not be decoded during indexing. Use Library manager → Retry failed files
             after checking the file.
           </p>{/if}
-        {#if info.asset.mediaKind === "image"}<h3>Camera / EXIF</h3>
-          {#if info.file.exif.length}
-            <dl>
-              {#each info.file.exif as field (field.label)}<dt>{field.label}</dt>
-                <dd>{field.value}</dd>{/each}
-            </dl>
-          {:else}<p>
-              {info.file.sourceState === "current" && !info.file.error
-                ? "No camera metadata available."
-                : "Camera metadata unavailable."}
-            </p>{/if}{/if}
+        {#if info.asset.mediaKind === "image" && info.file.exif.length}
+          <h3>Camera / EXIF</h3>
+          <dl>
+            {#each info.file.exif as field (field.label)}<dt>{field.label}</dt>
+              <dd>{field.value}</dd>{/each}
+          </dl>
+        {/if}
         {#if info.file.error}
           <p>Some file metadata could not be read.</p>
           <details>
@@ -208,6 +214,35 @@
               >{copiedText === cleanDiagnostic(info.file.error) ? "Copied" : "Copy details"}</button
             >
           </details>
+        {/if}
+        <h3>Tags</h3>
+        <p>
+          Tags come from a research model trained on unfiltered internet data. They are usually
+          wrong and can reflect harmful biases.
+        </p>
+        {#if tagsRequest}
+          {#await tagsRequest}
+            <p role="status">Loading tags…</p>
+          {:then tags}
+            {#if !tags.supported}
+              <p>Tags aren't available for this search model.</p>
+            {:else}
+              <dl>
+                {#each [["Simple", tags.simple], ["Subjects", tags.subjects], ["Vibes", tags.vibes]] as const as [label, list] (label)}
+                  <dt>{label}</dt>
+                  <dd class="tag-list">
+                    {#each list as tag (tag.term)}
+                      <span class="tag" title={tagTitle(tag)}>{tag.term}</span>
+                    {:else}
+                      None
+                    {/each}
+                  </dd>
+                {/each}
+              </dl>
+            {/if}
+          {:catch error}
+            <p>{errorMessage(error)}</p>
+          {/await}
         {/if}
       {:catch error}
         <p role="alert">Couldn't load file details. Refresh to try again.</p>
@@ -285,6 +320,16 @@
     font-variant-numeric: tabular-nums;
     text-overflow: clip;
     white-space: nowrap;
+  }
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+  }
+  .tag {
+    padding: 0 var(--space-4);
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-0);
   }
   pre {
     max-height: 180px;

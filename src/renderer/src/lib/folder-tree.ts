@@ -47,19 +47,19 @@ function compareSiblings(order: FolderSort): (a: FolderNode, b: FolderNode) => n
 /**
  * Builds the tree under the library's included roots. Roots stay in their configured order; each
  * directory hangs under its nearest listed ancestor, and siblings follow `order`. Only folders
- * containing an image, or leading to one, are included.
+ * containing a gallery item, or leading to one, are included.
  */
 export function buildFolderTree(
   roots: readonly string[],
   folders: readonly FolderEntry[],
   order: FolderSort,
-  imagePaths: readonly string[],
+  itemPaths: readonly string[],
 ): FolderNode[] {
-  const imageFolders = new Set<string>();
-  for (const path of imagePaths) {
+  const itemFolders = new Set<string>();
+  for (const path of itemPaths) {
     let folder = parentOf(path);
-    while (folder !== null && !imageFolders.has(folder)) {
-      imageFolders.add(folder);
+    while (folder !== null && !itemFolders.has(folder)) {
+      itemFolders.add(folder);
       folder = parentOf(folder);
     }
   }
@@ -95,7 +95,7 @@ export function buildFolderTree(
         node.newestMs = newest;
     }
     node.children.sort(compare);
-    return imageFolders.has(node.path) || node.children.length > 0;
+    return itemFolders.has(node.path) || node.children.length > 0;
   };
   const visible = top.filter(finish);
   const rootOrder = new Map(roots.map((root, index) => [root, index]));
