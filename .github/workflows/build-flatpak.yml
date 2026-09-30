@@ -2,10 +2,6 @@ name: Build Flatpak
 
 on:
   workflow_call:
-    inputs:
-      version:
-        required: true
-        type: string
 
 jobs:
   build:
@@ -35,7 +31,7 @@ jobs:
           manifest-path: packaging/flatpak/io.github.centuryofimage.nicegal.yml
           build-dir: dist/flatpak-build
           repo-dir: dist/flatpak-repo
-          bundle: dist/nicegal-${{ inputs.version }}-linux-x86_64.flatpak
+          build-bundle: false
           upload-artifact: false
       - name: Verify packaged runtime and preserve repository
         run: |
@@ -46,8 +42,3 @@ jobs:
           name: flatpak-repository
           if-no-files-found: error
           path: dist/flatpak-repo.tar
-      - uses: actions/upload-artifact@v7
-        with:
-          name: packages-flatpak
-          if-no-files-found: error
-          path: dist/*.flatpak

@@ -96,8 +96,6 @@ jobs:
   build-flatpak:
     needs: [version, build-linux]
     uses: ./.github/workflows/build-flatpak.yml
-    with:
-      version: ${{ needs.version.outputs.version }}
 
   attest:
     needs: [build-macos, build-windows, build-linux, build-flatpak]
@@ -123,7 +121,6 @@ jobs:
             dist/latest-linux.yml
             dist/*.AppImage
             dist/*.deb
-            dist/*.flatpak
             dist/*.dmg
 
       - name: Preserve the attestation bundle
@@ -183,7 +180,7 @@ jobs:
             --latest \
             --notes-file RELEASE_BODY.md \
             dist/*.exe dist/*.zip dist/*.blockmap dist/latest.yml \
-            dist/*.AppImage dist/*.deb dist/*.flatpak dist/*.dmg dist/latest-linux.yml dist/*.intoto.jsonl
+            dist/*.AppImage dist/*.deb dist/*.dmg dist/latest-linux.yml dist/*.intoto.jsonl
 
   publish-flatpak:
     needs: [publish, build-flatpak]
@@ -217,11 +214,11 @@ jobs:
           test -n "$FLATPAK_GPG_PRIVATE_KEY"
           test -n "$FLATPAK_GPG_KEY_ID"
           tar -xf dist/flatpak-repo.tar -C dist
-          docker build -t nicegal-flatpak-builder packaging/flatpak
           printf '%s' "$FLATPAK_GPG_PRIVATE_KEY" | docker run --rm -i \
             -v "$GITHUB_WORKSPACE:/work" \
+            -w /work --entrypoint dbus-run-session \
             -e FLATPAK_GPG_KEY_ID -e FLATPAK_GPG_PASSPHRASE \
-            nicegal-flatpak-builder -lc \
+            ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 -- bash -lc \
             'bash scripts/sign-flatpak-repo.sh dist/flatpak-repo flatpak-site "$FLATPAK_GPG_KEY_ID"'
       - name: Publish repository to Pages
         env:
