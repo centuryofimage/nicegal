@@ -294,6 +294,7 @@ export class NicegalServerClient {
       assets: Array<{
         assetId: number;
         path: string;
+        hostPath?: string;
         displayName: string;
         folderPath: string | null;
         extension: string | null;
@@ -316,6 +317,7 @@ export class NicegalServerClient {
       assets: value.assets.map((asset) => ({
         id: String(asset.assetId),
         path: asset.path,
+        hostPath: asset.hostPath,
         displayName: asset.displayName,
         folderPath: asset.folderPath,
         extension: asset.extension,

@@ -17,12 +17,9 @@
 
   function present(dialog: HTMLDialogElement): () => void {
     const previousFocus = document.activeElement;
+    // Native dialog focusing selects autofocus / the first interactive control and restores
+    // focus on close. Do not turn the heading into a keyboard focus target.
     dialog.showModal();
-    const heading = dialog.querySelector<HTMLElement>(`[id="${CSS.escape(labelledby)}"]`);
-    if (heading) {
-      heading.tabIndex = -1;
-      heading.focus({ preventScroll: true });
-    }
     return () => {
       dialog.close();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {

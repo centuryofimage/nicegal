@@ -271,7 +271,7 @@
       class="library-menu-button"
       aria-haspopup="menu"
       aria-expanded={menuOpen}
-      title={selected?.include.map((folder) => folder.path).join("\n")}
+      title={selected?.include.map((folder) => folder.hostPath ?? folder.path).join("\n")}
       onclick={() => (menuOpen = !menuOpen)}
       disabled={!catalog.libraries.length}
     >
@@ -292,7 +292,7 @@
             <span class="menu-label"
               ><span class="label">{library.displayName}</span>
               <span class="menu-path"
-                >{library.include.map((folder) => folder.path).join(" · ")}</span
+                >{library.include.map((folder) => folder.hostPath ?? folder.path).join(" · ")}</span
               >
               <span class="menu-path">{libraryOptionsSummary(library)}</span></span
             >

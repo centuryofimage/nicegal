@@ -80,7 +80,7 @@
         {/if}
         <dl>
           <dt>Location</dt>
-          <dd>{info.asset.path}</dd>
+          <dd>{info.hostPath ?? info.asset.path}</dd>
           <dt>Format</dt>
           <dd>{info.asset.mediaFormat.toUpperCase()}</dd>
           <dt>Size</dt>

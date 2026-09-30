@@ -1,4 +1,4 @@
 [submodule "nicegal-server"]
 	path = nicegal-server
 	url = https://github.com/centuryofimage/nicegal-server.git
-	branch = main
+	branch = flatpak

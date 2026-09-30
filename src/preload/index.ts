@@ -42,6 +42,14 @@ const invoke: typeof ipcRenderer.invoke = (channel, ...args) =>
 
 const searchClient = crypto.randomUUID();
 let viewGeneration = 0;
+const debugFilePicker = process.argv.includes("--nicegal-debug-file-picker");
+if (debugFilePicker) {
+  contextBridge.executeInMainWorld({
+    func: () => {
+      Object.assign(window, { __debugFilePicker: {} });
+    },
+  });
+}
 
 const updates: UpdateBridge = {
   getPreferences: () => invoke(IPC_CHANNELS.updates.preferences),
@@ -210,6 +218,23 @@ const native: NativeBridge = {
     return invoke(IPC_CHANNELS.native.openLicenseInformation);
   },
   chooseDirectory(defaultPath?: string): Promise<string | null> {
+    if (debugFilePicker) {
+      const override = contextBridge.executeInMainWorld({
+        func: () => {
+          const picker = (window as Window & { __debugFilePicker?: { nextPath?: unknown } })
+            .__debugFilePicker;
+          if (!picker || !Object.hasOwn(picker, "nextPath")) return undefined;
+          const path = picker.nextPath;
+          delete picker.nextPath;
+          return { path };
+        },
+      }) as { path: unknown } | undefined;
+      if (override) {
+        if (override.path !== null && typeof override.path !== "string")
+          return Promise.reject(new TypeError("Debug picker nextPath must be a string or null"));
+        return Promise.resolve(override.path);
+      }
+    }
     return invoke(IPC_CHANNELS.native.chooseDirectory, defaultPath);
   },
   chooseVisualSearchImage(): Promise<ExternalVisualReference | null> {

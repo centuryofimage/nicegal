@@ -93,6 +93,20 @@ jobs:
           "$appimage" --appimage-extract > /dev/null
           python3 "$GITHUB_WORKSPACE/scripts/check-linux-abi.py" squashfs-root
 
+      - name: Prepare Flatpak app directory
+        run: |
+          # The preceding AppImage/deb keep their existing desktop identity. Stamp
+          # only this second packaging pass; no frontend/backend rebuild is needed.
+          npm pkg set desktopName=io.github.centuryofimage.nicegal.desktop
+          pnpm exec electron-builder --linux --x64 --dir --publish never -c.directories.output=dist/flatpak
+          tar -cf dist/linux-unpacked.tar -C dist/flatpak linux-unpacked
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-input
+          if-no-files-found: error
+          path: dist/linux-unpacked.tar
+
       - name: Upload packages
         uses: actions/upload-artifact@v7
         with:

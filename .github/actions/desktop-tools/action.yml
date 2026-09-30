@@ -9,10 +9,21 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Read pinned Rust toolchain
+      id: rust-toolchain
+      shell: bash
+      run: |
+        channel=$(awk -F '"' '/^[[:space:]]*channel[[:space:]]*=/ { print $2; exit }' nicegal-server/rust-toolchain.toml)
+        test -n "$channel"
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+        # Cache restore/save probes run at the frontend root, outside this toolchain file.
+        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
+
     # The Rust workspace lives in the nicegal-server submodule.
     - name: Setup Rust
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
+        toolchain: ${{ steps.rust-toolchain.outputs.channel }}
         rust-src-dir: nicegal-server
         cache-key: ${{ inputs.platform == 'linux' && 'debian-12' || '' }}
         # FFmpeg's bindgen build script formats its generated bindings.

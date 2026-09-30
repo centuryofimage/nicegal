@@ -131,6 +131,43 @@ test("only installed NSIS and AppImage builds support automatic updates", () => 
   );
   assert.equal(supportsAutomaticUpdates(true, "linux", false, {}), false);
   assert.equal(supportsAutomaticUpdates(true, "darwin", true, {}), false);
+  assert.equal(
+    supportsAutomaticUpdates(true, "linux", false, {
+      APPIMAGE: "/stale/environment.AppImage",
+      FLATPAK_ID: "io.github.centuryofimage.nicegal",
+    }),
+    false,
+  );
+});
+
+test("Flatpak leaves update checks to its package manager", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+  const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
+  const previousResources = electronProcess.resourcesPath;
+  electronProcess.resourcesPath = userData;
+  const previous = process.env.FLATPAK_ID;
+  process.env.FLATPAK_ID = "io.github.centuryofimage.nicegal";
+  t.after(() => {
+    if (previousResources === undefined) delete electronProcess.resourcesPath;
+    else electronProcess.resourcesPath = previousResources;
+    if (previous === undefined) delete process.env.FLATPAK_ID;
+    else process.env.FLATPAK_ID = previous;
+  });
+  const beforeChecks = calls;
+  const beforeRequests = releaseRequests.length;
+  const service = startUpdates(
+    () => true,
+    () => assert.fail("Flatpak cannot self-install"),
+    "linux",
+    true,
+  );
+  t.after(service.stop);
+  assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
+  t.mock.timers.tick(5_000);
+  await flushUpdateCheck();
+  assert.equal(calls, beforeChecks);
+  assert.equal(releaseRequests.length, beforeRequests);
+  assert.equal(service.installAndRestart(), false);
 });
 
 test("release version comparison uses numeric components", () => {

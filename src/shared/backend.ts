@@ -73,6 +73,8 @@ export interface FolderEntry {
 
 export interface AssetMetadata {
   asset: GalleryAsset;
+  /** Host spelling for display only; filesystem access must use asset.path. */
+  hostPath?: string;
   file: {
     sourceState: "current" | "changed" | "missing" | "unavailable";
     attributes: string[];
@@ -93,6 +95,7 @@ export interface AssetMetadata {
 export interface CatalogAssetDetails {
   id: string;
   path: string;
+  hostPath?: string;
   displayName: string;
   folderPath: string | null;
   extension: string | null;
@@ -294,6 +297,7 @@ export type ScanOutcome = "unavailable" | "incomplete" | "cancelled" | "failed";
 /** One included folder of a library — `GET /v1/libraries`. */
 export interface LibraryFolder {
   path: string;
+  hostPath?: string;
   /** An edit revealed more of this folder and no complete scan of it has finished since. */
   scanPending: boolean;
   /** Why the latest scan of this folder did not finish; cleared by the next complete scan. */

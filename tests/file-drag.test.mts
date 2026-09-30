@@ -50,7 +50,27 @@ const vite = await createServer({
 });
 after(() => vite.close());
 const { registerNativeIpc } = await vite.ssrLoadModule("/src/main/native/ipc.ts");
+const { externalFilePath } = await vite.ssrLoadModule("/src/main/native/file-actions.ts");
 const channels = IPC_CHANNELS.native;
+
+test("Flatpak file exports use host paths or the host portal mount, without changing access paths", () => {
+  const file = { id: "1", path: "/run/flatpak/doc/abc/Photos/cat.png", displayName: "cat.png" };
+  const environment = {
+    FLATPAK_ID: "io.github.centuryofimage.nicegal",
+    XDG_RUNTIME_DIR: "/run/user/1000",
+  };
+  assert.equal(externalFilePath(file, environment), "/run/user/1000/doc/abc/Photos/cat.png");
+  assert.equal(
+    externalFilePath({ ...file, hostPath: "/media/photos/cat.png" }, environment),
+    "/media/photos/cat.png",
+  );
+  assert.equal(externalFilePath(file, {}), file.path);
+  assert.equal(file.path, "/run/flatpak/doc/abc/Photos/cat.png");
+  assert.equal(
+    externalFilePath({ ...file, path: "/run/flatpak/doc-other/cat.png" }, environment),
+    "/run/flatpak/doc-other/cat.png",
+  );
+});
 
 test("revealing a multi-selection opens only the clicked item", async () => {
   revealCalls.length = 0;

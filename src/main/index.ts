@@ -185,6 +185,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     icon,
     webPreferences: {
+      additionalArguments: app.commandLine.hasSwitch("remote-debugging-port")
+        ? ["--nicegal-debug-file-picker"]
+        : [],
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,
     },

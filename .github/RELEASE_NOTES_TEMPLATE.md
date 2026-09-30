@@ -7,4 +7,5 @@
 | macOS (Apple silicon) | [DMG]({{RELEASE_URL}}/nicegal-{{VERSION}}-macos-arm64.dmg)                                                                                               |
 
 > The macOS version is experimental.
+> A [Flatpak bundle]({{RELEASE_URL}}/nicegal-{{VERSION}}-linux-x86_64.flatpak) is also available for Linux (experimental).
 > Let me know of any issues or requests in [discussions!](https://github.com/centuryofimage/nicegal/discussions)

@@ -41,6 +41,7 @@ for (const scenario of [
     };
     const app = Object.assign(new EventEmitter(), {
       isPackaged: false,
+      commandLine: { hasSwitch: (): boolean => false },
       requestSingleInstanceLock: (): boolean => true,
       setAppUserModelId: (): void => {},
       getPath: (): string => directory,
