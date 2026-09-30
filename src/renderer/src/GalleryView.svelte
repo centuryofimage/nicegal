@@ -203,7 +203,7 @@
           placement="overlay"
         />{:else if offline.length}<AppMessage
           title={offline.length === 1 ? "Folder not connected" : "Folders not connected"}
-          message={offline.map((folder) => folder.path).join(", ")}
+          message={offline.map((folder) => folder.hostPath ?? folder.path).join(", ")}
           guidance="Connect the drive or restore the folder, then try again."
           actionLabel="Try again"
           onaction={() =>
@@ -309,8 +309,9 @@
     {#if !view.detailItem}
       <StatusBar
         libraryName={view.libraryName}
-        libraryTitle={catalog.selectedLibrary?.include.map((folder) => folder.path).join("\n") ??
-          ""}
+        libraryTitle={catalog.selectedLibrary?.include
+          .map((folder) => folder.hostPath ?? folder.path)
+          .join("\n") ?? ""}
         hasLibrary={catalog.selectedId !== null}
         matchedCount={view.searchView.matchTotal}
         totalCount={catalog.items.length}

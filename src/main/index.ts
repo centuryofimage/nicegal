@@ -44,6 +44,9 @@ if (isolatedUserData) {
 
 // Match electron-builder.yml so installed shortcuts and the running app share an identity.
 if (process.platform === "win32") app.setAppUserModelId("io.github.nicegal.nicegal");
+if (process.platform === "linux" && process.env["FLATPAK_ID"]) {
+  app.setDesktopName(`${process.env["FLATPAK_ID"]}.desktop`);
+}
 
 const isDev = Boolean(process.env["ELECTRON_RENDERER_URL"]);
 const rendererEntryUrl = process.env["ELECTRON_RENDERER_URL"] ?? APP_ENTRY_URL;
@@ -185,6 +188,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     icon,
     webPreferences: {
+      additionalArguments: app.commandLine.hasSwitch("remote-debugging-port")
+        ? ["--nicegal-debug-file-picker"]
+        : [],
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,
     },

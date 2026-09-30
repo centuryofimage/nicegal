@@ -94,7 +94,7 @@ export function supportsAutomaticUpdates(
   environment: NodeJS.ProcessEnv,
   executable: string = process.execPath,
 ): boolean {
-  if (!packaged) return false;
+  if (!packaged || environment.FLATPAK_ID) return false;
   if (platform === "win32")
     return (
       installed &&
@@ -122,7 +122,9 @@ export function startUpdates(
     process.env,
     app.getPath("exe"),
   );
-  const notifyOnly = app.isPackaged && releaseBuild && !supported;
+  // Flatpak updates belong to the user's Flatpak installation/repository. A GitHub
+  // notification would send them to a different package format rather than updating it.
+  const notifyOnly = app.isPackaged && releaseBuild && !supported && !process.env.FLATPAK_ID;
   const mode = supported ? "automatic" : notifyOnly ? "notify" : "none";
   const preferencesPath = join(app.getPath("userData"), "update-settings.json");
   let automaticUpdates = loadAutomaticUpdates(preferencesPath);

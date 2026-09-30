@@ -1,5 +1,6 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/electron-userland/electron-builder/refs/heads/release/v27/packages/app-builder-lib/scheme.json
 appId: io.github.nicegal.nicegal
+extends: ./build/linux-desktop.json
 productName: nicegal
 directories:
   buildResources: build
@@ -97,12 +98,6 @@ linux:
     - deb
   artifactName: ${name}-${version}-linux-${arch}.${ext}
   maintainer: nicegal
-  category: Utility
-  desktop:
-    entry:
-      GenericName: Image Gallery
-      Keywords: gallery;images;photos;search;OCR;
-      StartupNotify: "true"
   extraResources:
     - from: LICENSE
       to: licenses/LICENSE

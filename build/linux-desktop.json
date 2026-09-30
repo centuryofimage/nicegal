@@ -1,0 +1,17 @@
+{
+  "linux": {
+    "category": "Graphics",
+    "desktop": {
+      "entry": {
+        "Type": "Application",
+        "Name": "nicegal",
+        "GenericName": "Image Gallery",
+        "Comment": "Gallery with OCR, semantic text, and image similarity search",
+        "Terminal": "false",
+        "Categories": "Graphics;Photography;",
+        "Keywords": "gallery;images;photos;search;OCR;",
+        "StartupNotify": "true"
+      }
+    }
+  }
+}

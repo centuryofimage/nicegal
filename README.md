@@ -35,6 +35,16 @@ some models can show which parts of an image match your search. these screenshot
 
 search models download on first use. photos and videos are processed locally, all data remains on your computer, no telemetry.
 
+### Flatpak for Linux (experimental)
+
+[Install the Flatpak](https://centuryofimage.github.io/nicegal-flatpak/nicegal.flatpakref)
+by opening the downloaded file in your software manager, or run:
+
+```sh
+flatpak install --user https://centuryofimage.github.io/nicegal-flatpak/nicegal.flatpakref
+flatpak run io.github.centuryofimage.nicegal
+```
+
 built with svelte and a
 [rust search backend](https://github.com/centuryofimage/nicegal-server), using DirectML and OpenVino thru [ort](https://ort.pyke.io/).
 

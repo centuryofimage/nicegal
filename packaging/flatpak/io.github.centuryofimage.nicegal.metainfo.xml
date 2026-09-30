@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.centuryofimage.nicegal</id>
+  <name>nicegal</name>
+  <summary>Browse and search your photo and video libraries</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT AND AGPL-3.0-only</project_license>
+  <developer id="io.github.centuryofimage"><name>centuryofimage</name></developer>
+  <description>
+    <p>A desktop gallery with OCR, semantic text search, and image similarity search.
+    Index your folders locally and browse photos and videos with fast thumbnails.</p>
+  </description>
+  <launchable type="desktop-id">io.github.centuryofimage.nicegal.desktop</launchable>
+  <url type="homepage">https://github.com/centuryofimage/nicegal</url>
+  <url type="bugtracker">https://github.com/centuryofimage/nicegal/issues</url>
+  <content_rating type="oars-1.1" />
+</component>

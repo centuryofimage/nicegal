@@ -83,15 +83,23 @@ jobs:
             fi
           done
 
-      - name: Verify packaged Linux ABI baseline
+      - name: Verify AppImage ABI baseline
         run: |
-          python3 scripts/check-linux-abi.py dist/linux-unpacked
-          # Inspect the final AppImage too, including libraries added by the packaging tool.
+          # AppImage uses host libraries; Flatpak is checked against its own runtime.
           appimage="$GITHUB_WORKSPACE/dist/nicegal-${{ inputs.version }}-linux-x86_64.AppImage"
           chmod +x "$appimage"
           cd "$(mktemp -d)"
           "$appimage" --appimage-extract > /dev/null
           python3 "$GITHUB_WORKSPACE/scripts/check-linux-abi.py" squashfs-root
+
+      - name: Share the built app with Flatpak
+        run: tar -cf dist/linux-unpacked.tar -C dist linux-unpacked
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-input
+          if-no-files-found: error
+          path: dist/linux-unpacked.tar
 
       - name: Upload packages
         uses: actions/upload-artifact@v7

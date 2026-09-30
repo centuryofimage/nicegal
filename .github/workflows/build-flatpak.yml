@@ -1,0 +1,44 @@
+name: Build Flatpak
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    runs-on: ubuntu-26.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
+      # Flatpak Builder needs nested bubblewrap mount/user namespaces.
+      options: --privileged
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: flatpak-input
+          path: dist
+      - name: Extract Linux app
+        run: tar -xf dist/linux-unpacked.tar -C dist
+      - name: Prepare desktop metadata
+        run: python3 scripts/prepare-flatpak-desktop.py
+      - name: Package Flatpak
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: packaging/flatpak/io.github.centuryofimage.nicegal.yml
+          build-dir: dist/flatpak-build
+          repo-dir: dist/flatpak-repo
+          build-bundle: false
+          upload-artifact: false
+      - name: Verify packaged runtime and preserve repository
+        run: |
+          dbus-run-session -- python3 scripts/check-flatpak-runtime.py dist/flatpak-build
+          tar -cf dist/flatpak-repo.tar -C dist flatpak-repo
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak-repository
+          if-no-files-found: error
+          path: dist/flatpak-repo.tar

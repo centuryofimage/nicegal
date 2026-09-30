@@ -22,6 +22,7 @@ import { handleRemotableIpc, handleTrustedIpc } from "../ipc";
 import {
   copyFilePaths,
   copyFiles,
+  externalFilePath,
   openFiles,
   resolveFileTargets,
   revealFile,
@@ -97,8 +98,8 @@ export function registerNativeIpc(context: NativeIpcContext): void {
     // Electron on Windows/Linux advertises COPY | LINK, never MOVE. There is deliberately no
     // source-file cleanup. The user accepted shortcuts as well as copies (2026-09-14).
     event.sender.startDrag({
-      file: drag.files[0].path,
-      files: drag.files.map((file) => file.path),
+      file: externalFilePath(drag.files[0]),
+      files: drag.files.map((file) => externalFilePath(file)),
       icon: dragIcon,
     });
   });

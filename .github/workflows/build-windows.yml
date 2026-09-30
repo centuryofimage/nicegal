@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-
 env:
   CARGO_TERM_COLOR: always
   RELEASE_SERIES: "0.0"
@@ -86,8 +85,12 @@ jobs:
     secrets:
       NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
 
+  build-flatpak:
+    needs: [version, build-linux]
+    uses: ./.github/workflows/build-flatpak.yml
+
   attest:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos, build-windows, build-linux, build-flatpak]
     if: github.repository == 'centuryofimage/nicegal' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-slim
     steps:
@@ -128,7 +131,7 @@ jobs:
   publish:
     needs: [version, attest]
     if: github.repository == 'centuryofimage/nicegal' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-26.04
     environment: release
     steps:
       - name: Checkout release notes
@@ -170,3 +173,42 @@ jobs:
             --notes-file RELEASE_BODY.md \
             dist/*.exe dist/*.zip dist/*.blockmap dist/latest.yml \
             dist/*.AppImage dist/*.deb dist/*.dmg dist/latest-linux.yml dist/*.intoto.jsonl
+      - uses: actions/checkout@v7
+        with:
+          repository: centuryofimage/nicegal-flatpak
+          ref: gh-pages
+          path: flatpak-site
+          token: ${{ secrets.NICEGAL_PAT }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: flatpak-repository
+          path: dist
+      - name: Import and sign the approved release
+        env:
+          FLATPAK_GPG_PRIVATE_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+          FLATPAK_GPG_KEY_ID: ${{ vars.FLATPAK_GPG_KEY_ID }}
+          FLATPAK_GPG_PASSPHRASE: ${{ secrets.FLATPAK_GPG_PASSPHRASE }}
+        shell: bash
+        run: |
+          test -n "$FLATPAK_GPG_PRIVATE_KEY"
+          test -n "$FLATPAK_GPG_KEY_ID"
+          tar -xf dist/flatpak-repo.tar -C dist
+          printf '%s' "$FLATPAK_GPG_PRIVATE_KEY" | docker run --rm -i \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work --entrypoint dbus-run-session \
+            -e FLATPAK_GPG_KEY_ID -e FLATPAK_GPG_PASSPHRASE \
+            ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08 -- bash -lc \
+            'bash scripts/sign-flatpak-repo.sh dist/flatpak-repo flatpak-site "$FLATPAK_GPG_KEY_ID"'
+      - name: Publish repository to Pages
+        env:
+          GH_TOKEN: ${{ secrets.NICEGAL_PAT }}
+        working-directory: flatpak-site
+        shell: bash
+        run: |
+          git config --local user.name bep
+          git config --local user.email 169492267+nicegal@users.noreply.github.com
+          git add --all
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Publish Flatpak for $GITHUB_SHA"
+          git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin HEAD:gh-pages

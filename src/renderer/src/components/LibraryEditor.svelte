@@ -233,7 +233,7 @@
 
 <section class="library-editor" class:embedded aria-labelledby="library-editor-title">
   <header>
-    <h1 id="library-editor-title" tabindex="-1">Edit “{library?.displayName ?? "library"}”</h1>
+    <h1 id="library-editor-title">Edit “{library?.displayName ?? "library"}”</h1>
   </header>
 
   {#if library}
@@ -269,7 +269,7 @@
             <li>
               <div class="folder-value">
                 <Folder size={13} aria-hidden="true" />
-                <span class="path" title={path}>{path}</span>
+                <span class="path" title={saved?.hostPath ?? path}>{saved?.hostPath ?? path}</span>
                 <span class={["status", status.tone]} title={status.detail}>{status.text}</span>
               </div>
               {#if saved?.scanOutcome === "unavailable"}

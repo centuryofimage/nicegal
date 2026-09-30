@@ -142,7 +142,7 @@
 
 <section class="manager" aria-labelledby="libraries-manager-title">
   <header class="manager-header">
-    <h1 id="libraries-manager-title" tabindex="-1">Libraries</h1>
+    <h1 id="libraries-manager-title">Libraries</h1>
     <button class="ui-button ui-button-compact" onclick={requestClose}>Close</button>
   </header>
 
@@ -162,7 +162,7 @@
               {#if duplicate}<span class="duplicate">Duplicate folder</span>{/if}
             </span>
             <span class="library-paths"
-              >{library.include.map((folder) => folder.path).join(" · ")}</span
+              >{library.include.map((folder) => folder.hostPath ?? folder.path).join(" · ")}</span
             >
             <span class="library-summary">
               {status && !status.loading
@@ -194,7 +194,7 @@
       {#if removing}
         <section class="remove-confirmation" aria-labelledby="remove-library-title">
           <h2 id="remove-library-title">Remove “{removing.displayName}”?</h2>
-          <p>{removing.include.map((folder) => folder.path).join(" · ")}</p>
+          <p>{removing.include.map((folder) => folder.hostPath ?? folder.path).join(" · ")}</p>
           <p>Original files are never touched. Indexed data another library uses is kept.</p>
           {#if jobs.running}
             <p role="status">A job is running. Stop it before removing this library.</p>
