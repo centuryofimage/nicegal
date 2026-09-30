@@ -9,6 +9,8 @@ mkdir -p "$site/repo"
 if [ ! -f "$site/repo/config" ]; then
     ostree --repo="$site/repo" init --mode=archive-z2
 fi
+# Git checkouts omit empty directories required by OSTree when listing refs.
+mkdir -p "$site/repo/refs/remotes"
 # Import into the existing repository so the previous release remains a parent.
 flatpak build-commit-from --src-repo="$source_repo" --gpg-sign="$key_id" \
     --update-appstream "$site/repo" "app/$app_id/x86_64/master"
