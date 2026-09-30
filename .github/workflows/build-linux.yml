@@ -15,8 +15,18 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
+    container: debian:12
+    defaults:
+      run:
+        shell: bash
     steps:
+      # Bootstrap before checkout: minimal Debian does not include Git or CA certificates.
+      - name: Install Linux build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git curl xz-utils unzip python3 build-essential pkg-config libssl-dev libclang-dev cmake nasm libvulkan1 libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxtst6 libatspi2.0-0 libnotify4 libsecret-1-0 xdg-utils
+
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -24,17 +34,12 @@ jobs:
           token: ${{ secrets.NICEGAL_PAT || github.token }}
           persist-credentials: false
 
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libssl-dev libclang-dev cmake libvulkan1
-
       - name: Restore static FFmpeg
         id: ffmpeg-cache
         uses: actions/cache@v6
         with:
           path: nicegal-server/.deps/ffmpeg
-          key: ffmpeg-n9.0.1-ubuntu-24.04-${{ hashFiles('.github/ffmpeg/posix.args', '.github/actions/ffmpeg-posix/action.yml') }}-v1
+          key: ffmpeg-n9.0.1-debian-12-${{ hashFiles('.github/ffmpeg/posix.args', '.github/actions/ffmpeg-posix/action.yml') }}-v1
 
       - name: Prepare static FFmpeg
         uses: ./.github/actions/ffmpeg-posix
@@ -77,6 +82,16 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Verify packaged Linux ABI baseline
+        run: |
+          python3 scripts/check-linux-abi.py dist/linux-unpacked
+          # Inspect the final AppImage too, including libraries added by the packaging tool.
+          appimage="$GITHUB_WORKSPACE/dist/nicegal-${{ inputs.version }}-linux-x86_64.AppImage"
+          chmod +x "$appimage"
+          cd "$(mktemp -d)"
+          "$appimage" --appimage-extract > /dev/null
+          python3 "$GITHUB_WORKSPACE/scripts/check-linux-abi.py" squashfs-root
 
       - name: Upload packages
         uses: actions/upload-artifact@v7

@@ -14,7 +14,7 @@ runs:
       uses: actions-rust-lang/setup-rust-toolchain@v1
       with:
         rust-src-dir: nicegal-server
-        cache-key: ${{ inputs.platform == 'linux' && 'ubuntu-24.04' || '' }}
+        cache-key: ${{ inputs.platform == 'linux' && 'debian-12' || '' }}
         # FFmpeg's bindgen build script formats its generated bindings.
         components: rustfmt
 

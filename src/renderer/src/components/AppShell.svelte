@@ -69,7 +69,7 @@
 {/if}
 
 {#if showingUpdateDialog && (update.phase === "ready" || update.phase === "available")}
-  <div class="modal-layer update-modal-layer" data-theme={theme}>
+  <div class="modal-layer" data-theme={theme}>
     <UpdateAvailableDialog
       version={update.version}
       installReady={update.phase === "ready"}
@@ -124,9 +124,5 @@
 
   .modal-layer {
     display: contents;
-  }
-
-  .update-modal-layer {
-    --modal-width: 410px;
   }
 </style>

@@ -24,6 +24,8 @@ runs:
       run: |
         if [[ "$RUNNER_OS" == macOS ]]; then
           brew install nasm
+        elif [[ "$(id -u)" == 0 ]]; then
+          apt-get install -y nasm
         else
           sudo apt-get install -y nasm
         fi

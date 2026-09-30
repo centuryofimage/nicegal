@@ -34,6 +34,7 @@ const vite = await createServer({
 });
 after(() => vite.close());
 const { registerBackendIpc } = await vite.ssrLoadModule("/src/main/backend/ipc.ts");
+const { searchIssue } = await vite.ssrLoadModule("/src/renderer/src/lib/search-issue.ts");
 const { RuntimeController } = (await vite.ssrLoadModule(
   "/src/renderer/src/lib/runtime.svelte.ts",
 )) as {
@@ -185,4 +186,37 @@ test("model refresh clears startup loading when it supersedes the first runtime 
 
   assert.equal(runtime.status, latest);
   assert.equal(runtime.loading, false);
+});
+
+test("a failed image model switch exposes diagnostics and preserves the active model", async () => {
+  const previous = { imageModel: { activeModel: "old", models: [] } };
+  let fail = true;
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        setImageModel: async () => {
+          if (fail) throw new Error("job_busy: a job started");
+          return previous;
+        },
+        getSearchModels: async () => ({
+          text: { state: "notLoaded", error: null },
+          clipImage: { state: "notLoaded", error: null },
+          clipText: { state: "notLoaded", error: null },
+        }),
+        getRuntimeStatus: async () => previous,
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+  const runtime = new RuntimeController();
+  runtime.status = previous as typeof runtime.status;
+  await runtime.setImageModel("new");
+  assert.equal(runtime.imageModel?.activeModel, "old");
+  const issue = searchIssue(runtime);
+  assert.equal(issue?.label, "Model switch failed");
+  assert.equal(issue?.action, "settings");
+  assert.match(issue?.detail ?? "", /job/);
+  fail = false;
+  await runtime.setImageModel("old");
+  assert.equal(searchIssue(runtime), null);
+  runtime.dispose();
 });

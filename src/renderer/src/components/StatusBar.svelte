@@ -18,9 +18,12 @@
   import type { LibraryRowStatus } from "../lib/catalog.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
+  import { useApplication } from "../lib/application.svelte";
   import { jobRateText } from "../lib/job-format";
+  import { jobBlocksRuntimeSwitch } from "../lib/job-state";
   import { searchIssue, type SearchIssue } from "../lib/search-issue";
   import ActivitySpinner from "./ActivitySpinner.svelte";
+  import ModelPicker from "./ModelPicker.svelte";
 
   let {
     libraryName,
@@ -66,6 +69,13 @@
     ondismisssetup: (key: string) => void;
   } = $props();
 
+  const {
+    services: { jobs },
+  } = useApplication();
+  const modelSwitchDisabled = $derived(
+    !backendReady || runtime.saving || runtime.imageModelSaving || jobBlocksRuntimeSwitch(jobs),
+  );
+
   const providerLabels: Record<string, string> = {
     cpu: "CPU",
     directml: "DirectML",
@@ -80,10 +90,6 @@
       ? (providerLabels[runtime.activeProvider] ?? runtime.activeProvider) +
           (runtime.status?.restartRequired ? " ⟳" : "")
       : "",
-  );
-  const imageModelShortName = $derived(
-    runtime.imageModelName?.replace(/ \d{3,4}(?= \(|$)/, "").replace(/ \(experimental\)$/, "") ??
-      "",
   );
   const setupIssue = $derived(searchIssue(runtime));
   // Loaded indexing models share one provider. Before they load, show the launch choice.
@@ -141,10 +147,10 @@
   >
 {:else if runtime.activeProvider}
   <span class="status-segment provider" title={providerTitle}>{providerText}</span>
-  {#if hasLibrary && imageModelShortName}
-    <span class="status-segment image-model" title={runtime.imageModelName}
-      >{imageModelShortName}</span
-    >
+  {#if hasLibrary && runtime.imageModelName}
+    <span class="status-segment image-model">
+      <ModelPicker {runtime} disabled={modelSwitchDisabled} compact={true} />
+    </span>
   {/if}
 {/if}
 {#if setupIssue && setupIssue.key !== dismissedSetupErrorKey}

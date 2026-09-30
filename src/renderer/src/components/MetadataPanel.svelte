@@ -144,28 +144,6 @@
             </dd>
           </dl>
         {/if}
-        <h3>Search availability</h3>
-        <dl>
-          {#if info.asset.mediaKind === "image"}
-            <dt>Text recognition</dt>
-            <dd>
-              {{ indexed: "Ready", stale: "Needs update", notIndexed: "Not prepared" }[
-                info.ocrState
-              ]}
-            </dd>
-            <dt>Text meaning</dt>
-            <dd>
-              {{
-                embedded: "Ready",
-                noText: "No text found",
-                pending: "Pending",
-                notIndexed: "Needs text recognition",
-              }[info.textState]}
-            </dd>
-          {/if}
-          <dt>Visual search</dt>
-          <dd>{info.imageIndexed ? "Ready" : "Not prepared"}</dd>
-        </dl>
         {#if info.asset.mediaKind === "image"}
           <h3>Recognized text</h3>
           {#if info.ocrText?.trim()}
@@ -233,6 +211,28 @@
             <p>{errorMessage(error)}</p>
           {/await}
         {/if}
+        <h3>Search indexing (debug)</h3>
+        <dl>
+          {#if info.asset.mediaKind === "image"}
+            <dt>OCR</dt>
+            <dd>
+              {{ indexed: "Ready", stale: "Needs update", notIndexed: "Not prepared" }[
+                info.ocrState
+              ]}
+            </dd>
+            <dt>Related text</dt>
+            <dd>
+              {{
+                embedded: "Ready",
+                noText: "No text found",
+                pending: "Pending",
+                notIndexed: "Needs text recognition",
+              }[info.textState]}
+            </dd>
+          {/if}
+          <dt>Image search</dt>
+          <dd>{info.imageIndexed ? "Ready" : "Not prepared"}</dd>
+        </dl>
       {:catch error}
         <p role="alert">Couldn't load file details.</p>
         <details>

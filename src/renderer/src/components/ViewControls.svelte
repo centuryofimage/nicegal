@@ -13,6 +13,7 @@
   import { useApplication } from "../lib/application.svelte";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { settings, settingsLimits } from "../lib/settings.svelte";
+  import GallerySizeSlider from "./GallerySizeSlider.svelte";
   const {
     services: { runtime },
   } = useApplication();
@@ -219,6 +220,7 @@
         {@render layoutChoices()}
       </section>
       <div class="numeric-options">
+        <GallerySizeSlider menu />
         <label
           >Spacing <input type="number" bind:value={$settings.gap} {...settingsLimits.gap} /></label
         >

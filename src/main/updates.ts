@@ -9,7 +9,7 @@ import {
 } from "electron";
 import { autoUpdater } from "electron-updater";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, win32 } from "node:path";
 
 import type { UpdateStatus } from "../shared/updates";
 
@@ -67,14 +67,40 @@ export function isNewerRelease(latest: string, current: string): boolean {
 }
 
 /** Only the NSIS installer creates this marker; ZIP/portable share the same app payload. */
+export function isProgramFilesInstallation(
+  executable: string,
+  environment: NodeJS.ProcessEnv,
+): boolean {
+  const root = win32.parse(executable).root;
+  const directories = [
+    environment.ProgramFiles,
+    environment.ProgramW6432,
+    environment["ProgramFiles(x86)"],
+    ...(root ? [win32.join(root, "Program Files"), win32.join(root, "Program Files (x86)")] : []),
+  ];
+  return directories.some((directory) => {
+    if (!directory) return false;
+    const relative = win32.relative(directory.toLowerCase(), executable.toLowerCase());
+    return (
+      relative !== ".." && !relative.startsWith(`..${win32.sep}`) && !win32.isAbsolute(relative)
+    );
+  });
+}
+
 export function supportsAutomaticUpdates(
   packaged: boolean,
   platform: string,
   installed: boolean,
   environment: NodeJS.ProcessEnv,
+  executable: string = process.execPath,
 ): boolean {
   if (!packaged) return false;
-  if (platform === "win32") return installed && !environment.PORTABLE_EXECUTABLE_FILE;
+  if (platform === "win32")
+    return (
+      installed &&
+      !environment.PORTABLE_EXECUTABLE_FILE &&
+      !isProgramFilesInstallation(executable, environment)
+    );
   return platform === "linux" && Boolean(environment.APPIMAGE);
 }
 
@@ -94,8 +120,9 @@ export function startUpdates(
     platform,
     existsSync(join(process.resourcesPath, "nicegal-installed")),
     process.env,
+    app.getPath("exe"),
   );
-  const notifyOnly = app.isPackaged && releaseBuild && platform === "darwin";
+  const notifyOnly = app.isPackaged && releaseBuild && !supported;
   const mode = supported ? "automatic" : notifyOnly ? "notify" : "none";
   const preferencesPath = join(app.getPath("userData"), "update-settings.json");
   let automaticUpdates = loadAutomaticUpdates(preferencesPath);

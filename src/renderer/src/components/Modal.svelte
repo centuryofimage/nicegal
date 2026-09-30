@@ -71,6 +71,12 @@
 </dialog>
 
 <style>
+  /* A narrower panel must remain centered inside the shared dialog shell. */
+  .modal[open] {
+    display: grid;
+    justify-items: center;
+  }
+
   .modal {
     box-sizing: border-box;
     width: min(var(--modal-width, var(--dialog-width)), calc(100% - 2 * var(--space-16)));

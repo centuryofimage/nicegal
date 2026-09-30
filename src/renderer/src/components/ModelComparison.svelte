@@ -19,6 +19,9 @@
     void runtime.refresh();
   });
   let query = $state(untrack(() => parseQuery(ocrSearch.query).body));
+  // TODO(dev): Initialize both selections from the eligible text-query models, including
+  // when the active model is image-only (DINOv3) or model status arrives after opening.
+  // Validate membership before enabling Compare; a nonempty model ID is not enough.
   let left = $state(untrack(() => runtime.imageModel?.activeModel ?? ""));
   let right = $state(
     untrack(
@@ -109,6 +112,7 @@
           const item = items.get(hit.assetId);
           return item ? [{ ...hit, item }] : [];
         });
+        const elapsed = performance.now() - start;
         if (hits.length) {
           await window.nicegal.backend.ensureThumbnails({
             assetIds: [...new Set(hits.map((hit) => hit.assetId))],
@@ -121,7 +125,7 @@
             model: choice.id,
             name: choice.name,
             total: result.total,
-            elapsed: performance.now() - start,
+            elapsed,
             hits,
           },
         ];

@@ -63,7 +63,8 @@ const dateValuePattern = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?$/;
 type DateBounds = { from: string; to: string };
 
 export function parseQuery(raw: string): ParsedQuery {
-  const parts = raw.match(/\s+|(?:[^\s"]|"[^"]*")+/g) ?? [];
+  // Keep an opening quote and its unfinished phrase intact while the user types.
+  const parts = raw.match(/\s+|(?:[^\s"]|"[^"]*(?:"|$))+/g) ?? [];
   const tokens: QueryToken[] = [];
   let scope: SearchScope = "all";
   const filters: FileFilter[] = [];

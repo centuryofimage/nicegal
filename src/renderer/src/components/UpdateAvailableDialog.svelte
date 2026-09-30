@@ -39,7 +39,12 @@
   }
 </script>
 
-<Modal labelledby="update-dialog-title" describedby="update-dialog-description" {onclose}>
+<Modal
+  labelledby="update-dialog-title"
+  describedby="update-dialog-description"
+  {onclose}
+  --modal-width="410px"
+>
   <section class="update-dialog">
     <h1 id="update-dialog-title">Update available</h1>
     <p id="update-dialog-description">
@@ -75,7 +80,7 @@
 <style>
   .update-dialog {
     box-sizing: border-box;
-    width: min(410px, 100%);
+    width: 100%;
     padding: var(--space-16);
     border: 1px solid var(--border-strong);
     background: var(--surface-0);

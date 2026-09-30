@@ -37,6 +37,26 @@ test("media and path filters compose with scopes and dates", () => {
   assert.equal(withScope("type:video like: red car", "ocr"), "ocr: type:video red car");
 });
 
+test("OCR phrases retain quotes through every typing step and scope rewrite", () => {
+  for (const text of ['"', '"red', '"red ', '"red dress', '"red dress"']) {
+    const parsed = parseQuery(`ocr: ${text}`);
+    assert.equal(parsed.body, ` ${text}`);
+    assert.equal(parsed.ocrMode, "raw");
+    assert.equal(withScope(`ocr: ${text}`, "ocr"), `ocr: ${text.trim()}`);
+  }
+  assert.equal(parseQuery('ocr: "red dress" type:image').body.trim(), '"red dress"');
+});
+
+test("OCR exact phrases reach FTS unchanged", async () => {
+  const { search, requests } = fixture();
+  search.query = 'ocr: "red dress"';
+  search.schedule(1, [], "modified", false, true, false);
+  await pause();
+  assert.equal(requests[0]?.query, '"red dress"');
+  assert.equal(requests[0]?.type, "ocrMatch");
+  search.dispose();
+});
+
 test("path and extension filters accept wildcards, lists, and exclusion", () => {
   const parsed = parseQuery('name: IMG_* ext:.JPG,png !path:"Old Trips" !ext:gif ext: path:');
   assert.equal(parsed.body.trim().replace(/\s+/g, " "), "IMG_*");

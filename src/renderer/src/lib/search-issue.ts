@@ -23,9 +23,19 @@ const modelNames: Record<keyof SearchModelsResponse, string> = {
 
 export function searchIssue(runtime: {
   error?: string | null;
+  imageModelError?: string | null;
   modelError?: string | null;
   models?: SearchModelsResponse | null;
 }): SearchIssue | null {
+  if (runtime.imageModelError)
+    return {
+      key: `model-switch:${runtime.imageModelError}`,
+      label: "Model switch failed",
+      guidance:
+        "The image search model couldn't be switched. Open Search settings to check the active model and try again.",
+      detail: runtime.imageModelError,
+      action: "settings",
+    };
   if (runtime.error)
     return {
       key: `runtime:${runtime.error}`,

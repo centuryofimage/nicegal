@@ -7,6 +7,15 @@
 <script lang="ts">
   import { settings, settingsLimits } from "../lib/settings.svelte";
 
+  let { menu = false }: { menu?: boolean } = $props();
+  const marks = $derived.by(() => {
+    const ticks: { value: number; fraction: number }[] = [];
+    for (let at = Math.ceil(limits.min / 16) * 16; at <= limits.max; at += 16) {
+      ticks.push({ value: at, fraction: (at - limits.min) / (limits.max - limits.min) });
+    }
+    return ticks;
+  });
+
   const sizeKey = $derived(
     $settings.layoutMode === "justified"
       ? "targetRowHeight"
@@ -32,20 +41,69 @@
   }
 </script>
 
-<input
-  class="size-slider"
-  type="range"
-  aria-label="Image size"
-  aria-valuetext={`${value} px`}
-  {title}
-  min={limits.min}
-  max={limits.max}
-  step={limits.step}
-  style:--fill={fill}
-  bind:value={() => value, setSize}
-/>
+{#snippet slider()}
+  <input
+    class={menu ? "ui-trackbar" : "size-slider"}
+    type="range"
+    aria-label="Image size"
+    aria-valuetext={`${value} px`}
+    {title}
+    min={limits.min}
+    max={limits.max}
+    step={limits.step}
+    style:--fill={fill}
+    bind:value={() => value, setSize}
+  />
+{/snippet}
+
+{#if menu}
+  <div class="menu-size">
+    <div class="head"><span>Image size</span><span class="readout">{value} px</span></div>
+    <div class="ruler" aria-hidden="true">
+      {#each marks as mark (mark.value)}
+        <span
+          class="tick"
+          class:major={mark.value % 80 === 0}
+          style:left={`calc(${mark.fraction} * (100% - var(--thumb-width)) + var(--thumb-width) / 2)`}
+        ></span>
+      {/each}
+    </div>
+    {@render slider()}
+  </div>
+{:else}
+  {@render slider()}
+{/if}
 
 <style>
+  .menu-size {
+    color: var(--text-primary);
+  }
+  .head {
+    display: flex;
+    justify-content: space-between;
+    padding-bottom: var(--space-3);
+  }
+  .readout {
+    font-variant-numeric: tabular-nums;
+    font-size: var(--font-size-sm);
+    color: var(--text-secondary);
+  }
+  .ruler {
+    position: relative;
+    height: var(--space-7);
+  }
+  .tick {
+    position: absolute;
+    bottom: 0;
+    width: var(--space-1);
+    height: var(--space-3);
+    background: var(--tick-mark);
+    transform: translateX(-0.5px);
+  }
+  .tick.major {
+    height: var(--space-6);
+    background: var(--tick-mark-major);
+  }
   .size-slider {
     -webkit-appearance: none;
     appearance: none;

@@ -27,7 +27,12 @@
   } = $props();
 </script>
 
-<Modal labelledby="search-problem-title" describedby="search-problem-guidance" {onclose}>
+<Modal
+  labelledby="search-problem-title"
+  describedby="search-problem-guidance"
+  {onclose}
+  --modal-width="480px"
+>
   <section class="search-problem">
     <h1 id="search-problem-title">{issue.label}</h1>
     <p id="search-problem-guidance">{issue.guidance}</p>
@@ -51,7 +56,7 @@
     display: grid;
     gap: var(--space-8);
     box-sizing: border-box;
-    width: min(480px, calc(100vw - var(--space-16) * 2));
+    width: 100%;
     padding: var(--space-12);
     border: 1px solid var(--border-strong);
     background: var(--surface-0);

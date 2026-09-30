@@ -154,7 +154,9 @@
           <h2 id="updates-title">Updates</h2>
           <label class="row">
             <span class="setting-label"
-              >{isMac ? "Notify me about updates" : "Automatic updates"}</span
+              >{updatePreferences?.mode === "notify"
+                ? "Notify me about updates"
+                : "Automatic updates"}</span
             >
             <input
               type="checkbox"

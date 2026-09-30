@@ -29,9 +29,10 @@ const window = Object.assign(new EventEmitter(), {
   },
 });
 let userData = mkdtempSync(join(tmpdir(), "nicegal-update-preferences-test-"));
+let executable = "C:\\Users\\bep\\AppData\\Local\\Programs\\nicegal\\nicegal.exe";
 const app = Object.assign(new EventEmitter(), {
   isPackaged: true,
-  getPath: () => userData,
+  getPath: (name: string) => (name === "exe" ? executable : userData),
   getVersion: () => "0.0.41",
 });
 const powerMonitor = new EventEmitter();
@@ -113,11 +114,11 @@ const vite = await createServer({
   appType: "custom",
 });
 after(() => vite.close());
-const { startUpdates, supportsAutomaticUpdates, isNewerRelease } =
+const { startUpdates, supportsAutomaticUpdates, isNewerRelease, isProgramFilesInstallation } =
   await vite.ssrLoadModule("/src/main/updates.ts");
 
 test("only installed NSIS and AppImage builds support automatic updates", () => {
-  assert.equal(supportsAutomaticUpdates(true, "win32", true, {}), true);
+  assert.equal(supportsAutomaticUpdates(true, "win32", true, {}, executable), true);
   assert.equal(supportsAutomaticUpdates(true, "win32", false, {}), false);
   assert.equal(
     supportsAutomaticUpdates(true, "win32", true, { PORTABLE_EXECUTABLE_FILE: "portable.exe" }),
@@ -139,6 +140,84 @@ test("release version comparison uses numeric components", () => {
   assert.equal(isNewerRelease("0.0.40", "0.0.41"), false);
   assert.equal(isNewerRelease("0.0.42", "0.0.41-beta.1"), false);
 });
+
+test("Program Files installations require manual updates without matching sibling folders", () => {
+  const environment = { ProgramFiles: "C:\\Program Files", ProgramW6432: "D:\\Apps" };
+  for (const path of [
+    "c:\\PROGRAM FILES\\nicegal\\nicegal.exe",
+    "D:\\Apps\\nicegal.exe",
+    "C:\\Program Files (x86)\\nicegal\\nicegal.exe",
+  ]) {
+    assert.equal(isProgramFilesInstallation(path, environment), true);
+    assert.equal(supportsAutomaticUpdates(true, "win32", true, environment, path), false);
+  }
+  for (const path of [
+    "C:\\Program Files Backup\\nicegal.exe",
+    "D:\\AppsBackup\\nicegal.exe",
+    "C:\\Users\\bep\\AppData\\Local\\Programs\\nicegal\\nicegal.exe",
+  ]) {
+    assert.equal(isProgramFilesInstallation(path, environment), false);
+    assert.equal(supportsAutomaticUpdates(true, "win32", true, environment, path), true);
+  }
+});
+
+for (const scenario of [
+  { name: "Linux deb", platform: "linux", executable: "/opt/nicegal/nicegal" },
+  { name: "Windows ZIP", platform: "win32", executable: "C:\\Users\\bep\\Downloads\\nicegal.exe" },
+  {
+    name: "Windows Program Files",
+    platform: "win32",
+    executable: "C:\\Program Files\\nicegal\\nicegal.exe",
+  },
+]) {
+  test(`${scenario.name} offers a manual update without downloading or installing`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
+    const previousUserData = userData;
+    const previousExecutable = executable;
+    const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
+    const previousResources = electronProcess.resourcesPath;
+    const previousAppImage = process.env.APPIMAGE;
+    delete process.env.APPIMAGE;
+    userData = mkdtempSync(join(tmpdir(), "nicegal-manual-update-test-"));
+    executable = scenario.executable;
+    electronProcess.resourcesPath = userData;
+    if (scenario.name === "Windows Program Files")
+      writeFileSync(join(userData, "nicegal-installed"), "nsis");
+    t.after(() => {
+      userData = previousUserData;
+      executable = previousExecutable;
+      if (previousResources === undefined) delete electronProcess.resourcesPath;
+      else electronProcess.resourcesPath = previousResources;
+      if (previousAppImage === undefined) delete process.env.APPIMAGE;
+      else process.env.APPIMAGE = previousAppImage;
+    });
+    const beforeChecks = calls;
+    const beforeDownloads = downloads;
+    const service = startUpdates(
+      () => true,
+      () => assert.fail("Manual updates cannot restart"),
+      scenario.platform,
+      true,
+    );
+    t.after(service.stop);
+    assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "notify" });
+    t.mock.timers.tick(5_000);
+    await flushUpdateCheck();
+    assert.deepEqual(handlers.get("updates:status")!({}), {
+      phase: "available",
+      version: "0.0.42",
+    });
+    assert.equal(calls, beforeChecks);
+    assert.equal(downloads, beforeDownloads);
+    assert.equal(service.installAndRestart(), false);
+    assert.throws(() => handlers.get("updates:restart-and-install")!({}), /No update/);
+    const beforeOpened = opened.length;
+    await handlers.get("updates:release-notes")!({});
+    assert.deepEqual(opened.slice(beforeOpened), [
+      "https://github.com/centuryofimage/nicegal/releases/tag/v0.0.42",
+    ]);
+  });
+}
 
 test("packaged macOS checks once and offers a release link without installing", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
