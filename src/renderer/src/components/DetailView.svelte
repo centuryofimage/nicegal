@@ -544,7 +544,7 @@
     {#if isStillImage && !failed}
       <div class="app-toolbar-group image-tools" role="toolbar" aria-label="Image viewer controls">
         <button
-          class={["app-toolbar-button", showMatchAreas && "active"]}
+          class={["app-toolbar-button", showMatchAreas && canShowMatchAreas && "active"]}
           type="button"
           onclick={toggleMatchAreas}
           title={visualizeUnavailable ??

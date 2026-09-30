@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -34,7 +34,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: nicegal-server/.deps/ffmpeg
-          key: ffmpeg-n9.0.1-linux-${{ hashFiles('.github/ffmpeg/posix.args', '.github/actions/ffmpeg-posix/action.yml') }}-v1
+          key: ffmpeg-n9.0.1-ubuntu-24.04-${{ hashFiles('.github/ffmpeg/posix.args', '.github/actions/ffmpeg-posix/action.yml') }}-v1
 
       - name: Prepare static FFmpeg
         uses: ./.github/actions/ffmpeg-posix

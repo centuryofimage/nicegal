@@ -23,15 +23,12 @@
     onclose: () => void;
   } = $props();
 
-  let retry = $state(0);
   let copiedText = $state<string | null>(null);
-  // An await block discards an older result when selection, catalog snapshot or retry changes.
+  // An await block discards an older result when selection or catalog snapshot changes.
   const request = $derived.by((): Promise<AssetMetadata> | null => {
-    void retry; // Explicit refresh also reloads an unchanged selection.
     return ready && asset ? window.nicegal.backend.getAssetMetadata(asset.id) : null;
   });
   const tagsRequest = $derived.by((): Promise<ImageTags> | null => {
-    void retry;
     return ready && asset ? loadImageTags(asset.id, $settings.hideOffensiveTags) : null;
   });
   function tagTitle(tag: ImageTag): string {
@@ -56,14 +53,6 @@
 <aside id="metadata-panel" class="metadata-panel" aria-labelledby="metadata-heading">
   <header>
     <h2 id="metadata-heading">Info</h2>
-    <button
-      class="ui-button"
-      onclick={() => {
-        copiedText = null;
-        retry += 1;
-      }}
-      disabled={!ready || !asset}>Refresh</button
-    >
     <button class="ui-button" aria-label="Close info" onclick={onclose}>Close</button>
   </header>
   <div class="metadata-body">
@@ -245,7 +234,7 @@
           {/await}
         {/if}
       {:catch error}
-        <p role="alert">Couldn't load file details. Refresh to try again.</p>
+        <p role="alert">Couldn't load file details.</p>
         <details>
           <summary>Technical details</summary>
           <pre>{errorMessage(error)}</pre>

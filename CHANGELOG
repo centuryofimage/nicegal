@@ -1,7 +1,2 @@
-- fix all the bugs the last release added and make everything more stable
-- reduce ram usage by 2gb by mmapping model text encoders
-  - i've updated the model files, it will redownload and delete the old ones on startup
-  - i also fixed siglip2 which apparently wants lowercase inputs only
-- add a "tag generator". its extremely quirky and not how CLIP is meant to be used, so the results are TRULY strange. it took a while to get something kind of resembling the gallery images
-  - check the info panel when viewing an image. only supports the non experimental models
-- cleanup ui a tiny bit
+- small ui cleanups
+- internal cleanups

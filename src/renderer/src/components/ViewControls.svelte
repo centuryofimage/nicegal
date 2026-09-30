@@ -10,8 +10,12 @@
   import type { DividerGranularity, LayoutMode } from "../lib/gallery/types";
   import type { MediaFilter } from "../lib/search-query";
 
+  import { useApplication } from "../lib/application.svelte";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { settings, settingsLimits } from "../lib/settings.svelte";
+  const {
+    services: { runtime },
+  } = useApplication();
   let {
     layoutMode = $bindable(),
     sortField = $bindable(),
@@ -64,6 +68,7 @@
     { value: "video", label: "Videos" },
   ];
   let openMenu = $state(false);
+  const matchAreasAvailable = $derived(runtime.imageModelVisualizes);
   function chooseLayout(mode: LayoutMode): void {
     layoutMode = mode;
   }
@@ -174,14 +179,18 @@
           >Match scores
         </button>
         <button
+          class="match-areas-option"
           type="button"
           role="checkbox"
-          aria-checked={$settings.matchAreas}
-          title="Show where each visual search result matches, on its tile"
+          aria-checked={$settings.matchAreas && matchAreasAvailable}
+          title={matchAreasAvailable
+            ? "Show where each visual search result matches, on its tile"
+            : `${runtime.imageModelName ?? "This image model"} does not visualize well`}
+          disabled={!matchAreasAvailable}
           onclick={() => ($settings.matchAreas = !$settings.matchAreas)}
         >
           <span class="choice-mark" aria-hidden="true"
-            >{#if $settings.matchAreas}<Check size={12} />{/if}</span
+            >{#if $settings.matchAreas && matchAreasAvailable}<Check size={12} />{/if}</span
           >Match areas
         </button>
       </div>
@@ -338,6 +347,13 @@
     background: var(--btn-face-active);
     box-shadow: var(--bevel-sunken);
     color: var(--text-primary);
+  }
+  .organization-menu button.match-areas-option:disabled {
+    border-color: var(--btn-border);
+    background: var(--btn-face);
+    box-shadow: var(--bevel-raised);
+    color: var(--text-tertiary);
+    opacity: 0.55;
   }
   .choice-mark {
     display: inline-flex;

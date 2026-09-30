@@ -346,6 +346,13 @@
   color: var(--text-primary);
 }
 
+.app-toolbar-group > .app-toolbar-button:disabled {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  opacity: 0.55;
+}
+
 .app-toolbar-group > .app-toolbar-button.selected {
   border-left-color: var(--btn-border-active);
 }

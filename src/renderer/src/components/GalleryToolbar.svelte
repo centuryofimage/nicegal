@@ -10,6 +10,8 @@
   import { settings } from "../lib/settings.svelte";
   import { addDroppedVisualFiles, chooseVisualFile } from "../lib/visual-search-input";
   import JobIndicator from "./JobIndicator.svelte";
+  import Modal from "./Modal.svelte";
+  import ModelComparison from "./ModelComparison.svelte";
   import SearchBar from "./SearchBar.svelte";
   import SearchOptions from "./SearchOptions.svelte";
   import ViewControls from "./ViewControls.svelte";
@@ -27,6 +29,8 @@
   } = useApplication();
 
   let searchBar = $state<SearchBar>();
+  let comparisonOpen = $state(false);
+  let comparison = $state<ModelComparison>();
   export function focusSearch(): void {
     searchBar?.focus();
   }
@@ -117,6 +121,14 @@
       <Settings size={13} aria-hidden="true" />
       <span>Settings</span>
     </button>
+    {#if import.meta.env.DEV}
+      <button
+        class="app-toolbar-button app-toolbar-text-button"
+        onclick={() => (comparisonOpen = true)}
+        disabled={catalog.selectedId === null}
+        aria-haspopup="dialog">Compare models</button
+      >
+    {/if}
   </div>
   {#if ocrSearch.rankable}
     <SearchOptions
@@ -132,6 +144,16 @@
       {onsection}
     />
   {/if}
+{/if}
+
+{#if import.meta.env.DEV && comparisonOpen}
+  <Modal
+    labelledby="model-comparison-title"
+    onclose={() => comparison?.requestClose()}
+    --modal-width="1100px"
+  >
+    <ModelComparison bind:this={comparison} onclose={() => (comparisonOpen = false)} />
+  </Modal>
 {/if}
 
 <style>
