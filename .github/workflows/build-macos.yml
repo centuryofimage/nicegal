@@ -21,9 +21,6 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  # NASM objects in the Intel FFmpeg archive lack a Mach-O platform load command.
-  # ld assumes macOS and rustc reports that benign diagnostic as linker_messages.
-  RUSTFLAGS: ${{ inputs.arch == 'x64' && '-D warnings -A linker_messages' || '-D warnings' }}
 
 jobs:
   build:

@@ -120,12 +120,6 @@
       >About</button
     >
   </nav>
-  {#if !catalog.backendStatus.ready && catalog.backendStatus.error}
-    <div class="settings-error" role="alert">
-      The gallery service is unavailable.
-      <button class="ui-button" onclick={onclose}>Show error details</button>
-    </div>
-  {/if}
   <div class="settings-groups themed-scrollbar">
     {#if page === "gallery"}
       <section class="settings-group" aria-labelledby="appearance-title">
@@ -179,7 +173,7 @@
     {:else if page === "remote"}
       <RemoteAccessSettings />
     {:else}
-      <SearchModels />
+      <SearchModels onshowservicedetails={onclose} />
       <section class="settings-group" aria-labelledby="library-search-title">
         <h2 id="library-search-title">Per library</h2>
         <div class="row">
@@ -256,6 +250,7 @@
   .settings-panel {
     display: flex;
     width: 100%;
+    flex: 1;
     max-width: var(--dialog-width);
     min-height: 0;
     flex-direction: column;
@@ -301,6 +296,8 @@
   }
   .settings-groups {
     display: grid;
+    flex: 1;
+    align-content: start;
     min-height: 0;
     gap: var(--space-14);
     padding-top: var(--space-14);

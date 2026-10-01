@@ -357,6 +357,7 @@ class Application implements ApplicationContext {
    */
   private async stopJobsForRuntimeSwitch(): Promise<string | null> {
     const { jobs, orchestrator } = this.services;
+    await jobs.sync();
     if (!jobs.running) return null;
     if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
       return "Switch after the current job finishes.";
@@ -364,6 +365,8 @@ class Application implements ApplicationContext {
     // scan the backend had queued can start in the meantime, so cancel whatever is running.
     const deadline = Date.now() + 30_000;
     while (this.started && jobs.running && Date.now() < deadline) {
+      if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
+        return "Switch after the current job finishes.";
       if (jobs.active?.status !== "cancelling") await orchestrator.cancel();
       await new Promise((resolve) => setTimeout(resolve, 250));
       await jobs.sync();

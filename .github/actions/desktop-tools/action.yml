@@ -6,6 +6,9 @@ inputs:
     description: Desktop platform identifier, including macos-intel when applicable.
     required: true
 
+env:
+  PNPM_VERSION: 11.28.3
+
 runs:
   using: composite
   steps:
@@ -25,7 +28,9 @@ runs:
       with:
         toolchain: ${{ steps.rust-toolchain.outputs.channel }}
         rust-src-dir: nicegal-server
-        cache-key: ${{ inputs.platform == 'linux' && 'debian-12' || '' }}
+        cache-key: ${{ inputs.platform == 'linux' && 'debian-12' || inputs.platform }}-${{ hashFiles('nicegal-server/Cargo.toml', 'nicegal-server/.cargo/config.toml') }}
+        # Let Cargo's target-specific configuration supply compiler flags.
+        rustflags: ""
         # FFmpeg's bindgen build script formats its generated bindings.
         components: rustfmt
 
@@ -56,7 +61,7 @@ runs:
       if: inputs.platform != 'macos-intel'
       uses: pnpm/setup@v2.1.0
       with:
-        version: 11.27.1
+        version: ${{ env.PNPM_VERSION }}
         cache: true
 
     # pnpm/setup currently fails on Intel macOS runners.
@@ -64,6 +69,6 @@ runs:
       if: inputs.platform == 'macos-intel'
       shell: bash
       run: |
-        npm install -g pnpm@11.27.1
+        npm install -g pnpm@$PNPM_VERSION
         echo "PATH=$HOME/.local/share/pnpm:$PATH" >> "$GITHUB_ENV"
         pnpm ci

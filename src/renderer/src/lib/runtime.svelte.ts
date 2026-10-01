@@ -144,7 +144,7 @@ export class RuntimeController {
         this.imageModelError = blocked;
         return;
       }
-      this.status = await window.nicegal.backend.setImageModel(model);
+      this.status = await this.switchRuntime(() => window.nicegal.backend.setImageModel(model));
       await this.refreshModels();
     } catch (error) {
       this.imageModelError = switchErrorMessage(error);
@@ -167,13 +167,29 @@ export class RuntimeController {
         this.error = blocked;
         return;
       }
-      this.status = await window.nicegal.backend.setExecutionProvider(executionProvider);
+      this.status = await this.switchRuntime(() =>
+        window.nicegal.backend.setExecutionProvider(executionProvider),
+      );
       await this.refreshModels();
     } catch (error) {
       this.error = switchErrorMessage(error);
     } finally {
       this.saving = false;
       this.loading = false;
+    }
+  }
+
+  /** A restarted backend may begin recovery work between the job poll and the write. */
+  private async switchRuntime(write: () => Promise<RuntimeStatus>): Promise<RuntimeStatus> {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await write();
+      } catch (error) {
+        if (this.disposed || errorCode(error) !== "job_busy" || attempt >= 2) throw error;
+        const blocked = await this.stopBlockingJobs();
+        if (blocked) throw new Error(blocked);
+        if (this.disposed) throw error;
+      }
     }
   }
 

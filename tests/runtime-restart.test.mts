@@ -108,6 +108,34 @@ test("provider change accepts status after the backend disconnect resets control
   assert.equal(controller.error, null);
 });
 
+test("model switch stops newly discovered recovery work and retries a busy write", async () => {
+  let writes = 0;
+  let stops = 0;
+  const selected = { imageModel: { selectedModel: "new" } };
+  globalThis.window = {
+    nicegal: {
+      backend: {
+        setImageModel: async () => {
+          writes += 1;
+          if (writes === 1) throw new Error('nicegal-error:{"code":"job_busy","message":"busy"}');
+          return selected;
+        },
+        getSearchModels: async () => ({}),
+      },
+    },
+  } as unknown as Window & typeof globalThis;
+  const runtime = new RuntimeController(async () => {
+    stops += 1;
+    return null;
+  });
+  await runtime.setImageModel("new");
+  assert.equal(writes, 2);
+  assert.equal(stops, 2);
+  assert.equal(runtime.imageModelError, null);
+  assert.equal(runtime.status?.imageModel.selectedModel, "new");
+  assert.equal(runtime.imageModelSaving, false);
+});
+
 test("image model write invalidates an older runtime read", async () => {
   const read = Promise.withResolvers<object>();
   const previous = { imageModel: { selectedModel: "old" } };

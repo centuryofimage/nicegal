@@ -3,6 +3,8 @@
   import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
   import ModelPicker from "./ModelPicker.svelte";
 
+  let { onshowservicedetails }: { onshowservicedetails: () => void } = $props();
+
   const { services } = useApplication();
   const { runtime, jobs, catalog } = services;
   // A running scan is stopped by the switch itself; other jobs have to finish first.
@@ -12,6 +14,14 @@
 
 <section aria-labelledby="search-models-title" class="model-section">
   <h2 id="search-models-title">Search</h2>
+  {#if !catalog.backendStatus.ready && catalog.backendStatus.error}
+    <div class="service-status" role="status">
+      <span>Search settings are unavailable while the gallery service is offline.</span>
+      <button class="ui-button ui-button-compact" onclick={onshowservicedetails}
+        >Show details</button
+      >
+    </div>
+  {/if}
   <ModelPicker
     {runtime}
     disabled={!runtime.imageModel ||
@@ -40,6 +50,16 @@
 </section>
 
 <style>
+  .service-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding: var(--space-7) var(--space-9);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
   .model-section {
     border: 1px solid var(--border);
     background: var(--surface-1);
