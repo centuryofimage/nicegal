@@ -131,7 +131,7 @@ jobs:
   publish:
     needs: [version, attest]
     if: github.repository == 'centuryofimage/nicegal' && github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-26.04
     environment: release
     steps:
       - name: Checkout release notes
