@@ -2,6 +2,7 @@ import { ipcMain, type IpcMainInvokeEvent, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 
 import { encodeIpcError } from "../shared/ipc-error";
+import { isRemoteChannel, type RemoteChannel, type WindowChannel } from "./ipc-access";
 
 export type IpcSenderValidator = (event: IpcMainInvokeEvent) => boolean;
 
@@ -12,6 +13,8 @@ export type IpcSenderValidator = (event: IpcMainInvokeEvent) => boolean;
  */
 export interface BridgeClient {
   readonly id: string;
+  /** A paired LAN browser rather than the desktop window. */
+  readonly remote: boolean;
   send(channel: string, ...args: unknown[]): void;
   isClosed(): boolean;
   /** Runs once when the renderer goes away for good. */
@@ -45,6 +48,7 @@ export function windowClient(sender: WebContents): BridgeClient {
   };
   const client: BridgeClient = {
     id: `window:${sender.id}:${randomUUID()}`,
+    remote: false,
     send: (channel, ...args) => {
       if (!closed && !sender.isDestroyed()) sender.send(channel, ...args);
     },
@@ -61,41 +65,49 @@ export function windowClient(sender: WebContents): BridgeClient {
   return client;
 }
 
-const remotableHandlers = new Map<string, BridgeHandler>();
+const remotableHandlers = new Map<RemoteChannel, BridgeHandler>();
 
-/** Handlers that remote browsers may call. Everything else is reachable only from the window. */
+/** The handler a paired browser may call on `channel`, if `IPC_ACCESS` marks it remote. */
 export function remotableHandler(channel: string): BridgeHandler | undefined {
-  return remotableHandlers.get(channel);
+  return isRemoteChannel(channel) ? remotableHandlers.get(channel) : undefined;
+}
+
+/** Registers a handler reachable only from the app's top-level renderer frame. */
+export function handleTrustedIpc(
+  channel: WindowChannel,
+  isTrustedSender: IpcSenderValidator,
+  handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown,
+): void {
+  if (isRemoteChannel(channel)) throw new Error(`${channel} is remote in IPC_ACCESS`);
+  handleInvoke(channel, isTrustedSender, handler);
 }
 
 /**
- * Registers an invoke handler that is only reachable from the app's top-level renderer frame.
- * Every renderer-to-main capability crosses this guard before it reaches a domain handler.
+ * Registers a handler for the window and for paired remote browsers. The handler sees only a
+ * `BridgeClient`, never the Electron event, so it cannot reach window-only APIs by accident.
  */
-export function handleTrustedIpc(
+export function handleRemotableIpc(
+  channel: RemoteChannel,
+  isTrustedSender: IpcSenderValidator,
+  handler: BridgeHandler,
+): void {
+  if (!isRemoteChannel(channel)) throw new Error(`${channel} is not remote in IPC_ACCESS`);
+  remotableHandlers.set(channel, handler);
+  handleInvoke(channel, isTrustedSender, (event, ...args) =>
+    handler(windowClient(event.sender), ...args),
+  );
+}
+
+function handleInvoke(
   channel: string,
   isTrustedSender: IpcSenderValidator,
   handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown,
 ): void {
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
-    if (!isTrustedSender(event)) throw new Error("Rejected IPC from an untrusted renderer");
+    if (!isTrustedSender(event))
+      throw new Error("Untrusted IPC: rejected a call from an untrusted renderer");
     return callWithIpcCode(() => handler(event, ...args));
   });
-}
-
-/**
- * Like `handleTrustedIpc`, and also callable by paired remote browsers. The handler sees only a
- * `BridgeClient`, never the Electron event, so it cannot reach window-only APIs by accident.
- */
-export function handleRemotableIpc(
-  channel: string,
-  isTrustedSender: IpcSenderValidator,
-  handler: BridgeHandler,
-): void {
-  remotableHandlers.set(channel, handler);
-  handleTrustedIpc(channel, isTrustedSender, (event, ...args) =>
-    handler(windowClient(event.sender), ...args),
-  );
 }
 
 function callWithIpcCode(call: () => unknown): unknown {

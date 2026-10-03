@@ -1,24 +1,21 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type -- Standalone Node JavaScript, matching repository scripts. */
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const output = resolve(root, "resources/licenses/license-information.html");
+// The backend report is a build artifact. Regenerate it from locked Cargo metadata so
+// dependency updates never require refreshing and committing a separate snapshot.
+execFileSync(
+  "uv",
+  ["run", "--no-project", "--python", "3.13", "python", "scripts/collect-licenses.py"],
+  { cwd: resolve(root, "nicegal-server"), stdio: "inherit", windowsHide: true },
+);
 const backend = JSON.parse(
-  await readFile(resolve(root, "nicegal-server/third-party-licenses.json"), "utf8"),
+  await readFile(resolve(root, "nicegal-server/target/third-party-licenses.json"), "utf8"),
 );
-const backendLock = (await readFile(resolve(root, "nicegal-server/Cargo.lock"), "utf8")).replace(
-  /\r\n/g,
-  "\n",
-);
-if (backend.lockfileSha256 !== createHash("sha256").update(backendLock).digest("hex")) {
-  throw new Error(
-    "Backend license inventory is stale. Run python nicegal-server/scripts/collect-licenses.py and commit it first.",
-  );
-}
 const command = process.platform === "win32" ? "cmd.exe" : "pnpm";
 const args =
   process.platform === "win32"

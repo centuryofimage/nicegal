@@ -10,6 +10,7 @@
 
   import { errorMessage } from "../lib/errors";
   import { originalUrlOf } from "../lib/gallery/types";
+  import { overlayHistory } from "../lib/overlay-history";
 
   let {
     items,
@@ -28,6 +29,16 @@
   // it lifts after it appears, and that release must not count.
   let backdropPress = false;
 
+  const downloads = new AbortController();
+
+  /** One status for the sheet's async actions. A tap may only open the share sheet for a few
+   * seconds, so a download that outlives it waits as "ready" for a second tap. */
+  let status = $state.raw<
+    | { kind: "idle" | "preparing" }
+    | { kind: "ready"; file: File }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
   // Sharing the file itself needs HTTPS and a browser that shares files; elsewhere the row is
   // left out rather than failing.
   const canShareFiles =
@@ -38,7 +49,16 @@
     typeof ClipboardItem !== "undefined" &&
     typeof navigator.clipboard?.write === "function" &&
     (ClipboardItem.supports?.("image/png") ?? true);
-  let copyError = $state<string | null>(null);
+
+  function fail(error: unknown): void {
+    if (!downloads.signal.aborted) status = { kind: "error", message: errorMessage(error) };
+  }
+
+  async function fetchBlob(item: GalleryItem): Promise<Blob> {
+    const response = await fetch(originalUrlOf(item), { signal: downloads.signal });
+    if (!response.ok) throw new Error(`Couldn't load the file (${response.status}).`);
+    return response.blob();
+  }
 
   /**
    * Browsers take images on the clipboard only as PNG, so other formats are redrawn first. The
@@ -46,16 +66,9 @@
    * that begin after an await.
    */
   function copyImage(item: GalleryItem): void {
-    copyError = null;
-    const png = fetch(originalUrlOf(item), { signal: downloads.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`Couldn't load the image (${response.status}).`);
-        return response.blob();
-      })
-      .then((blob) => (blob.type === "image/png" ? blob : toPng(blob)));
-    navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(onclose, (error) => {
-      if (!downloads.signal.aborted) copyError = errorMessage(error);
-    });
+    status = { kind: "idle" };
+    const png = fetchBlob(item).then((blob) => (blob.type === "image/png" ? blob : toPng(blob)));
+    navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(onclose, fail);
   }
 
   async function toPng(blob: Blob): Promise<Blob> {
@@ -73,50 +86,36 @@
     );
   }
 
-  /** A tap may only open the share sheet for a few seconds. A large video can take longer to
-   * download, so a download that outlives it waits as "ready" for a second tap. */
-  let share = $state.raw<
-    | { phase: "idle" | "preparing" }
-    | { phase: "ready"; file: File }
-    | { phase: "failed"; message: string }
-  >({ phase: "idle" });
-  const downloads = new AbortController();
-
-  function present(dialog: HTMLDialogElement): () => void {
-    dialog.showModal();
-    return () => {
-      downloads.abort();
-      dialog.close();
-    };
-  }
-
-  async function startShare(item: GalleryItem): Promise<void> {
-    if (share.phase === "ready") return shareFile(share.file);
-    share = { phase: "preparing" };
+  async function shareItem(item: GalleryItem): Promise<void> {
+    let file = status.kind === "ready" ? status.file : null;
     try {
-      const response = await fetch(originalUrlOf(item), { signal: downloads.signal });
-      if (!response.ok) throw new Error(`Couldn't load the file (${response.status}).`);
-      const blob = await response.blob();
-      await shareFile(new File([blob], item.displayName, { type: blob.type }));
-    } catch (error) {
-      if (!downloads.signal.aborted) share = { phase: "failed", message: errorMessage(error) };
-    }
-  }
-
-  async function shareFile(file: File): Promise<void> {
-    if (!navigator.canShare({ files: [file] })) {
-      share = { phase: "failed", message: "This browser can't share this type of file." };
-      return;
-    }
-    try {
+      if (!file) {
+        status = { kind: "preparing" };
+        const blob = await fetchBlob(item);
+        file = new File([blob], item.displayName, { type: blob.type });
+      }
+      if (!navigator.canShare({ files: [file] })) {
+        status = { kind: "error", message: "This browser can't share this type of file." };
+        return;
+      }
       await navigator.share({ files: [file] });
       onclose();
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") onclose();
-      else if (error instanceof DOMException && error.name === "NotAllowedError")
-        share = { phase: "ready", file };
-      else share = { phase: "failed", message: errorMessage(error) };
+      else if (file && error instanceof DOMException && error.name === "NotAllowedError")
+        status = { kind: "ready", file };
+      else fail(error);
     }
+  }
+
+  function present(dialog: HTMLDialogElement): () => void {
+    dialog.showModal();
+    const entry = overlayHistory().open(() => onclose());
+    return () => {
+      entry.close();
+      downloads.abort();
+      dialog.close();
+    };
   }
 
   function act(action: () => void): void {
@@ -148,11 +147,11 @@
           <button
             class="sheet-row"
             type="button"
-            disabled={share.phase === "preparing"}
-            onclick={() => startShare(single)}
-            ><Share size={16} aria-hidden="true" />{share.phase === "preparing"
+            disabled={status.kind === "preparing"}
+            onclick={() => shareItem(single)}
+            ><Share size={16} aria-hidden="true" />{status.kind === "preparing"
               ? "Preparing…"
-              : share.phase === "ready"
+              : status.kind === "ready"
                 ? "Ready. Tap to share"
                 : "Share…"}</button
           >
@@ -185,8 +184,7 @@
           : `Add ${items.length} to visual search`}</button
       >
     </div>
-    {#if share.phase === "failed"}<p class="sheet-error" role="alert">{share.message}</p>{/if}
-    {#if copyError}<p class="sheet-error" role="alert">{copyError}</p>{/if}
+    {#if status.kind === "error"}<p class="sheet-error" role="alert">{status.message}</p>{/if}
     <button class="sheet-row sheet-cancel" type="button" onclick={onclose}>Cancel</button>
   </div>
 </dialog>

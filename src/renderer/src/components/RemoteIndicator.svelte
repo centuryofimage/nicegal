@@ -1,10 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  let { onopen }: { onopen: () => void } = $props();
-
   import { connectionLabel, type RemoteConnection } from "../../../shared/remote";
 
+  let { onopen }: { onopen: () => void } = $props();
   let connected = $state.raw<RemoteConnection[]>([]);
 
   onMount(() => {
@@ -51,15 +50,10 @@
     border-right-color: var(--border-subtle);
   }
   .dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: radial-gradient(
-      circle at 35% 35%,
-      var(--status-connected-highlight) 0,
-      var(--status-connected) 55%,
-      var(--status-connected-edge) 100%
-    );
-    box-shadow: 0 0 2px 1px var(--status-connected-glow);
+    box-sizing: border-box;
+    width: 7px;
+    height: 7px;
+    border: 1px solid var(--status-connected-edge);
+    background: var(--status-connected);
   }
 </style>

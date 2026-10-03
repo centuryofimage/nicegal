@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
+  import { overlayHistory } from "../lib/overlay-history";
+
   let {
     labelledby,
     describedby,
@@ -20,7 +22,10 @@
     // Native dialog focusing selects autofocus / the first interactive control and restores
     // focus on close. Do not turn the heading into a keyboard focus target.
     dialog.showModal();
+    // Back asks to close, like Escape. A dialog that stays open gets its entry back.
+    const entry = overlayHistory().open(() => onclose());
     return () => {
+      entry.close();
       dialog.close();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
         previousFocus.focus({ preventScroll: true });
@@ -78,7 +83,7 @@
     box-sizing: border-box;
     width: min(var(--modal-width, var(--dialog-width)), calc(100% - 2 * var(--space-16)));
     max-width: none;
-    max-height: calc(100% - 2 * var(--space-16));
+    max-height: calc(100dvh - 2 * var(--space-16));
     margin: auto;
     padding: 0;
     border: 0;
@@ -89,5 +94,10 @@
 
   .modal::backdrop {
     background: var(--dialog-backdrop);
+  }
+
+  .modal :global(> *) {
+    min-width: 0;
+    max-width: 100%;
   }
 </style>

@@ -21,6 +21,20 @@ import { aspectRatioOf, type GalleryItem } from "./gallery/types";
 import { folderName, rootKey, rootsMatch } from "./library-root";
 import { libraryIndexing, settings, type GallerySettings } from "./settings.svelte";
 
+/** A counter that stamps async work; a result is stale once a later `bump` has happened. */
+class Epoch {
+  private value = 0;
+  get current(): number {
+    return this.value;
+  }
+  bump(): number {
+    return ++this.value;
+  }
+  isCurrent(token: number): boolean {
+    return token === this.value;
+  }
+}
+
 /** Frontend preferences for one backend library: its optional name and restorable view. */
 export interface LibraryViewState {
   /** User-chosen name; null shows a name derived from the folders. */
@@ -142,7 +156,10 @@ function isLibraryId(value: unknown): value is LibraryId {
 }
 
 /** The v2 registry and the older single-root key, in their stored order. */
-function readV2Registry(): { libraries: V2LibraryRecord[]; selectedRoot: string } {
+function readV2Registry(): {
+  libraries: V2LibraryRecord[];
+  selectedRoot: string;
+} {
   const libraries: V2LibraryRecord[] = [];
   let selectedRoot = "";
   try {
@@ -176,7 +193,12 @@ function readV2Registry(): { libraries: V2LibraryRecord[]; selectedRoot: string 
     }
     const legacyRoot = localStorage.getItem(LIBRARY_ROOT_STORAGE_KEY)?.trim();
     if (legacyRoot) {
-      libraries.push({ root: legacyRoot, displayName: "", query: "", scrollTop: 0 });
+      libraries.push({
+        root: legacyRoot,
+        displayName: "",
+        query: "",
+        scrollTop: 0,
+      });
       selectedRoot = legacyRoot;
     }
   } catch {
@@ -219,7 +241,11 @@ export class CatalogController {
   readonly libraries: LibraryRecord[] = $derived(
     this.definitions.map((library) => {
       const name = this.names[library.id] ?? null;
-      return { ...library, name, displayName: name ?? derivedLibraryName(library.include) };
+      return {
+        ...library,
+        name,
+        displayName: name ?? derivedLibraryName(library.include),
+      };
     }),
   );
   readonly selectedLibrary: LibraryRecord | undefined = $derived(
@@ -235,26 +261,28 @@ export class CatalogController {
   private loadedTimeline: Timeline | null = null;
   /** Backend catalog revision as of the last successful load, used only for change polling. */
   private catalogRevision = $state("");
-  /** Bumped on every started load; a response that lands after a newer one starts is dropped. */
-  private generation = 0;
+  /** A catalog load's response is dropped once a newer load starts. */
+  private readonly loads = new Epoch();
   /** Library and timeline of the load in flight, so a repeat request coalesces into it. */
   private inFlightRefresh: string | null = null;
   /** A repeat request arrived during the load in flight; load once more when it lands. */
   private refreshAgain = false;
-  /** Bumped on every library-list load; an overtaken list response is dropped. */
-  private librariesGeneration = 0;
+  /** An overtaken library-list response is dropped. */
+  private readonly libraryLists = new Epoch();
   /** Cache-busting counter stamped onto items, advanced whenever a job regenerates thumbnails. */
   private thumbnailRevision = $state(0);
   private refreshTimer: ReturnType<typeof setTimeout> | undefined;
   /** Prevents the two-second revision interval from stacking requests behind a slow backend. */
   private revisionPollPending: number | null = null;
-  private nextRevisionPoll = 0;
+  private readonly polls = new Epoch();
   private disposed = false;
-  private backendStatusRevision = 0;
-  private imageCoverageGeneration = 0;
+  /** Counts statuses applied, so a pushed one supersedes a startup read in flight. */
+  private readonly backendPushes = new Epoch();
+  /** Invalidates coverage reads when the model changes or the backend drops. */
+  private readonly coverageReads = new Epoch();
   imageModelId = $state<string | null>(null);
   /** Invalidates every outstanding row-status pass when a newer pass starts. */
-  private libraryStatusGeneration = 0;
+  private readonly statusPasses = new Epoch();
   /** Invalidates status completions for one library when its cataloged count can change. */
   // eslint-disable-next-line svelte/prefer-svelte-reactivity -- generation counters are private bookkeeping, never read reactively by the UI
   private readonly libraryStatusIdGenerations = new Map<LibraryId, number>();
@@ -279,15 +307,15 @@ export class CatalogController {
 
   /** Fetches backend status and, if ready, loads libraries and the catalog. Call once. */
   async initialize(): Promise<void> {
-    const revision = this.backendStatusRevision;
+    const revision = this.backendPushes.current;
     try {
       const status = await window.nicegal.backend.getBackendStatus();
       if (this.disposed) return;
       // A pushed status supersedes a startup read that was already in flight.
-      if (revision === this.backendStatusRevision) this.applyBackendStatus(status);
+      if (this.backendPushes.isCurrent(revision)) this.applyBackendStatus(status);
     } catch (error) {
       if (this.disposed) return;
-      if (revision === this.backendStatusRevision) throw error;
+      if (this.backendPushes.isCurrent(revision)) throw error;
     }
     if (this.backendStatus.ready) await this.loadLibraries();
     else this.loading = false;
@@ -296,7 +324,7 @@ export class CatalogController {
   /** Applies a status pushed live from the main process — today, only an nicegal-server crash.
    * See `onBackendStatusChanged` wiring in `application.svelte.ts`. */
   applyBackendStatus(status: BackendStatus): void {
-    this.backendStatusRevision += 1;
+    this.backendPushes.bump();
     if (!status.ready) this.invalidateRequests();
     this.backendStatus = status;
   }
@@ -307,8 +335,8 @@ export class CatalogController {
     const changed = this.imageModelId !== null;
     this.imageModelId = model;
     if (!changed) return;
-    this.imageCoverageGeneration += 1;
-    this.libraryStatusGeneration += 1;
+    this.coverageReads.bump();
+    this.statusPasses.bump();
     for (const [id, status] of this.libraryStatuses) {
       this.updateLibraryStatus(id, {
         ...status,
@@ -321,10 +349,10 @@ export class CatalogController {
   }
 
   private invalidateRequests(): void {
-    this.generation += 1;
-    this.librariesGeneration += 1;
-    this.libraryStatusGeneration += 1;
-    this.imageCoverageGeneration += 1;
+    this.loads.bump();
+    this.libraryLists.bump();
+    this.statusPasses.bump();
+    this.coverageReads.bump();
     this.inFlightRefresh = null;
     this.revisionPollPending = null;
     this.refreshAgain = false;
@@ -343,12 +371,12 @@ export class CatalogController {
    */
   async loadLibraries(): Promise<void> {
     if (this.disposed || !this.backendStatus.ready) return;
-    const generation = ++this.librariesGeneration;
+    const generation = this.libraryLists.bump();
     try {
       if (!this.importedV2) await this.importV2Registry(generation);
-      if (generation !== this.librariesGeneration) return;
+      if (!this.libraryLists.isCurrent(generation)) return;
       const definitions = await window.nicegal.backend.listLibraries();
-      if (generation !== this.librariesGeneration) return;
+      if (!this.libraryLists.isCurrent(generation)) return;
       this.librariesError = "";
       // Reloaded after every job; an unchanged list must not rebuild every library record.
       if (
@@ -357,11 +385,11 @@ export class CatalogController {
       )
         this.applyDefinitions(definitions);
     } catch (error) {
-      if (generation !== this.librariesGeneration) return;
+      if (!this.libraryLists.isCurrent(generation)) return;
       this.librariesError = errorMessage(error);
       this.loading = false;
     } finally {
-      if (generation === this.librariesGeneration) this.librariesLoaded = true;
+      if (this.libraryLists.isCurrent(generation)) this.librariesLoaded = true;
     }
   }
 
@@ -379,7 +407,7 @@ export class CatalogController {
     }
     this.inFlightRefresh = key;
     this.refreshAgain = false;
-    const generation = ++this.generation;
+    const generation = this.loads.bump();
     this.loading = true;
     this.loadError = "";
     const libraryId = this.selectedId;
@@ -396,9 +424,12 @@ export class CatalogController {
       // A revision read after the rows could describe an insertion absent from those rows.
       // Keep the earlier revision so polling detects any change during the load.
       const revision = await window.nicegal.backend.getCatalogRevision();
-      if (generation !== this.generation) return;
-      const assets = await window.nicegal.backend.listAssets({ libraryId, timeline });
-      if (generation !== this.generation) return;
+      if (!this.loads.isCurrent(generation)) return;
+      const assets = await window.nicegal.backend.listAssets({
+        libraryId,
+        timeline,
+      });
+      if (!this.loads.isCurrent(generation)) return;
       this.items = assets.map((asset) => this.mapGalleryAsset(asset, timeline));
       // Record what was actually loaded so `onSettingsChange` can tell a real sort-field change
       // from a settings emission that leaves the loaded timeline untouched.
@@ -406,7 +437,7 @@ export class CatalogController {
       this.updateSelectedCatalogCount();
       this.catalogRevision = revision;
     } catch (error) {
-      if (generation === this.generation) {
+      if (this.loads.isCurrent(generation)) {
         const message = errorMessage(error);
         this.loadError = message;
         this.updateLibraryStatus(libraryId, {
@@ -416,7 +447,7 @@ export class CatalogController {
         });
       }
     } finally {
-      if (generation === this.generation) {
+      if (this.loads.isCurrent(generation)) {
         this.inFlightRefresh = null;
         this.loading = false;
         if (this.refreshAgain) {
@@ -450,22 +481,22 @@ export class CatalogController {
       document.visibilityState !== "visible"
     )
       return;
-    const poll = ++this.nextRevisionPoll;
+    const poll = this.polls.bump();
     this.revisionPollPending = poll;
-    const generation = this.generation;
-    const imageGeneration = this.imageCoverageGeneration;
+    const generation = this.loads.current;
+    const imageGeneration = this.coverageReads.current;
     const selectedId = this.selectedId;
     try {
       const revision = await window.nicegal.backend.getCatalogRevision();
-      if (generation !== this.generation) return;
+      if (!this.loads.isCurrent(generation)) return;
       if (this.catalogRevision && revision !== this.catalogRevision) await this.refresh();
       else this.catalogRevision = revision;
       const libraryId = this.selectedId;
-      if (libraryId !== null && generation === this.generation) {
+      if (libraryId !== null && this.loads.isCurrent(generation)) {
         const imageCoverage = await window.nicegal.backend.getImageEmbeddingCoverage(libraryId);
         if (
-          generation === this.generation &&
-          imageGeneration === this.imageCoverageGeneration &&
+          this.loads.isCurrent(generation) &&
+          this.coverageReads.isCurrent(imageGeneration) &&
           libraryId === this.selectedId
         ) {
           this.updateLibraryStatus(libraryId, {
@@ -477,8 +508,8 @@ export class CatalogController {
       }
     } catch (error) {
       if (
-        generation === this.generation &&
-        imageGeneration === this.imageCoverageGeneration &&
+        this.loads.isCurrent(generation) &&
+        this.coverageReads.isCurrent(imageGeneration) &&
         selectedId !== null &&
         selectedId === this.selectedId
       )
@@ -511,7 +542,7 @@ export class CatalogController {
   async refreshLibraryStatuses(): Promise<void> {
     if (this.disposed || !this.backendStatus.ready) return;
 
-    const generation = ++this.libraryStatusGeneration;
+    const generation = this.statusPasses.bump();
     const ids = this.definitions.map((library) => library.id);
     const selectedId = this.selectedId;
     const selectedCataloged = this.items.length;
@@ -519,7 +550,11 @@ export class CatalogController {
     // finished landing it; mid-load it is stale. Snapshot `loading` now rather than trust it.
     const selectedLoading = this.loading;
     for (const id of ids) {
-      this.updateLibraryStatus(id, { ...this.statusFor(id), loading: true, error: null });
+      this.updateLibraryStatus(id, {
+        ...this.statusFor(id),
+        loading: true,
+        error: null,
+      });
     }
 
     await Promise.all(
@@ -698,7 +733,7 @@ export class CatalogController {
 
   /** A list read that started before a library mutation must not republish the old list. */
   private supersedeLibraryLoads(): void {
-    this.librariesGeneration += 1;
+    this.libraryLists.bump();
   }
 
   /**
@@ -711,7 +746,7 @@ export class CatalogController {
     const preferences = get(settings);
     let complete = true;
     for (const record of libraries) {
-      if (generation !== this.librariesGeneration) return;
+      if (!this.libraryLists.isCurrent(generation)) return;
       try {
         const library = await window.nicegal.backend.createLibrary({
           include: [record.root],
@@ -719,7 +754,7 @@ export class CatalogController {
           ...libraryIndexing(preferences, record.root),
           importKey: `${LIBRARIES_STORAGE_KEY}:${rootKey(record.root)}`,
         });
-        if (generation !== this.librariesGeneration) return;
+        if (!this.libraryLists.isCurrent(generation)) return;
         if (!this.views[library.id]) {
           const derived = derivedLibraryName(library.include);
           this.setViews({
@@ -802,7 +837,7 @@ export class CatalogController {
     idGeneration: number,
   ): boolean {
     return (
-      generation === this.libraryStatusGeneration &&
+      this.statusPasses.isCurrent(generation) &&
       idGeneration === this.libraryStatusIdGeneration(id) &&
       this.definitions.some((library) => library.id === id)
     );

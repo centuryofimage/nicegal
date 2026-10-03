@@ -184,7 +184,8 @@
         <button
           class="ui-button"
           onclick={() => void prepareRemoval()}
-          disabled={!selected || navigationBusy}>Remove library…</button
+          title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+          disabled={!selected || navigationBusy || isRemote()}>Remove library…</button
         >
         {#if createError}<p class="error" role="alert">{createError}</p>{/if}
       </div>
@@ -248,7 +249,7 @@
     display: flex;
     box-sizing: border-box;
     width: 100%;
-    height: min(700px, calc(100vh - var(--space-16) * 2));
+    height: min(700px, calc(100dvh - var(--space-16) * 2));
     flex-direction: column;
     overflow: hidden;
     border: 1px solid var(--border-strong);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { flushSync } from "svelte";
+import { flushSync, tick } from "svelte";
 
 import type { GalleryItem } from "../../src/renderer/src/lib/gallery/types";
 import type { JobSnapshot } from "../../src/shared/backend";
@@ -11,6 +11,16 @@ import {
   type LibraryViewController,
 } from "../../src/renderer/src/lib/library-view.svelte";
 import { layoutOptions, settings } from "../../src/renderer/src/lib/settings.svelte";
+import { FakeHistory } from "./fake-history";
+
+const browser = new FakeHistory();
+Object.assign(globalThis, {
+  history: browser,
+  window: {
+    nicegal: { backend: { cancelSearch: async () => {} } },
+    addEventListener: browser.addEventListener.bind(browser),
+  },
+});
 
 const app = createApplication();
 const { catalog, ocrSearch } = app.services;
@@ -196,34 +206,7 @@ assert.equal(view.detailItem?.id, "first", "disposed view no longer receives nav
 stop();
 console.log("Library reactivity checks passed");
 
-// A pending browser Back must not dismiss an image opened after the close action.
-// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Browser event listener bookkeeping, not reactive UI state.
-const listeners = new Set<() => void>();
-let backs = 0;
-const fakeLocation = { pathname: "/index.html", search: "", hash: "" };
-const fakeHistory = {
-  state: null as Record<string, unknown> | null,
-  pushState(state: Record<string, unknown>, _title: string, url: string): void {
-    this.state = state;
-    fakeLocation.hash = url;
-  },
-  replaceState(state: Record<string, unknown> | null, _title: string, url: string): void {
-    this.state = state;
-    fakeLocation.hash = url.startsWith("#") ? url : "";
-  },
-  back(): void {
-    backs++;
-  },
-};
-Object.assign(globalThis, {
-  location: fakeLocation,
-  history: fakeHistory,
-  window: {
-    nicegal: { backend: { cancelSearch: async () => {} } },
-    addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
-    removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
-  },
-});
+// The viewer owns one history entry: UI close drops it, Back closes the viewer.
 const historyApp = createApplication();
 historyApp.services.catalog.items = latest;
 let historyView!: LibraryViewController;
@@ -231,23 +214,29 @@ const stopHistory = $effect.root(() => {
   historyView = createLibraryViewController(historyApp, () => {});
 });
 flushSync();
+browser.flush();
+const baseIndex = browser.index;
 historyView.openDetail(0);
-flushSync();
+historyView.showNextDetail();
+assert.equal(browser.index, baseIndex + 1, "navigating inside the viewer adds no entries");
 historyView.closeDetail();
-flushSync();
-assert.equal(backs, 1);
 historyView.openDetail(1);
-flushSync();
-fakeHistory.state = null;
-fakeLocation.hash = "";
-for (const listener of listeners) listener();
-flushSync();
-assert.equal(historyView.detailItem?.id, "second");
-assert.equal(fakeLocation.hash, "#item=second");
-fakeHistory.state = null;
-fakeLocation.hash = "";
-for (const listener of listeners) listener();
+browser.flush();
+await Promise.resolve();
+assert.equal(browser.index, baseIndex + 1, "reopening during the pending Back keeps one entry");
+assert.equal(
+  historyView.detailItem?.id,
+  "second",
+  "the pending Back does not close the reopened image",
+);
+historyView.detailStatus = { loading: true } as NonNullable<LibraryViewController["detailStatus"]>;
+browser.back();
+browser.flush();
 flushSync();
 assert.equal(historyView.detailItem, undefined, "user Back closes the current viewer");
+assert.equal(historyView.detailStatus, null, "Back also clears the closed image's status");
+await tick();
+browser.flush();
+assert.equal(browser.index, baseIndex, "Back leaves no entry to re-push");
 historyView.dispose();
 stopHistory();

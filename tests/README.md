@@ -6,7 +6,7 @@ connect to the running app or its catalog.
 
 For live gallery gesture checks, run `pnpm dev`, connect with `agent-browser connect 9222`,
 and execute `tests/helpers/gallery-input.browser.js` with `agent-browser eval -b` using
-the file's UTF-8 base64 text. This checks the actual ViSelect integration in the renderer,
+the file's UTF-8 base64 text. This checks the actual gallery input module in the renderer,
 including item-drag exclusion, cancellation, lost mouseup, and subsequent clicks. It creates
 and removes an isolated DOM fixture without changing catalog data. Native OS drops also need
 a manual Explorer/file-manager check; the Node tests validate IPC payloads and late preparation.

@@ -142,7 +142,7 @@
     </button>
   {/if}
 
-  <div id="job-progress-card" class="job-card" inert={!cardOpen}>
+  <div id="job-progress-card" class="job-card viewport-popup" inert={!cardOpen}>
     {#key job.jobId}
       <JobProgress {job} />
     {/key}
@@ -179,6 +179,8 @@
 
 <style>
   .job-anchor {
+    anchor-name: --job-indicator;
+    anchor-scope: --job-indicator;
     position: relative;
     display: flex;
     flex: none;
@@ -305,12 +307,12 @@
   }
 
   .job-card {
+    --popup-anchor: --job-indicator;
+    --popup-width: 310px;
     position: absolute;
     z-index: var(--z-panel);
     top: calc(100% + var(--space-4));
     right: 0;
-    box-sizing: border-box;
-    width: 310px;
     max-height: calc(100dvh - var(--control-height) - var(--space-12));
     padding: var(--space-9);
     overflow-y: auto;

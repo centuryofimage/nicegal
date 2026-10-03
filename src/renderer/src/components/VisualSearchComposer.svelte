@@ -112,7 +112,7 @@
 </script>
 
 <div
-  class="visual-composer"
+  class="visual-composer viewport-popup"
   bind:this={composerEl}
   role="dialog"
   aria-label="Compose visual search"
@@ -293,12 +293,13 @@
 
 <style>
   .visual-composer {
+    --popup-anchor: --search-field;
+    --popup-width: 520px;
     position: absolute;
     z-index: var(--z-popover);
     top: calc(100% + var(--space-3));
     left: 0;
-    width: min(520px, 100%);
-    box-sizing: border-box;
+    overflow: auto;
     border: 1px solid var(--border);
     background: var(--surface-1);
     box-shadow: var(--shadow-overlay);

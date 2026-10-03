@@ -4,152 +4,123 @@
   import type { RuntimeController } from "../lib/runtime.svelte";
 
   import { errorMessage } from "../lib/errors";
-  import {
-    compactModelDescriptions,
-    modelDescriptions,
-    modelLicenses,
-    shortModelName,
-  } from "../lib/model-descriptions";
+  import { groupImageModels, imageModels, shortModelName } from "../lib/image-models";
 
   let {
     runtime,
-
     disabled,
-
     compact = false,
-  }: {
-    runtime: RuntimeController;
-
-    disabled: boolean;
-
-    compact?: boolean;
-  } = $props();
-
-  let popup = $state<HTMLDivElement>();
-
-  let trigger = $state<HTMLButtonElement>();
-
-  let open = $state(false);
+  }: { runtime: RuntimeController; disabled: boolean; compact?: boolean } = $props();
 
   const id = $props.id();
+  const popupWidth = 350;
 
+  let popup = $state<HTMLDivElement>();
+  let trigger = $state<HTMLButtonElement>();
+  let open = $state(false);
+  let linkError = $state<string | null>(null);
+
+  const groups = $derived(groupImageModels(runtime.imageModel?.models ?? []));
+  const activeModel = $derived(runtime.imageModel?.activeModel);
+
+  /** Opens above the status bar trigger, kept inside the window. */
   function position(): void {
     if (!trigger || !popup) return;
-
     const rect = trigger.getBoundingClientRect();
-
-    const width = Math.min(compact ? 350 : 390, window.innerWidth - 16);
-
+    const width = Math.min(popupWidth, window.innerWidth - 16);
     popup.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
-
     popup.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-
     popup.style.maxHeight = `${Math.max(0, rect.top - 12)}px`;
-  }
-
-  function close(): void {
-    popup?.hidePopover();
   }
 
   async function choose(event: Event & { currentTarget: HTMLInputElement }): Promise<void> {
     const input = event.currentTarget;
-
-    const group = input.closest("fieldset");
-
+    const fieldset = input.closest("fieldset");
     if (compact) {
-      close();
-
+      popup?.hidePopover();
       trigger?.focus();
     }
-
     await runtime.setImageModel(input.value);
-
     // The native radio group changes before the request; a failed switch keeps the old model.
-
-    for (const radio of group?.querySelectorAll<HTMLInputElement>('input[type="radio"]') ?? []) {
+    for (const radio of fieldset?.querySelectorAll<HTMLInputElement>("input[type=radio]") ?? []) {
       radio.checked = radio.value === runtime.imageModel?.activeModel;
     }
   }
 
-  let modelLicenseError = $state<string | null>(null);
-
-  async function openModelLicense(
-    event: MouseEvent & { currentTarget: HTMLAnchorElement },
-  ): Promise<void> {
+  async function openLink(event: MouseEvent & { currentTarget: HTMLAnchorElement }): Promise<void> {
     event.preventDefault();
-
-    modelLicenseError = null;
-
+    linkError = null;
     try {
       await window.nicegal.native.openExternalUrl(event.currentTarget.href);
     } catch (cause) {
-      modelLicenseError = errorMessage(cause);
+      linkError = errorMessage(cause);
     }
   }
 </script>
 
 {#snippet options()}
-  <fieldset class="image-model-picker" class:compact {disabled}>
-    <legend class:compact-legend={compact}>Image search model</legend>
-
+  <fieldset class={["picker", { compact }]} {disabled}>
+    <legend>Image search model</legend>
     {#if !compact}
-      <p class="model-intro">
+      <p class="intro">
         Chooses how pictures are compared with example images and descriptions. It does not change
         OCR or related-text search.
       </p>
     {/if}
-
-    <div class="image-model-options">
-      {#each runtime.imageModel?.models ?? [] as model (model.id)}
-        <div class="image-model-option" class:chosen={model.id === runtime.imageModel?.activeModel}>
-          <label title={compact ? modelDescriptions[model.id] : undefined}>
-            <input
-              type="radio"
-              name={`${id}-image-model`}
-              value={model.id}
-              checked={model.id === runtime.imageModel?.activeModel}
-              disabled={!model.available}
-              onchange={choose}
-            />
-
-            <span class="model-copy">
-              <span class="model-name"
-                >{compact
-                  ? shortModelName(model.name)
-                  : model.name}{#if compact && !model.available}
-                  · Unavailable{/if}</span
-              >
-
-              <span class="model-description"
-                >{(compact ? compactModelDescriptions[model.id] : modelDescriptions[model.id]) ??
-                  modelDescriptions[model.id] ??
-                  "Image search model."}</span
-              >
-            </span>
-          </label>
-
-          {#if !compact}
-            {#if modelLicenses[model.id]}
-              <a href={modelLicenses[model.id].url} onclick={openModelLicense}
-                >{modelLicenses[model.id].label}</a
-              >
-            {/if}
-
-            {#if !model.available}<span class="model-unavailable">Unavailable</span>{/if}
-          {/if}
+    <div class="options">
+      {#each groups as group (group.id)}
+        <div class="tier" role="group" aria-labelledby={`${id}-${group.id}`}>
+          <div class="tier-heading" id={`${id}-${group.id}`}>
+            {group.label}{#if !compact}<span class="tier-description">{group.description}</span
+              >{/if}
+          </div>
+          {#each group.models as model (model.id)}
+            {@const info = imageModels[model.id]}
+            <div class={["option", { chosen: model.id === activeModel }]}>
+              <label title={compact ? info?.description : undefined}>
+                <input
+                  type="radio"
+                  name={`${id}-image-model`}
+                  value={model.id}
+                  checked={model.id === activeModel}
+                  disabled={!model.available}
+                  onchange={choose}
+                />
+                <span class="copy">
+                  <span class="name">
+                    {compact
+                      ? shortModelName(model.name)
+                      : model.name}{#if compact && !model.available}
+                      · Unavailable{/if}{#if !compact && info?.recommended}<span class="recommended"
+                        >Recommended</span
+                      >{/if}
+                  </span>
+                  <span class="description">
+                    {(compact ? info?.compactDescription : info?.description) ??
+                      "Image search model."}
+                  </span>
+                </span>
+              </label>
+              {#if !compact}
+                {#if info?.license}
+                  <a href={model.url} title="Model page" onclick={openLink}>{info.license}</a>
+                {/if}
+                {#if !model.available}<span class="unavailable">Unavailable</span>{/if}
+              {/if}
+            </div>
+          {/each}
         </div>
       {/each}
     </div>
   </fieldset>
-
-  {#if modelLicenseError}<p class="model-error" role="alert">{modelLicenseError}</p>{/if}
+  {#if linkError}<p class="error" role="alert">{linkError}</p>{/if}
 {/snippet}
 
-<svelte:window onresize={close} />
+<svelte:window onresize={() => popup?.hidePopover()} />
 
 {#if compact}
   <button
-    class="model-trigger"
+    class="trigger"
     bind:this={trigger}
     {disabled}
     popovertarget={id}
@@ -161,10 +132,10 @@
   >
     {shortModelName(runtime.imageModelName ?? "")}<ChevronDown size={10} aria-hidden="true" />
   </button>
-
   <div
     {id}
-    class="model-picker"
+    class="popup"
+    style:width={`min(${popupWidth}px, calc(100vw - 16px))`}
     popover="auto"
     role="dialog"
     aria-label="Choose image search model"
@@ -178,119 +149,176 @@
 {/if}
 
 <style>
-  .model-trigger {
-    display: inline-flex;
-
-    align-items: center;
-
-    gap: var(--space-2);
-
+  .picker {
+    margin: var(--space-8) var(--space-9);
     padding: 0;
-
     border: 0;
-
-    background: transparent;
-
-    color: inherit;
-
-    font: inherit;
-
-    cursor: pointer;
   }
-
-  .model-trigger:focus-visible {
-    outline: var(--focus-ring);
-  }
-
-  .model-picker {
-    box-sizing: border-box;
-
-    position: fixed;
-
-    inset: auto;
-
-    width: min(350px, calc(100vw - 16px));
-
-    margin: 0;
-
-    padding: var(--space-2);
-
-    overflow-x: hidden;
-
-    overflow-y: auto;
-
-    white-space: normal;
-
-    border: 1px solid var(--border-strong);
-
-    background: var(--surface-0);
-
+  legend {
+    padding: 0;
     color: var(--text-primary);
-
-    box-shadow: var(--shadow-overlay);
-
+    font-weight: var(--font-weight-semibold);
+  }
+  .intro {
+    margin: var(--space-3) 0 var(--space-6);
+  }
+  .options {
+    border: 1px solid var(--border);
+  }
+  .tier + .tier {
+    border-top: 1px solid var(--border);
+  }
+  .tier-heading {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-5);
+    padding: var(--space-3) var(--space-5);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+  .tier-description {
+    color: var(--text-secondary);
     font-size: var(--font-size-sm);
+    font-weight: normal;
   }
-
-  .image-model-picker.compact {
-    margin: 0;
+  .option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-height: 43px;
+    padding: var(--space-4) var(--space-5);
+    border-top: 1px solid var(--border-subtle);
+    background: var(--surface-1);
   }
-
-  .compact-legend {
-    position: absolute;
-
-    width: 1px;
-
-    height: 1px;
-
-    padding: 0;
-
-    overflow: hidden;
-
-    clip-path: inset(50%);
-
-    white-space: nowrap;
-  }
-
-  .compact .image-model-options {
-    border: 0;
-  }
-
-  .compact .image-model-option {
-    min-height: 0;
-
-    padding: var(--space-3) var(--space-4);
-
-    border: 0;
-
-    background: transparent;
-  }
-
-  .compact .image-model-option:hover,
-  .compact .image-model-option:focus-within,
-  .compact .image-model-option.chosen {
+  .option.chosen {
     background: var(--surface-hover);
   }
-
-  .compact .model-copy {
-    gap: 0;
-
-    line-height: var(--line-height-tight);
-
-    white-space: normal;
+  label {
+    display: flex;
+    align-items: start;
+    gap: var(--space-5);
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
   }
-
-  .compact label {
-    font: inherit;
+  input {
+    flex: none;
+    margin: 2px 0 0;
+    accent-color: var(--accent);
   }
-
-  .model-error {
+  .copy {
+    display: grid;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .name {
+    color: var(--text-primary);
+    font-weight: var(--font-weight-semibold);
+  }
+  .recommended {
+    display: inline-block;
+    margin-left: var(--space-8);
+    padding: 0 var(--space-3);
+    border: 1px solid var(--success);
+    border-radius: 6px;
+    color: var(--success);
+    font-size: 10px;
+    font-weight: normal;
+    vertical-align: 1px;
+  }
+  .description,
+  .unavailable {
+    color: var(--text-secondary);
+  }
+  a,
+  .unavailable {
+    flex: none;
+    font-size: var(--font-size-sm);
+  }
+  a:focus-visible,
+  input:focus-visible,
+  .trigger:focus-visible {
+    outline: var(--focus-ring);
+  }
+  .error {
     margin: var(--space-8) var(--space-9);
-
     color: var(--danger);
-
     white-space: pre-wrap;
-
     overflow-wrap: anywhere;
+  }
+  @media (max-width: 550px) {
+    .option {
+      flex-wrap: wrap;
+    }
+    a {
+      margin-left: 24px;
+    }
+  }
+
+  .trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .popup {
+    box-sizing: border-box;
+    position: fixed;
+    inset: auto;
+    margin: 0;
+    padding: var(--space-2);
+    overflow: hidden auto;
+    white-space: normal;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-0);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-overlay);
+    font-size: var(--font-size-sm);
+  }
+  .compact {
+    margin: 0;
+  }
+  .compact legend {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .compact .options,
+  .compact .tier + .tier {
+    border: 0;
+  }
+  .compact .tier + .tier {
+    margin-top: var(--space-2);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .compact .tier-heading {
+    padding: var(--space-3) var(--space-4) var(--space-2);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: var(--font-size-sm);
+  }
+  .compact .option {
+    min-height: 0;
+    padding: var(--space-3) var(--space-4);
+    border: 0;
+    background: transparent;
+  }
+  .compact .option:hover,
+  .compact .option:focus-within,
+  .compact .option.chosen {
+    background: var(--surface-hover);
+  }
+  .compact .copy {
+    gap: 0;
+    line-height: var(--line-height-tight);
   }
 </style>

@@ -5,10 +5,11 @@
    its label. */
 @media (max-width: 600px) {
   .app-toolbar {
+    --toolbar-control-height: 32px;
     flex-wrap: wrap;
   }
-  .app-toolbar .search-bar {
-    flex-basis: 100%;
+  .app-toolbar-text-button:has(svg):not(.app-toolbar-keep-label) {
+    min-width: var(--toolbar-control-height);
   }
   /* Visually hidden, still the button's accessible name. */
   .app-toolbar-text-button:has(svg):not(.app-toolbar-keep-label) > span {

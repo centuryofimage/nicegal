@@ -83,6 +83,8 @@
       Number((name.trim() || null) !== library.name)
     );
   });
+  // Library definitions change only on the PC; phones can still scan and make thumbnails.
+  const readOnly = isRemote();
   export async function saveChanges(): Promise<boolean> {
     return changeCount === 0 && purgeFolders.length === 0 ? true : apply();
   }
@@ -257,10 +259,17 @@
     <div class="body">
       <label class="name-row">
         <span>Name</span>
-        <input type="text" bind:value={name} {placeholder} maxlength="200" />
+        <input
+          type="text"
+          bind:value={name}
+          {placeholder}
+          maxlength="200"
+          disabled={readOnly}
+          title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
+        />
       </label>
 
-      <fieldset>
+      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
         <legend>Folders</legend>
         <ul class="folder-list" aria-label="Included folders">
           {#each include as path (path)}
@@ -313,8 +322,8 @@
           <button
             class="ui-button ui-button-compact"
             onclick={addFolder}
-            title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
-            disabled={isRemote()}><Plus size={13} aria-hidden="true" /> Add folder…</button
+            title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
+            disabled={readOnly}><Plus size={13} aria-hidden="true" /> Add folder…</button
           >
           {#if include.length === 1}
             <span class="hint">You can add another folder to this library.</span>
@@ -322,7 +331,7 @@
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
         <legend>Excluded folders</legend>
         <p class="hint">Hidden from this library and skipped by future scans.</p>
         {#if exclude.length}
@@ -364,14 +373,14 @@
           <button
             class="ui-button ui-button-compact"
             onclick={excludeFolder}
-            title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
-            disabled={!include.length || isRemote()}
+            title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
+            disabled={!include.length || readOnly}
             ><Plus size={13} aria-hidden="true" /> Exclude folder…</button
           >
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
         <legend>Search</legend>
         <label class="check"><input type="checkbox" bind:checked={image} /> Image search</label>
         <label class="check indent"

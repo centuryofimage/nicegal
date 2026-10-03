@@ -21,9 +21,12 @@ export interface ImageTags {
   vibes: ImageTag[];
 }
 
+/** Gallery item ids are decimal strings of the asset's integer id; the endpoint wants the plain integer. */
 export async function loadImageTags(assetId: string, hideOffensive: boolean): Promise<ImageTags> {
+  const id = Number(assetId);
+  if (!Number.isSafeInteger(id)) throw new Error(`Invalid asset id: ${assetId}`);
   const query = new URLSearchParams({
-    assetId: String(Number(assetId)),
+    assetId: String(id),
     hideOffensive: String(hideOffensive),
   });
   const response = await fetch(apiUrl(`/v1/assets/tags?${query}`));

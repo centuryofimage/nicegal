@@ -259,6 +259,7 @@
   }
   .settings-pages {
     display: flex;
+    flex-wrap: wrap;
     flex: none;
     gap: var(--space-4);
     padding-top: var(--space-10);
@@ -329,6 +330,8 @@
   }
   .setting-label {
     display: grid;
+    min-width: 0;
+    overflow-wrap: anywhere;
     gap: var(--space-2);
   }
   .setting-label small {
@@ -361,5 +364,20 @@
   input:focus-visible {
     outline: var(--focus-ring);
     outline-offset: var(--focus-ring-offset);
+  }
+
+  @media (max-width: 600px) {
+    .settings-panel {
+      padding: var(--space-8);
+    }
+    .row {
+      flex-wrap: wrap;
+    }
+    .segmented-row .setting-label {
+      flex-basis: 100%;
+    }
+    .segmented-row :global(.ui-choice-group) {
+      flex-wrap: wrap;
+    }
   }
 </style>

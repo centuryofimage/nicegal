@@ -1,12 +1,4 @@
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  net,
-  powerMonitor,
-  shell,
-  type IpcMainInvokeEvent,
-} from "electron";
+import { app, BrowserWindow, net, powerMonitor, shell, type IpcMainInvokeEvent } from "electron";
 import { autoUpdater } from "electron-updater";
 import { existsSync } from "node:fs";
 import { join, win32 } from "node:path";
@@ -14,6 +6,7 @@ import { join, win32 } from "node:path";
 import type { UpdateStatus } from "../shared/updates";
 
 import { IPC_CHANNELS } from "../shared/ipc-channels";
+import { handleTrustedIpc } from "./ipc";
 import { loadAutomaticUpdates, saveAutomaticUpdates } from "./update-preferences";
 
 declare const __NICEGAL_RELEASE_UPDATES__: boolean;
@@ -151,19 +144,12 @@ export function startUpdates(
     }
   };
   const hasDownload = (): boolean => status.phase === "ready";
-  const authorize = (event: IpcMainInvokeEvent): void => {
-    if (!isTrustedSender(event)) throw new Error("Untrusted update request");
-  };
-  ipcMain.handle(IPC_CHANNELS.updates.status, (event) => {
-    authorize(event);
-    return status;
-  });
-  ipcMain.handle(IPC_CHANNELS.updates.preferences, (event) => {
-    authorize(event);
-    return { enabled: automaticUpdates, mode };
-  });
-  ipcMain.handle(IPC_CHANNELS.updates.setEnabled, (event, value: unknown) => {
-    authorize(event);
+  handleTrustedIpc(IPC_CHANNELS.updates.status, isTrustedSender, () => status);
+  handleTrustedIpc(IPC_CHANNELS.updates.preferences, isTrustedSender, () => ({
+    enabled: automaticUpdates,
+    mode,
+  }));
+  handleTrustedIpc(IPC_CHANNELS.updates.setEnabled, isTrustedSender, (_event, value: unknown) => {
     if (typeof value !== "boolean") throw new Error("Automatic updates must be a boolean");
     // Persist first: failed writes must not report a preference as saved.
     saveAutomaticUpdates(preferencesPath, value);
@@ -177,14 +163,12 @@ export function startUpdates(
     }
     return { enabled: automaticUpdates, mode };
   });
-  ipcMain.handle(IPC_CHANNELS.updates.releaseNotes, async (event) => {
-    authorize(event);
+  handleTrustedIpc(IPC_CHANNELS.updates.releaseNotes, isTrustedSender, async () => {
     if ((status.phase !== "ready" && status.phase !== "available") || !status.version) return;
     // Never navigate to arbitrary URLs supplied by release metadata or by the renderer.
     await shell.openExternal(`${RELEASES}/tag/v${encodeURIComponent(status.version)}`);
   });
-  ipcMain.handle(IPC_CHANNELS.updates.restartAndInstall, (event) => {
-    authorize(event);
+  handleTrustedIpc(IPC_CHANNELS.updates.restartAndInstall, isTrustedSender, () => {
     if (!mayUpdate() || status.phase !== "ready") throw new Error("No update is ready to install");
     if (restartRequested) return;
     restartRequested = true;

@@ -18,9 +18,7 @@
   import type { LibraryRowStatus } from "../lib/catalog.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
-  import { useApplication } from "../lib/application.svelte";
   import { jobRateText } from "../lib/job-format";
-  import { jobBlocksRuntimeSwitch } from "../lib/job-state";
   import { searchIssue, type SearchIssue } from "../lib/search-issue";
   import ActivitySpinner from "./ActivitySpinner.svelte";
   import ModelPicker from "./ModelPicker.svelte";
@@ -40,6 +38,7 @@
     backendReady,
     backendError,
     runtime,
+    modelSwitchDisabled,
     job = null,
     onsearchproblem,
     dismissedSetupErrorKey,
@@ -62,19 +61,14 @@
     backendReady: boolean;
     backendError: string | null;
     runtime: RuntimeController;
+    /** The image model picker is unavailable while the backend is busy or switching. */
+    modelSwitchDisabled: boolean;
     job?: JobSnapshot | null;
     /** Opens the search problem dialog for the warning shown. */
     onsearchproblem: (issue: SearchIssue) => void;
     dismissedSetupErrorKey: string | null;
     ondismisssetup: (key: string) => void;
   } = $props();
-
-  const {
-    services: { jobs },
-  } = useApplication();
-  const modelSwitchDisabled = $derived(
-    !backendReady || runtime.saving || runtime.imageModelSaving || jobBlocksRuntimeSwitch(jobs),
-  );
 
   const providerLabels: Record<string, string> = {
     cpu: "CPU",
@@ -272,14 +266,14 @@
   }
 
   @container (max-width: 410px) {
-    .item-count,
+    .provider,
     .image-model {
       display: none;
     }
   }
 
   @container (max-width: 330px) {
-    .provider,
+    .item-count,
     .message {
       display: none;
     }

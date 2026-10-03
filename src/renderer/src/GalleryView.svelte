@@ -22,10 +22,12 @@
   import { GalleryPinchZoom } from "./lib/gallery/pinch-zoom.svelte";
   import { originalUrlOf } from "./lib/gallery/types";
   import { createGalleryWheelZoom } from "./lib/gallery/wheel-zoom";
+  import { jobBlocksRuntimeSwitch } from "./lib/job-state";
   import { offlineFolders } from "./lib/library-status";
   import { createLibraryViewController } from "./lib/library-view.svelte";
   import { isRemote } from "./lib/platform";
   import { galleryLayoutState, settings } from "./lib/settings.svelte";
+  import { phoneWidth } from "./lib/viewport";
 
   const application = useApplication();
   const commands = application.commands;
@@ -39,7 +41,18 @@
   let infoButton: HTMLButtonElement;
   function toggleInfo(): void {
     if (infoOpen) closeInfo();
-    else infoOpen = true;
+    else {
+      if (view.librariesPaneOpen && phoneWidth.current) {
+        view.toggleLibrariesPane();
+      }
+      infoOpen = true;
+    }
+  }
+  function toggleLibraries(): void {
+    if (!view.librariesPaneOpen && phoneWidth.current) {
+      infoOpen = false;
+    }
+    view.toggleLibrariesPane();
   }
   function closeInfo(): void {
     infoOpen = false;
@@ -62,6 +75,12 @@
   // failure gets a different key and is shown again.
   let dismissedSetupErrorKey = $state<string | null>(null);
   const view = createLibraryViewController(application, (y) => gallery?.scrollTo(y));
+  const modelSwitchDisabled = $derived(
+    !catalog.backendStatus.ready ||
+      runtime.saving ||
+      runtime.imageModelSaving ||
+      jobBlocksRuntimeSwitch(jobs),
+  );
   const inspectedAsset = $derived(
     view.detailItem ??
       (view.gallerySelection.count === 1
@@ -113,7 +132,46 @@
     bind:this={toolbarControls}
     {view}
     onsection={(key) => gallery?.scrollToSection(key)}
+    start={phoneWidth.current ? paneToggles : undefined}
   />
+{/snippet}
+
+{#snippet paneToggles()}
+  <div class="app-toolbar-group" role="group" aria-label="Panes">
+    {@render librariesToggle()}
+    {@render infoToggle()}
+  </div>
+{/snippet}
+
+<!-- Pane toggles sit in the status bar, or in the toolbar at phone width. -->
+{#snippet librariesToggle()}
+  <button
+    class={phoneWidth.current
+      ? ["app-toolbar-button", "app-toolbar-text-button", { active: view.librariesPaneOpen }]
+      : "status-pane-toggle status-pane-toggle-start"}
+    aria-controls="libraries-pane"
+    aria-pressed={view.librariesPaneOpen}
+    disabled={Boolean(view.detailItem)}
+    title="Show or hide libraries"
+    onclick={toggleLibraries}
+  >
+    <PanelLeft size={13} aria-hidden="true" /><span>Libraries</span>
+  </button>
+{/snippet}
+
+{#snippet infoToggle()}
+  <button
+    bind:this={infoButton}
+    class={phoneWidth.current
+      ? ["app-toolbar-button", "app-toolbar-text-button", { active: infoOpen }]
+      : "status-pane-toggle"}
+    aria-controls="metadata-panel"
+    aria-pressed={infoOpen}
+    title="Show or hide file info (I / Ctrl+I / Cmd+I)"
+    onclick={toggleInfo}
+  >
+    <PanelRight size={13} aria-hidden="true" /><span>Info</span>
+  </button>
 {/snippet}
 
 {#snippet workspace()}
@@ -274,6 +332,7 @@
             imageModelName={runtime.imageModelName}
             imageModelVisualizes={runtime.imageModelVisualizes}
             backendReady={catalog.backendStatus.ready}
+            toolbarEnd={phoneWidth.current ? infoToggle : undefined}
             bind:showMatchAreas
           />
         {/key}
@@ -294,16 +353,7 @@
 {/snippet}
 
 {#snippet status()}
-  <button
-    class="status-pane-toggle status-pane-toggle-start"
-    aria-controls="libraries-pane"
-    aria-pressed={view.librariesPaneOpen}
-    disabled={Boolean(view.detailItem)}
-    title="Show or hide libraries"
-    onclick={view.toggleLibrariesPane}
-  >
-    <PanelLeft size={13} aria-hidden="true" /><span>Libraries</span>
-  </button>
+  {#if !phoneWidth.current}{@render librariesToggle()}{/if}
   <div class="status-details">
     {#if isRemote()}<ReconnectingStatus />{/if}
     {#if !view.detailItem}
@@ -325,6 +375,7 @@
         backendReady={catalog.backendStatus.ready}
         backendError={catalog.backendStatus.error}
         {runtime}
+        {modelSwitchDisabled}
         {dismissedSetupErrorKey}
         ondismisssetup={(key) => (dismissedSetupErrorKey = key)}
         onsearchproblem={view.openSearchProblem}
@@ -348,17 +399,8 @@
     {/if}
   </div>
   {#if !isRemote()}<RemoteIndicator onopen={() => view.openSettingsDialog("remote")} />{/if}
-  {#if !view.detailItem}<GallerySizeSlider />{/if}
-  <button
-    bind:this={infoButton}
-    class="status-pane-toggle"
-    aria-controls="metadata-panel"
-    aria-pressed={infoOpen}
-    title="Show or hide file info (I / Ctrl+I / Cmd+I)"
-    onclick={toggleInfo}
-  >
-    <PanelRight size={13} aria-hidden="true" /><span>Info</span>
-  </button>
+  {#if !view.detailItem && !phoneWidth.current}<GallerySizeSlider />{/if}
+  {#if !phoneWidth.current}{@render infoToggle()}{/if}
 {/snippet}
 
 {#snippet modals()}

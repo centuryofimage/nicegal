@@ -41,8 +41,9 @@ export interface TlsIdentity {
 
 export interface RemoteServerHost {
   authenticate(token: string): RemoteDevice | null;
-  /** Returns the new device's token, or an error to show on the pairing page. */
-  pair(code: string, name: string): { token: string } | { error: string };
+  /** Returns the new device's token, or an error to show on the pairing page. `address` is the
+   * requesting IP, which wrong-code limits are counted against. */
+  pair(code: string, name: string, address: string): { token: string } | { error: string };
   rendererDirectory: string;
   /** The app icon, for home-screen shortcuts. */
   iconPath: string;
@@ -55,6 +56,9 @@ export interface RemoteServerHost {
 }
 
 /** HTTP front for paired browsers: the renderer bundle, bridge calls, events, and media. */
+/** Library and job changes go through validated, desktop-only IPC, never the raw backend API. */
+const REMOTE_BLOCKED_API = /^\/api\/v1\/(libraries(\/|$)|jobs$)/;
+
 export class RemoteServer {
   private readonly front: NetServer;
   private readonly sockets = new Set<Socket>();
@@ -183,6 +187,9 @@ ${client.browser}`,
       );
     }
     if (url.pathname.startsWith("/api/v1/") && (method === "GET" || method === "POST")) {
+      if (method === "POST" && REMOTE_BLOCKED_API.test(url.pathname)) {
+        return sendText(response, 404, "Not found");
+      }
       const body = method === "POST" ? await readBody(request, MAX_RPC_BODY) : undefined;
       const contentType = request.headers["content-type"];
       const forwarded = new Request(
@@ -219,6 +226,11 @@ ${client.browser}`,
     return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 400}${secure}`;
   }
 
+  private ownOrigin(request: IncomingMessage): string | null {
+    const host = headerValue(request, "host") ?? headerValue(request, ":authority");
+    return host ? `${this.tls ? "https" : "http"}://${host}` : null;
+  }
+
   private deviceOf(request: IncomingMessage): RemoteDevice | null {
     const token = readCookie(request, COOKIE);
     return token ? this.host.authenticate(token) : null;
@@ -235,10 +247,15 @@ ${client.browser}`,
       return sendHtml(response, 200, pairPage({ deviceName: defaultName }));
     }
     if (method !== "POST") return sendText(response, 405, "Method not allowed");
+    // Browsers send Origin with every form POST. A foreign one is another page trying to burn
+    // the pairing code's attempts.
+    const origin = headerValue(request, "origin");
+    if (origin !== null && origin !== this.ownOrigin(request))
+      return sendText(response, 403, "Pairing must come from this page");
     const form = new URLSearchParams((await readBody(request, 4096)).toString("utf8"));
     const code = (form.get("code") ?? "").replace(/\D/g, "");
     const name = (form.get("name") ?? "").trim().slice(0, 60) || defaultName;
-    const result = this.host.pair(code, name);
+    const result = this.host.pair(code, name, clientAddress(request));
     if ("error" in result)
       return sendHtml(response, 403, pairPage({ deviceName: name, error: result.error }));
     response.writeHead(303, {
@@ -368,6 +385,7 @@ const REMOTE_CSP = [
 ].join("; ");
 
 class RemoteClient implements BridgeClient {
+  readonly remote = true;
   private readonly streams = new Set<ServerResponse>();
   private queued: string[] = [];
   private closeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -588,6 +606,12 @@ function acceptsHtml(request: IncomingMessage): boolean {
 function headerValue(request: IncomingMessage, name: string): string | null {
   const value = request.headers[name];
   return typeof value === "string" ? value : null;
+}
+
+/** The peer's IP, with IPv4-mapped IPv6 addresses written as plain IPv4. */
+function clientAddress(request: IncomingMessage): string {
+  const address = request.socket.remoteAddress ?? "";
+  return address.startsWith("::ffff:") ? address.slice("::ffff:".length) : address;
 }
 
 function readCookie(request: IncomingMessage, name: string): string | null {

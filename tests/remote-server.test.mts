@@ -3,6 +3,7 @@ import type { TLSSocket } from "node:tls";
 import assert from "node:assert/strict";
 import { X509Certificate } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { request as httpRequest } from "node:http";
 import { connect } from "node:http2";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -35,6 +36,10 @@ const { RemoteAccess } = await vite.ssrLoadModule("/src/main/remote/remote-acces
 const { RemoteServer } = await vite.ssrLoadModule("/src/main/remote/remote-server.ts");
 
 const CLIENT = "11111111-2222-4333-8444-555555555555";
+/** Real channels from IPC_ACCESS, given test handlers. */
+const ECHO = "backend:catalog-revision";
+const FAIL = "backend:list-jobs";
+const WINDOW_ONLY = "native:collect-diagnostics";
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -96,7 +101,7 @@ test(
     await server.listen(port);
     t.after(() => server.close());
     const request = (): Promise<Response> =>
-      fetch(`http://127.0.0.1:${port}/api/v1/test`, {
+      fetch(`http://127.0.0.1:${port}/api/v1/assets/tags?assetId=1`, {
         headers: { cookie: "nicegal_device=test" },
       });
     const first = await request();
@@ -130,19 +135,19 @@ test("remote access pairs, authenticates, serves calls, events and media, and re
   await writeFile(media, Buffer.from("0123456789"));
 
   handleRemotableIpc(
-    "test:echo",
+    ECHO,
     () => true,
     (_client: unknown, value: unknown) => ({ value }),
   );
   handleRemotableIpc(
-    "test:fail",
+    FAIL,
     () => true,
     () => {
       throw Object.assign(new Error("Image model not ready"), { code: "models_not_ready" });
     },
   );
   handleTrustedIpc(
-    "test:window-only",
+    WINDOW_ONLY,
     () => true,
     () => "secret",
   );
@@ -174,51 +179,80 @@ test("remote access pairs, authenticates, serves calls, events and media, and re
       ...init,
       headers: { "content-type": "application/json", ...init.headers },
     });
-  const pair = (code: string): Promise<Response> =>
-    fetch(`${base}/pair`, {
-      method: "POST",
-      redirect: "manual",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ code, name: "Test phone" }),
+  const pair = (
+    code: string,
+    options: { localAddress?: string; origin?: string } = {},
+  ): Promise<{ status: number; headers: Record<string, string | string[] | undefined> }> =>
+    new Promise((resolve, reject) => {
+      const body = new URLSearchParams({ code, name: "Test phone" }).toString();
+      const request = httpRequest(
+        `${base}/pair`,
+        {
+          method: "POST",
+          localAddress: options.localAddress,
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            ...(options.origin ? { origin: options.origin } : {}),
+          },
+        },
+        (response) => {
+          response.resume();
+          response.once("end", () =>
+            resolve({ status: response.statusCode ?? 0, headers: response.headers }),
+          );
+        },
+      );
+      request.once("error", reject);
+      request.end(body);
     });
 
   // Unpaired: pages redirect to pairing, calls are refused, no code is active yet.
   const home = await fetch(base, { redirect: "manual", headers: { accept: "text/html" } });
   assert.equal(home.status, 303);
   assert.equal(home.headers.get("location"), "/pair");
-  assert.equal(
-    (await rpc("test:echo", [1], { headers: { "x-nicegal-client": CLIENT } })).status,
-    401,
-  );
+  assert.equal((await rpc(ECHO, [1], { headers: { "x-nicegal-client": CLIENT } })).status, 401);
   assert.equal((await pair("123456")).status, 403);
 
-  // Five wrong guesses void the code, so the right one no longer works either.
-  let code = access.renewPairingCode().pairingCode;
+  // Five wrong guesses lock out the address that made them, not the code.
+  const code = access.renewPairingCode().pairingCode;
   const wrong = code === "000000" ? "111111" : "000000";
   for (let attempt = 0; attempt < 5; attempt++) assert.equal((await pair(wrong)).status, 403);
-  assert.equal(access.status().pairingCode, null);
   assert.equal((await pair(code)).status, 403);
+  assert.equal(access.status().pairingCode, code);
 
-  // A fresh code pairs one device and is then spent.
-  code = access.renewPairingCode().pairingCode;
-  const paired = await pair(code);
+  // Another site's page cannot submit the form, so it cannot spend attempts either.
+  const phone = { localAddress: "127.0.0.2" };
+  assert.equal((await pair(code, { ...phone, origin: "http://evil.example" })).status, 403);
+  assert.equal((await pair(code, { ...phone, origin: "null" })).status, 403);
+
+  // Another address pairs with the same code, which is then spent.
+  const paired = await pair(code, { ...phone, origin: base });
   assert.equal(paired.status, 303);
-  const cookie = paired.headers.get("set-cookie")!.split(";")[0];
+  const cookie = String(paired.headers["set-cookie"]).split(";")[0];
   assert.match(cookie, /^nicegal_device=[\w-]{43}$/);
-  assert.equal((await pair(code)).status, 403);
+  assert.equal((await pair(code, phone)).status, 403);
   assert.deepEqual(
     access.status().devices.map((device: { name: string }) => device.name),
     ["Test phone"],
   );
 
+  // Wrong codes from all addresses together still void the code at 50.
+  const guarded = access.renewPairingCode().pairingCode;
+  const miss = guarded === "000000" ? "111111" : "000000";
+  for (let host = 10; host < 20; host++)
+    for (let attempt = 0; attempt < 5; attempt++)
+      assert.equal((await pair(miss, { localAddress: `127.0.0.${host}` })).status, 403);
+  assert.equal(access.status().pairingCode, null);
+  assert.equal((await pair(guarded, { localAddress: "127.0.0.30" })).status, 403);
+
   // Calls need the client header, reach only remotable handlers, and keep error codes.
   const headers = { cookie, "x-nicegal-client": CLIENT };
-  assert.equal((await rpc("test:echo", [1], { headers: { cookie } })).status, 400);
-  assert.deepEqual(await (await rpc("test:echo", [42], { headers })).json(), {
+  assert.equal((await rpc(ECHO, [1], { headers: { cookie } })).status, 400);
+  assert.deepEqual(await (await rpc(ECHO, [42], { headers })).json(), {
     value: { value: 42 },
   });
-  assert.equal((await rpc("test:window-only", [], { headers })).status, 404);
-  const failed = (await (await rpc("test:fail", [], { headers })).json()) as {
+  assert.equal((await rpc(WINDOW_ONLY, [], { headers })).status, 404);
+  const failed = (await (await rpc(FAIL, [], { headers })).json()) as {
     error: { message: string };
   };
   assert.match(failed.error.message, /nicegal-error:.*models_not_ready/);
@@ -270,7 +304,7 @@ test("remote access pairs, authenticates, serves calls, events and media, and re
 
   // Removing the device signs it out at once.
   access.removeDevice(access.status().devices[0].id);
-  assert.equal((await rpc("test:echo", [1], { headers })).status, 401);
+  assert.equal((await rpc(ECHO, [1], { headers })).status, 401);
 
   // Turning remote access off closes the port.
   assert.equal((await access.setEnabled(false)).running, false);

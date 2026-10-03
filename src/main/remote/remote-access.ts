@@ -9,7 +9,11 @@ import { RemoteServer, type RemoteServerHost, type TlsIdentity } from "./remote-
 import { RemoteStore } from "./remote-store";
 
 const PAIRING_CODE_MS = 5 * 60_000;
-const MAX_PAIRING_FAILURES = 5;
+/** Wrong codes one address may try per code. Another address on the LAN cannot use them up. */
+const MAX_FAILURES_PER_ADDRESS = 5;
+/** Wrong codes across all addresses before the code is voided. Keeps a guess at 1 in 20,000
+ * however many addresses an attacker has. */
+const MAX_PAIRING_FAILURES = 50;
 
 export type RemoteServices = Omit<
   RemoteServerHost,
@@ -33,7 +37,12 @@ export class RemoteAccess {
   private server: RemoteServer | null = null;
   private fingerprint: string | null = null;
   private error: string | null = null;
-  private pairing: { code: string; expiresAt: number; failures: number } | null = null;
+  private pairing: {
+    code: string;
+    expiresAt: number;
+    failures: number;
+    failuresByAddress: Map<string, number>;
+  } | null = null;
   private pairingTimer: ReturnType<typeof setTimeout> | null = null;
   private transition: Promise<void> = Promise.resolve();
 
@@ -130,6 +139,7 @@ export class RemoteAccess {
       code: String(randomInt(0, 1_000_000)).padStart(6, "0"),
       expiresAt: Date.now() + PAIRING_CODE_MS,
       failures: 0,
+      failuresByAddress: new Map(),
     };
     if (this.pairingTimer) clearTimeout(this.pairingTimer);
     this.pairingTimer = setTimeout(() => this.endPairing(), PAIRING_CODE_MS);
@@ -150,17 +160,23 @@ export class RemoteAccess {
     return this.serialize(() => this.shut());
   }
 
-  private pair(code: string, name: string): { token: string } | { error: string } {
+  private pair(code: string, name: string, address: string): { token: string } | { error: string } {
     const pairing = this.pairing;
     if (!pairing || pairing.expiresAt <= Date.now())
       return { error: "No pairing code is active. Select Pair a device on your PC." };
+    const tooMany = { error: "Too many wrong codes. Select Pair a device on your PC again." };
+    const addressFailures = pairing.failuresByAddress.get(address) ?? 0;
+    if (addressFailures >= MAX_FAILURES_PER_ADDRESS) return tooMany;
     if (code !== pairing.code) {
+      pairing.failuresByAddress.set(address, addressFailures + 1);
       pairing.failures += 1;
       if (pairing.failures >= MAX_PAIRING_FAILURES) {
         this.endPairing();
-        return { error: "Too many wrong codes. Select Pair a device on your PC again." };
+        return tooMany;
       }
-      return { error: "That code doesn't match. Check the code on your PC." };
+      return addressFailures + 1 >= MAX_FAILURES_PER_ADDRESS
+        ? tooMany
+        : { error: "That code doesn't match. Check the code on your PC." };
     }
     const { token } = this.store.addDevice(name);
     // One code, one device.
@@ -181,7 +197,7 @@ export class RemoteAccess {
         {
           ...this.services,
           authenticate: (token) => this.store.authenticate(token),
-          pair: (code, name) => this.pair(code, name),
+          pair: (code, name, address) => this.pair(code, name, address),
           onConnectionsChanged: () => this.changed(),
         },
         tls,

@@ -6,6 +6,7 @@ import type { DividerGranularity, LayoutMode } from "./gallery/types";
 
 import { SETTINGS_STORAGE_KEY } from "./constants";
 import { rootKey } from "./library-root";
+import { phoneWidth } from "./viewport";
 
 export type GalleryTheme = "seven-a" | "seven-b";
 /** Sibling order in the libraries pane folder tree. */
@@ -87,7 +88,7 @@ const defaults: GallerySettings = {
   indexOcr: false,
   indexImage: true,
   // At phone width the pane covers the gallery, so a first visit starts with it closed.
-  librariesPaneOpen: !globalThis.matchMedia?.("(max-width: 600px)").matches,
+  librariesPaneOpen: !phoneWidth.current,
   librariesPaneWidth: 200,
   folderSort: "name",
 };

@@ -49,6 +49,7 @@ def main() -> None:
     model, name, folder = MODELS[sys.argv[1]], sys.argv[2], DATA / sys.argv[3]
     limit = int(sys.argv[4]) if len(sys.argv) > 4 else None
     encoder = ImageEncoder(model)
+    batch_size = encoder.fixed_batch or BATCH
     vectors, batch, skipped = [], [], 0
     start = time.perf_counter()
     for data in images(folder, limit):
@@ -57,7 +58,7 @@ def main() -> None:
         except (OSError, ValueError):
             skipped += 1
             continue
-        if len(batch) == BATCH:
+        if len(batch) == batch_size:
             vectors.append(encoder(batch))
             batch = []
             done = sum(len(v) for v in vectors)

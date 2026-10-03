@@ -44,7 +44,6 @@
     "@lukeed/uuid": "^2.0.1",
     "@sveltejs/vite-plugin-svelte": "^6.2.4",
     "@types/node": "^22.20.4",
-    "@viselect/vanilla": "^3.10.1",
     "electron": "^44.5.1",
     "electron-builder": "^27.0.0-alpha.9",
     "electron-vite": "^5.0.0",

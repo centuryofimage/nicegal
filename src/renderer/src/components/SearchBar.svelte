@@ -408,7 +408,7 @@
 <!-- Keyboard events are delegated from the search controls and the nested composer. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
-  class="search-bar"
+  class={["search-bar", { "suggestion-visible": semanticSuggestion }]}
   bind:this={searchBarEl}
   role="search"
   {onkeydown}
@@ -428,14 +428,15 @@
         onclick={toggleMenu}
       >
         <ScopeIcon size={12} aria-hidden="true" />
-        <span>{selectedScope.label}</span>
+        <span class="scope-label">{selectedScope.label}</span>
+        {#if parsed.scope === "like"}<span class="mobile-scope-label">Visual</span>{/if}
         <ChevronDown size={11} aria-hidden="true" />
       </button>
 
       {#if menuOpen || semanticSuggestion}
         <div class="scope-popovers">
           {#if menuOpen}
-            <div class="scope-menu" role="menu" aria-label="Search scope">
+            <div class="scope-menu viewport-popup" role="menu" aria-label="Search scope">
               {#each scopeOptions as option (option.scope)}
                 <button
                   type="button"
@@ -561,10 +562,16 @@
       <button
         class="compose-chip"
         type="button"
+        title={visualReferences.length
+          ? `Visual search includes ${visualReferences.length} photo examples`
+          : undefined}
         aria-expanded={composerOpen}
         aria-haspopup="dialog"
         onclick={toggleComposer}
       >
+        {#if visualReferences.length}
+          <span class="mobile-photo-indicator"><Images size={12} aria-hidden="true" /></span>
+        {/if}
         <span
           >Compose visual search{exampleCount
             ? ` · ${exampleCount} example${exampleCount === 1 ? "" : "s"}`
@@ -621,10 +628,18 @@
 
 <style>
   .search-bar {
+    --suggestion-height: 23px;
+    anchor-name: --search-field;
+    anchor-scope: --search-field;
     position: relative;
     width: 100%;
     min-width: 0;
     color: var(--text-secondary);
+  }
+
+  /* The suggestion tab hangs below the field; reserve its row so it never covers what follows. */
+  .search-bar.suggestion-visible {
+    margin-bottom: var(--suggestion-height);
   }
 
   .search-field {
@@ -692,7 +707,7 @@
   .semantic-suggestion {
     display: flex;
     width: max-content;
-    min-height: 23px;
+    min-height: var(--suggestion-height);
     box-sizing: border-box;
     align-items: center;
     gap: var(--space-4);
@@ -773,6 +788,8 @@
   }
 
   .scope-control {
+    anchor-name: --search-scope;
+    anchor-scope: --search-scope;
     position: relative;
     flex: none;
   }
@@ -857,8 +874,10 @@
   /* A Win32 popup menu: flat white field, hairline border, single-line rows, a check gutter on
      the left and the typed prefix in the accelerator column on the right. */
   .scope-menu {
+    --popup-anchor: --search-scope;
+    --popup-width: 240px;
     display: grid;
-    min-width: 216px;
+    overflow: auto;
     padding: var(--space-2);
     border: 1px solid var(--border);
     background: var(--surface-0);
@@ -1003,6 +1022,64 @@
     width: 18px;
     height: 18px;
     padding: 0;
+  }
+
+  .mobile-scope-label,
+  .mobile-photo-indicator {
+    display: none;
+  }
+
+  @media (max-width: 600px) {
+    .search-field {
+      flex-wrap: wrap;
+      height: auto;
+      min-height: var(--toolbar-control-height);
+    }
+    .input-wrap {
+      order: 1;
+      min-width: 160px;
+      height: 34px;
+    }
+    .input-wrap > .input-backdrop,
+    .input-wrap > input {
+      height: 34px;
+      line-height: 34px;
+    }
+    .clear-button {
+      order: 2;
+      width: 28px;
+      height: 30px;
+    }
+    .folder-focus-chip {
+      order: 3;
+      height: 30px;
+      margin-bottom: var(--space-3);
+    }
+    .scope-button {
+      height: 30px;
+    }
+    .scope-control:has(.mobile-scope-label) .scope-label,
+    .photo-reference-chip {
+      display: none;
+    }
+    .mobile-scope-label {
+      display: inline;
+    }
+    .mobile-photo-indicator {
+      display: inline-flex;
+      align-items: center;
+    }
+    .compose-chip-row {
+      height: 34px;
+    }
+    .compose-chip {
+      height: 30px;
+      max-width: 100%;
+    }
+    .compose-chip > span:not(.mobile-photo-indicator) {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   }
 
   .scope-button:focus-visible,

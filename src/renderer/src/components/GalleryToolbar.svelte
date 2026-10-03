@@ -1,8 +1,12 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
+
   import FolderOpen from "@lucide/svelte/icons/folder-open";
+  import GitCompareArrows from "@lucide/svelte/icons/git-compare-arrows";
   import Settings from "@lucide/svelte/icons/settings";
 
   import type { LibraryViewController } from "../lib/library-view.svelte";
+  import type ModelComparison from "./ModelComparison.svelte";
 
   import { useApplication } from "../lib/application.svelte";
   import { errorMessage } from "../lib/errors";
@@ -11,7 +15,6 @@
   import { addDroppedVisualFiles, chooseVisualFile } from "../lib/visual-search-input";
   import JobIndicator from "./JobIndicator.svelte";
   import Modal from "./Modal.svelte";
-  import ModelComparison from "./ModelComparison.svelte";
   import SearchBar from "./SearchBar.svelte";
   import SearchOptions from "./SearchOptions.svelte";
   import ViewControls from "./ViewControls.svelte";
@@ -19,9 +22,12 @@
   let {
     view,
     onsection,
+    start,
   }: {
     view: LibraryViewController;
     onsection: (key: string) => void;
+    /** Controls at the start of the actions row. */
+    start?: Snippet;
   } = $props();
   const {
     services: { catalog, ocrSearch, jobs, orchestrator },
@@ -54,10 +60,7 @@
 </script>
 
 {#if !view.detailItem}
-  <div
-    class="search-row app-toolbar"
-    class:semantic-suggestion-visible={ocrSearch.shouldSuggestSemantic}
-  >
+  <div class="search-row app-toolbar">
     <SearchBar
       bind:this={searchBar}
       bind:value={ocrSearch.query}
@@ -78,57 +81,65 @@
       onaddlibraryvisual={addSelectedImages}
       ondropvisualfiles={dropImages}
     />
-    {#if orchestrator.restartingIndex}
-      <span role="status">Switching to OpenVINO…</span>
-      <button class="ui-button" onclick={() => orchestrator.cancel()}>Stop indexing</button>
-    {:else if jobs.active}
-      <JobIndicator
-        job={jobs.active}
-        running={view.jobRunning}
-        oncancel={() => orchestrator.cancel()}
-        ondismiss={commands.dismissJobResult}
+    <div class="toolbar-actions">
+      {#if start}<div class="toolbar-start">{@render start()}</div>{/if}
+      {#if orchestrator.restartingIndex}
+        <span role="status">Switching to OpenVINO…</span>
+        <button class="ui-button" onclick={() => orchestrator.cancel()}>Stop indexing</button>
+      {:else if jobs.active}
+        <JobIndicator
+          job={jobs.active}
+          running={view.jobRunning}
+          oncancel={() => orchestrator.cancel()}
+          ondismiss={commands.dismissJobResult}
+        />
+      {/if}
+      <ViewControls
+        ranked={view.rankedView}
+        {mediaFilter}
+        onmediachange={chooseMedia}
+        bind:layoutMode={$settings.layoutMode}
+        bind:sortField={$settings.sortField}
+        bind:dateHeaders={$settings.dateHeaders}
       />
-    {/if}
-    <ViewControls
-      ranked={view.rankedView}
-      {mediaFilter}
-      onmediachange={chooseMedia}
-      bind:layoutMode={$settings.layoutMode}
-      bind:sortField={$settings.sortField}
-      bind:dateHeaders={$settings.dateHeaders}
-    />
-    <button
-      class="app-toolbar-button app-toolbar-text-button"
-      class:active={view.activeDialog === "manageLibraries"}
-      onclick={view.openManageLibraries}
-      title="Library manager"
-      aria-label="Library manager"
-      aria-haspopup="dialog"
-      aria-expanded={view.activeDialog === "manageLibraries"}
-    >
-      <FolderOpen size={13} aria-hidden="true" />
-      <span>Library manager</span>
-    </button>
-    <button
-      class="app-toolbar-button app-toolbar-text-button"
-      class:active={view.activeDialog === "settings"}
-      onclick={() => view.openSettingsDialog()}
-      title="Settings"
-      aria-label="Settings"
-      aria-haspopup="dialog"
-      aria-expanded={view.activeDialog === "settings"}
-    >
-      <Settings size={13} aria-hidden="true" />
-      <span>Settings</span>
-    </button>
-    {#if import.meta.env.DEV}
       <button
         class="app-toolbar-button app-toolbar-text-button"
-        onclick={() => (comparisonOpen = true)}
-        disabled={catalog.selectedId === null}
-        aria-haspopup="dialog">Compare models</button
+        class:active={view.activeDialog === "manageLibraries"}
+        onclick={view.openManageLibraries}
+        title="Library manager"
+        aria-label="Library manager"
+        aria-haspopup="dialog"
+        aria-expanded={view.activeDialog === "manageLibraries"}
       >
-    {/if}
+        <FolderOpen size={13} aria-hidden="true" />
+        <span>Library manager</span>
+      </button>
+      <button
+        class="app-toolbar-button app-toolbar-text-button"
+        class:active={view.activeDialog === "settings"}
+        onclick={() => view.openSettingsDialog()}
+        title="Settings"
+        aria-label="Settings"
+        aria-haspopup="dialog"
+        aria-expanded={view.activeDialog === "settings"}
+      >
+        <Settings size={13} aria-hidden="true" />
+        <span>Settings</span>
+      </button>
+      {#if import.meta.env.DEV}
+        <button
+          class="app-toolbar-button app-toolbar-text-button"
+          onclick={() => (comparisonOpen = true)}
+          disabled={catalog.selectedId === null}
+          title="Compare models"
+          aria-label="Compare models"
+          aria-haspopup="dialog"
+        >
+          <GitCompareArrows size={13} aria-hidden="true" />
+          <span>Compare models</span>
+        </button>
+      {/if}
+    </div>
   </div>
   {#if ocrSearch.rankable}
     <SearchOptions
@@ -152,21 +163,40 @@
     onclose={() => comparison?.requestClose()}
     --modal-width="1100px"
   >
-    <ModelComparison bind:this={comparison} onclose={() => (comparisonOpen = false)} />
+    {#await import("./ModelComparison.svelte") then { default: ModelComparison }}
+      <ModelComparison bind:this={comparison} onclose={() => (comparisonOpen = false)} />
+    {/await}
   </Modal>
 {/if}
 
 <style>
+  /* Actions share the search row until the field would drop below its minimum width, then wrap
+     together onto a second row, still right-aligned. */
   .search-row {
+    flex-wrap: wrap;
     align-items: flex-start;
   }
-  /* The tab is anchored below SearchBar's field. Reserve its physical row here, so it does not
-     cover the search options immediately below the toolbar. Padding keeps the toolbar controls
-     aligned to the field instead of vertically centering them in the added space. */
-  .search-row.semantic-suggestion-visible {
-    padding-bottom: calc(var(--space-6) + 23px);
-  }
   .search-row :global(.search-bar) {
-    flex: 1;
+    flex: 1 1 320px;
+  }
+  .toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: flex-start;
+    gap: var(--space-6);
+    margin-left: auto;
+  }
+  .toolbar-start {
+    margin-right: auto;
+  }
+  /* Phones: search on the first row, actions spanning the second. */
+  @media (max-width: 600px) {
+    .search-row :global(.search-bar) {
+      flex-basis: 100%;
+    }
+    .toolbar-actions {
+      flex: 1;
+    }
   }
 </style>

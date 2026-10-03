@@ -11,9 +11,9 @@ type MarqueeSelection = {
 };
 
 /**
- * Owns gallery selection independently of rendered tiles. ViSelect finds the pooled DOM tiles
- * within a marquee; this model retains their ID-based result so selection survives virtualization,
- * relayouts, and filtering. The anchor is an id rather than an index because result order changes.
+ * Owns gallery selection independently of rendered tiles, by asset ID, so selection survives
+ * virtualization, relayouts, and filtering. The anchor is an id rather than an index because
+ * result order changes.
  */
 export class GallerySelection {
   readonly ids = new SvelteSet<string>();
@@ -59,17 +59,15 @@ export class GallerySelection {
   }
 
   /**
-   * Snapshots logical selection before ViSelect begins a marquee. Its DOM store is deliberately
-   * transient because a pooled element can represent a different asset after a virtualized scroll.
+   * Snapshots logical selection before a marquee begins.
    */
   beginMarquee(modifiers: SelectionModifiers): void {
     this.marquee = { baseline: new SvelteSet(this.ids), modifiers };
   }
 
   /**
-   * Applies the current ViSelect hit set against the selection that existed when the drag began.
-   * Recalculating from the snapshot, rather than applying ViSelect's incremental DOM changes,
-   * makes reversals during a drag and virtualized tile recycling deterministic.
+   * Applies the current marquee hit set against the selection that existed when the drag began,
+   * so shrinking the box during a drag restores what it had covered.
    */
   updateMarquee(ids: readonly string[], visibleIds: readonly string[]): void {
     const marquee = this.marquee;

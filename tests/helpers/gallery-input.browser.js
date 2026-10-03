@@ -8,6 +8,7 @@
   };
   const counts = { starts: 0, ends: 0, clears: 0, opens: 0, drags: 0 };
   let isCurrent = () => false;
+  let marqueeRect = null;
   const input = createGalleryInput({
     onopen: () => counts.opens++,
     onselect: () => {},
@@ -16,6 +17,8 @@
     onmarqueestart: () => counts.starts++,
     onmarqueechange: () => {},
     onmarqueeend: () => counts.ends++,
+    onmarqueerect: (rect) => (marqueeRect = rect),
+    marqueeHits: () => [],
     onfiledrag: (_index, current) => {
       counts.drags++;
       isCurrent = current;
@@ -32,8 +35,6 @@
   frame.append(image);
   viewport.append(frame);
   document.body.append(viewport);
-  viewport.addEventListener("pointerdown", input.onViewportPointerDown);
-  viewport.addEventListener("pointerup", input.onViewportPointerUp);
   frame.addEventListener("dragstart", (event) => input.startFileDrag(event, { index: 0 }));
   const detach = input.attach(viewport);
   const mouse = (target, type, x, y, buttons = 1) =>
@@ -67,12 +68,10 @@
     pointer(target, "pointerup", x, y, 0);
     mouse(target, "mouseup", x, y, 0);
   };
-  const boxVisible = () =>
-    [...viewport.querySelectorAll(".gallery-selection-area")].some(
-      (el) => getComputedStyle(el).display !== "none",
-    );
+  const boxVisible = () => marqueeRect !== null;
   try {
     press(image, 30, 30);
+    pointer(document, "pointermove", 90, 90);
     mouse(document, "mousemove", 90, 90);
     assert(counts.starts === 0 && !boxVisible(), "item presses must never arm a marquee");
     image.dispatchEvent(
@@ -103,10 +102,12 @@
     for (const cancel of cancellations) {
       const started = counts.starts;
       press(viewport, 5, 5);
+      pointer(document, "pointermove", 100, 100);
       mouse(document, "mousemove", 100, 100);
       assert(counts.starts === started + 1 && boxVisible(), "background drag must show a marquee");
       cancel();
       assert(!boxVisible(), "cancellation must remove the box immediately");
+      pointer(document, "pointermove", 120, 120);
       mouse(document, "mousemove", 120, 120);
       assert(
         counts.starts === started + 1 && !boxVisible(),
@@ -118,6 +119,13 @@
     press(viewport, 5, 5);
     release(viewport, 5, 5);
     assert(counts.clears === 1, "genuine background clicks still clear selection");
+    press(viewport, 5, 5);
+    pointer(document, "pointermove", 9, 7);
+    release(viewport, 9, 7);
+    assert(
+      counts.clears === 1 && counts.starts === 6,
+      "a short drag below the marquee threshold neither clears nor starts a marquee",
+    );
     return { passed: true, devicePixelRatio, counts };
   } finally {
     detach();

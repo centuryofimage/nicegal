@@ -214,7 +214,7 @@
     <ChevronDown size={13} aria-hidden="true" /></button
   >
   {#if openMenu}
-    <div class="view-menu" role="dialog" aria-label="View options">
+    <div class="view-menu viewport-popup" role="dialog" aria-label="View options">
       <section>
         <h2>Layout</h2>
         {@render layoutChoices()}
@@ -249,6 +249,8 @@
     align-items: center;
   }
   .view-controls {
+    anchor-name: --view-controls;
+    anchor-scope: --view-controls;
     position: relative;
     gap: var(--space-6);
     flex: none;
@@ -263,13 +265,13 @@
     outline-offset: var(--focus-ring-offset);
   }
   .view-menu {
+    --popup-anchor: --view-controls;
+    --popup-width: 300px;
     position: absolute;
     z-index: var(--z-popover);
     top: calc(100% + var(--space-2));
     display: grid;
-    width: 300px;
-    max-width: calc(100vw - var(--space-16));
-    max-height: calc(100vh - 100px);
+    max-height: calc(100dvh - 100px);
     overflow: auto;
     right: 0;
     gap: var(--space-6);

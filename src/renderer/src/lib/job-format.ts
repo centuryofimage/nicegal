@@ -29,7 +29,9 @@ export function jobRateText(job: JobSnapshot): string {
     rate < 0
   )
     return "";
-  return `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })} items/s`;
+  // Image indexing counts each still image and sampled video frame, not files.
+  const unit = job.phase === "imageEmbedding" ? "images/s" : "items/s";
+  return `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
 }
 
 const PHASE_LABELS: Record<JobPhase, string> = {

@@ -37,6 +37,7 @@
 
   import { createGalleryInput } from "../lib/gallery/input";
   import { buildLayout } from "../lib/gallery/layout";
+  import { marqueeHitIds, type ContentRect } from "../lib/gallery/marquee";
   import { GalleryMediaLifecycle } from "../lib/gallery/media-lifecycle.svelte";
   import { selectPromotedIds } from "../lib/gallery/media-policy";
   import { layoutDefaults, type LayoutOptions } from "../lib/gallery/options";
@@ -54,11 +55,11 @@
   import { firstVisibleIndex, visibleIndexRange } from "../lib/gallery/visible-range";
   import {
     TileMatchAreas,
-    matchAreaKey,
-    type TileMatchMap,
+    type TileMatchTarget,
   } from "../lib/patch-features/tile-match-areas.svelte";
   import { isRemote } from "../lib/platform";
   import { parseQuery } from "../lib/search-query";
+  import TileMatchOverlay from "./TileMatchOverlay.svelte";
 
   /** Give up on a poster that keeps failing to ensure (corrupt/unreadable source) rather than
    * retrying it forever. */
@@ -116,7 +117,7 @@
     referenceIds = new Set<string>(),
     /** Fires when a tile is modifier-selected without opening it. */
     onselect = () => {},
-    /** ViSelect's live marquee hit set, expressed as stable asset IDs instead of pooled DOM nodes. */
+    /** The live marquee hit set as asset IDs, computed from layout geometry. */
     onmarqueestart = () => {},
     onmarqueechange = () => {},
     onmarqueeend = () => {},
@@ -175,7 +176,10 @@
     onmarqueestart: (modifiers) => onmarqueestart(modifiers),
     onmarqueechange: (ids) => onmarqueechange(ids),
     onmarqueeend: () => onmarqueeend(),
+    onmarqueerect: (rect) => (marqueeRect = rect),
+    marqueeHits: (rect) => marqueeHitIds(layout, items, rect),
   });
+  let marqueeRect = $state.raw<ContentRect | null>(null);
 
   let viewport: HTMLDivElement;
   let viewportWidth = $state(0);
@@ -202,32 +206,42 @@
   const tileMatchAreas = new TileMatchAreas();
   onDestroy(() => tileMatchAreas.dispose());
   $effect(() => onmappingchange(tileMatchAreas.busy));
-  function matchAreaTarget(tile: PoolTile): string | null {
-    if (tile.mediaKind === "image") return tile.itemId;
+  /** A video's map is for its matched frame, so none is shown while that frame is missing or the
+   * video preview plays. */
+  function matchAreaTarget(tile: PoolTile): TileMatchTarget | undefined {
+    if (!matchAreas || matchAreaScores?.get(tile.itemId)?.kind !== "visual") return undefined;
+    if (tile.mediaKind === "image") return { assetId: tile.itemId };
     if (
       tile.mediaKind === "video" &&
       tile.matchTimestampMs !== undefined &&
       missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs &&
       previewVideoId !== tile.itemId
-    ) {
-      return matchAreaKey(tile.itemId, tile.matchTimestampMs);
-    }
-    return null;
+    )
+      return { assetId: tile.itemId, timestampMs: tile.matchTimestampMs };
+    return undefined;
   }
+  /** Match-area targets of pooled tiles, by slot. */
+  const matchAreaTargets: ReadonlyMap<number, TileMatchTarget> = $derived(
+    new Map(
+      tiles.flatMap((tile) => {
+        const target = matchAreaTarget(tile);
+        return target ? [[tile.slot, target] as const] : [];
+      }),
+    ),
+  );
   $effect(() => {
-    const visible = tiles
-      .filter(
-        (tile) =>
-          matchAreaTarget(tile) !== null &&
-          matchAreaScores?.get(tile.itemId)?.kind === "visual" &&
-          tile.y + tile.height >= scrollTop &&
-          tile.y <= scrollTop + viewportHeight,
-      )
-      .map((tile) => matchAreaTarget(tile)!);
+    const visible = tiles.flatMap((tile) => {
+      const target = matchAreaTargets.get(tile.slot);
+      return target && tile.y + tile.height >= scrollTop && tile.y <= scrollTop + viewportHeight
+        ? [target]
+        : [];
+    });
     const query = matchAreas;
     const model = matchAreaModel;
     untrack(() => tileMatchAreas.configure(model, query, visible));
   });
+  /** The weakest visual match in the results still shows its map at this fraction of full opacity. */
+  const MIN_MATCH_FADE = 0.4;
   const matchAreaRange = $derived.by(() => {
     const values = Array.from(matchAreaScores?.values() ?? [])
       .filter((match) => match.kind === "visual")
@@ -237,39 +251,8 @@
   function matchAreaFade(id: string): number {
     const range = matchAreaRange;
     const score = matchAreaScores?.get(id)?.similarity;
-    return range && score !== undefined && range.max > range.min
-      ? 0.4 + (0.6 * (score - range.min)) / (range.max - range.min)
-      : 1;
-  }
-  function paintTileMap(map: TileMatchMap) {
-    return (canvas: HTMLCanvasElement): void => {
-      canvas.getContext("2d")?.putImageData(new ImageData(map.pixels, map.columns, map.rows), 0, 0);
-    };
-  }
-  function tileMapPlacement(
-    tile: PoolTile,
-    map: TileMatchMap,
-  ): {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } {
-    const contentWidth = Math.max(1, tile.width - 6);
-    const contentHeight = Math.max(1, tile.height - 6);
-    const sourceWidth = tile.naturalWidth || contentWidth;
-    const sourceHeight = tile.naturalHeight || contentHeight;
-    const fit = layout.mode === "grid" ? Math.max : Math.min;
-    const scale = fit(contentWidth / sourceWidth, contentHeight / sourceHeight);
-    const imageWidth = sourceWidth * scale;
-    const imageHeight = sourceHeight * scale;
-    const [x, y, width, height] = map.region;
-    return {
-      left: (contentWidth - imageWidth) / 2 + x * imageWidth,
-      top: (contentHeight - imageHeight) / 2 + y * imageHeight,
-      width: width * imageWidth,
-      height: height * imageHeight,
-    };
+    if (!range || score === undefined || range.max <= range.min) return 1;
+    return MIN_MATCH_FADE + ((1 - MIN_MATCH_FADE) * (score - range.min)) / (range.max - range.min);
   }
 
   // Animated-image promotion. Video previews are attached only for the hovered tile.
@@ -819,11 +802,7 @@
   {@attach input.attach}
   {@attach attachViewport}
   {onscroll}
-  onpointerdown={(event) => {
-    oninteractionchange(true);
-    input.onViewportPointerDown(event);
-  }}
-  onpointerup={input.onViewportPointerUp}
+  onpointerdown={() => oninteractionchange(true)}
 >
   <div
     class="section-metric"
@@ -839,7 +818,8 @@
       {@const matchingFrameAvailable =
         tile.matchTimestampMs !== undefined &&
         missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs}
-      {@const areaKey = matchAreaTarget(tile)}
+      {@const areaTarget = matchAreaTargets.get(tile.slot)}
+      {@const areaMap = areaTarget && tileMatchAreas.get(areaTarget)}
       <div
         class={{
           "gallery-frame": true,
@@ -892,29 +872,14 @@
           }}
           use:tileImage={currentSrc}
         />
-        {#if matchAreas && areaKey && matchAreaScores?.get(tile.itemId)?.kind === "visual" && tileMatchAreas.entries.has(areaKey)}
-          {#key areaKey}
-            {@const map = tileMatchAreas.entries.get(areaKey)!}
-            {@const placement = tileMapPlacement(tile, map)}
-            <div
-              class="tile-match-clip"
-              aria-hidden="true"
-              style:--match-fade={matchAreaFade(tile.itemId)}
-            >
-              {#each ["tint", "cover"] as layer (layer)}
-                <canvas
-                  class={["tile-match-map", `tile-match-${layer}`]}
-                  width={map.columns}
-                  height={map.rows}
-                  style:left={`${placement.left}px`}
-                  style:top={`${placement.top}px`}
-                  style:width={`${placement.width}px`}
-                  style:height={`${placement.height}px`}
-                  {@attach paintTileMap(map)}
-                ></canvas>
-              {/each}
-            </div>
-          {/key}
+        {#if areaMap}
+          <TileMatchOverlay
+            map={areaMap}
+            sourceWidth={tile.naturalWidth}
+            sourceHeight={tile.naturalHeight}
+            cover={layout.mode === "grid"}
+            fade={matchAreaFade(tile.itemId)}
+          />
         {/if}
         {#if tile.mediaKind === "video"}
           {#if previewVideoId === tile.itemId}
@@ -1016,6 +981,16 @@
         {/if}
       </div>
     {/each}
+    {#if marqueeRect}
+      <div
+        class="gallery-selection-area"
+        aria-hidden="true"
+        style:left={`${marqueeRect.left}px`}
+        style:top={`${marqueeRect.top}px`}
+        style:width={`${marqueeRect.right - marqueeRect.left}px`}
+        style:height={`${marqueeRect.bottom - marqueeRect.top}px`}
+      ></div>
+    {/if}
   </div>
 </div>
 
@@ -1161,10 +1136,11 @@
     box-shadow: inset 0 0 0 1px var(--accent);
   }
 
-  /* ViSelect appends this element imperatively, so its class must be global. The compact,
-     translucent band follows the existing Win32 selection accent rather than adding a second
-     selection color. */
-  .gallery-viewport :global(.gallery-selection-area) {
+  /* The translucent band follows the Win32 selection accent rather than adding a second color. */
+  .gallery-selection-area {
+    position: absolute;
+    z-index: calc(var(--z-raised) + 1);
+    pointer-events: none;
     border: 1px solid var(--accent);
     background: color-mix(in srgb, var(--accent) 18%, transparent);
   }
@@ -1183,27 +1159,6 @@
     object-fit: contain;
     /* Revealed by the tileImage action once this element's current src has loaded. */
     visibility: hidden;
-  }
-
-  .tile-match-clip {
-    position: absolute;
-    inset: calc(var(--space-2) + 1px);
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  .tile-match-map {
-    position: absolute;
-    pointer-events: none;
-  }
-
-  .tile-match-tint {
-    opacity: calc(var(--tile-match-map-opacity) * var(--match-fade));
-    mix-blend-mode: var(--match-map-blend);
-  }
-
-  .tile-match-cover {
-    opacity: calc(var(--tile-match-map-cover-opacity) * var(--match-fade));
   }
 
   .gallery-viewport.crop-grid-tiles .gallery-tile {

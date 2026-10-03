@@ -24,16 +24,16 @@
   import Plus from "@lucide/svelte/icons/plus";
   import Scan from "@lucide/svelte/icons/scan";
   import ScanEye from "@lucide/svelte/icons/scan-eye";
-  import { getAbortSignal, onMount } from "svelte";
+  import { getAbortSignal, onMount, type Snippet } from "svelte";
 
   import type { ImageQuery } from "../../../shared/backend";
 
-  import { LONG_PRESS_MS, LONG_PRESS_SLOP_PX } from "../lib/gallery/input";
   import { originalUrlOf, type GalleryItem } from "../lib/gallery/types";
   import { TURBO_GRADIENT } from "../lib/patch-features/colormap";
   import { loadMatchMap, type MatchMap } from "../lib/patch-features/match-map";
   import { similarityPixels } from "../lib/patch-features/similar";
   import { isRemote } from "../lib/platform";
+  import { ViewerGestures } from "../lib/viewer-gestures.svelte";
   import VideoPlayer from "./VideoPlayer.svelte";
 
   type ZoomMode = "fit" | "actual" | "custom";
@@ -59,6 +59,7 @@
     imageModelVisualizes = true,
     backendReady = true,
     showMatchAreas = $bindable(false),
+    toolbarEnd,
   }: {
     item: GalleryItem;
     initialPlayback?: { currentTime: number; muted: boolean } | null;
@@ -79,6 +80,8 @@
     /** Requests wait for a ready backend and repeat after it restarts. */
     backendReady?: boolean;
     showMatchAreas?: boolean;
+    /** Trailing toolbar control supplied by the gallery. */
+    toolbarEnd?: Snippet;
   } = $props();
 
   let failed = $state(false);
@@ -99,11 +102,6 @@
   let customScale = $state(1);
   let rawPanX = $state(0);
   let rawPanY = $state(0);
-  let dragPointerId = $state<number | null>(null);
-  let dragStartX = $state(0);
-  let dragStartY = $state(0);
-  let dragStartPanX = $state(0);
-  let dragStartPanY = $state(0);
   let fullscreen = $state(false);
 
   const imageReady = $derived(
@@ -191,7 +189,7 @@
   function updateHoveredPatch(event: PointerEvent): void {
     const map = activeMap;
     const bounds = imageFrame?.getBoundingClientRect();
-    if (!map || !bounds || dragPointerId !== null) {
+    if (!map || !bounds) {
       hoveredPatch = null;
       return;
     }
@@ -337,125 +335,26 @@
     setCustomScale(effectiveScale * 1.0015 ** -delta, anchor);
   }
 
-  /** A touch drag while the image fits steps between items; once zoomed in, drags pan. Holding
-   * still opens the file actions, since iOS Safari sends no contextmenu for a long press. */
-  let swipeStart: { pointerId: number; x: number; y: number } | null = null;
-  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-  const SWIPE_MIN_PX = 50;
-
-  /** Fingers on the image, for pinch zoom. Two fingers zoom around the point between them and pan
-   * as it moves; lifting one hands the gesture back to the other as a pan. */
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- gesture bookkeeping; nothing renders from it
-  const touches = new Map<number, { x: number; y: number }>();
-  let pinch: { distance: number; midX: number; midY: number } | null = null;
-
-  function pinchState(): { distance: number; midX: number; midY: number } {
-    const [a, b] = [...touches.values()];
-    return {
-      distance: Math.hypot(a.x - b.x, a.y - b.y),
-      midX: (a.x + b.x) / 2,
-      midY: (a.y + b.y) / 2,
-    };
-  }
-
-  function startPan(pointerId: number, x: number, y: number): void {
-    dragPointerId = pointerId;
-    dragStartX = x;
-    dragStartY = y;
-    dragStartPanX = panX;
-    dragStartPanY = panY;
-  }
-
-  function handlePointerDown(event: PointerEvent): void {
-    if (event.pointerType === "touch") {
-      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      stage?.setPointerCapture(event.pointerId);
-      if (touches.size === 2 && imageReady) {
-        clearTimeout(longPressTimer);
-        swipeStart = null;
-        dragPointerId = null;
-        hoveredPatch = null;
-        pinch = pinchState();
-        return;
-      }
-      if (touches.size > 2) return;
-    }
-    if (event.pointerType === "touch" && !canPan && event.isPrimary) {
-      swipeStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
-      clearTimeout(longPressTimer);
-      longPressTimer = setTimeout(() => {
-        swipeStart = null;
-        onfilemenu();
-      }, LONG_PRESS_MS);
-      return;
-    }
-    if (event.button !== 0 || dragPointerId !== null || !canPan || !stage) return;
-    event.preventDefault();
-
-    stage.setPointerCapture(event.pointerId);
-    hoveredPatch = null;
-    startPan(event.pointerId, event.clientX, event.clientY);
-  }
-
-  function handlePointerMove(event: PointerEvent): void {
-    if (touches.has(event.pointerId))
-      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-    if (pinch && touches.size >= 2) {
-      const next = pinchState();
-      const anchor = stagePoint(next.midX, next.midY);
-      if (anchor && pinch.distance > 0)
-        setCustomScale(effectiveScale * (next.distance / pinch.distance), anchor);
-      rawPanX = panX + next.midX - pinch.midX;
-      rawPanY = panY + next.midY - pinch.midY;
-      pinch = next;
-      return;
-    }
-    if (
-      swipeStart?.pointerId === event.pointerId &&
-      Math.abs(event.clientX - swipeStart.x) + Math.abs(event.clientY - swipeStart.y) >
-        LONG_PRESS_SLOP_PX
-    )
-      clearTimeout(longPressTimer);
-    if (dragPointerId === null) {
-      updateHoveredPatch(event);
-      return;
-    }
-    if (event.pointerId !== dragPointerId) return;
-    rawPanX = dragStartPanX + event.clientX - dragStartX;
-    rawPanY = dragStartPanY + event.clientY - dragStartY;
-  }
-
-  function endPointerDrag(event: PointerEvent): void {
-    clearTimeout(longPressTimer);
-    touches.delete(event.pointerId);
-    if (pinch) {
-      if (touches.size >= 2) pinch = pinchState();
-      else {
-        pinch = null;
-        const [remaining] = [...touches.entries()];
-        if (remaining && canPan) startPan(remaining[0], remaining[1].x, remaining[1].y);
-      }
-      return;
-    }
-    if (swipeStart?.pointerId === event.pointerId) {
-      const dx = event.clientX - swipeStart.x;
-      const dy = event.clientY - swipeStart.y;
-      swipeStart = null;
-      if (
-        event.type !== "pointerup" ||
-        Math.abs(dx) < SWIPE_MIN_PX ||
-        Math.abs(dx) < 2 * Math.abs(dy)
-      )
-        return;
-      if (dx < 0 && hasNext) onnext();
-      else if (dx > 0 && hasPrev) onprev();
-      return;
-    }
-    if (event.pointerId !== dragPointerId) return;
-    if (stage?.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
-    dragPointerId = null;
-    hoveredPatch = null;
-  }
+  const gestures = new ViewerGestures({
+    isReady: () => imageReady,
+    canPan: () => canPan,
+    pan: () => ({ x: panX, y: panY }),
+    setPan: (x, y) => {
+      rawPanX = x;
+      rawPanY = y;
+    },
+    zoomBy: (ratio, clientX, clientY) => {
+      const anchor = stagePoint(clientX, clientY);
+      if (anchor) setCustomScale(effectiveScale * ratio, anchor);
+    },
+    hasPrev: () => hasPrev,
+    hasNext: () => hasNext,
+    onprev: () => onprev(),
+    onnext: () => onnext(),
+    onfilemenu: () => onfilemenu(),
+    onengage: () => (hoveredPatch = null),
+    onhover: updateHoveredPatch,
+  });
 
   function handleDoubleClick(event: MouseEvent): void {
     if (!imageReady) return;
@@ -614,6 +513,7 @@
         </button>
       </div>
     {/if}
+    {#if toolbarEnd}<div class="toolbar-end">{@render toolbarEnd()}</div>{/if}
   </header>
 
   {#if matchRequest}
@@ -662,15 +562,12 @@
       <div
         class="detail-image-stage"
         class:is-pannable={canPan}
-        class:is-dragging={dragPointerId !== null}
+        class:is-dragging={gestures.dragging}
         role="presentation"
         bind:this={stage}
+        {@attach gestures.attach}
         onwheel={handleWheel}
-        onpointerdown={handlePointerDown}
-        onpointermove={handlePointerMove}
         onpointerleave={() => (hoveredPatch = null)}
-        onpointerup={endPointerDrag}
-        onpointercancel={endPointerDrag}
         ondblclick={handleDoubleClick}
       >
         <div
@@ -723,6 +620,9 @@
 </section>
 
 <style>
+  .toolbar-end {
+    margin-left: auto;
+  }
   .detail-viewer {
     position: absolute;
     z-index: var(--z-raised);

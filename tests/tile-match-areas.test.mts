@@ -44,20 +44,50 @@ test("tile mapping completes a final partial request", async () => {
     controller.configure(
       "test",
       { components: [{ text: "cat", weight: 1 }] },
-      Array.from({ length: 17 }, (_, index) => (index === 16 ? "17@2000" : String(index + 1))),
+      Array.from({ length: 17 }, (_, index) =>
+        index === 16 ? { assetId: "17", timestampMs: 2000 } : { assetId: String(index + 1) },
+      ),
     );
     assert.equal(controller.busy, true);
     const deadline = Date.now() + 3000;
-    while (controller.entries.size !== 17 && Date.now() < deadline)
+    while (controller.busy && Date.now() < deadline)
       await new Promise((resolve) => setTimeout(resolve, 25));
-    assert.equal(controller.entries.size, 17);
-    assert.equal(controller.entries.has("17@2000"), true);
+    for (let index = 1; index <= 16; index += 1)
+      assert.ok(controller.get({ assetId: String(index) }), `map ${index}`);
+    assert.ok(controller.get({ assetId: "17", timestampMs: 2000 }));
+    assert.equal(controller.get({ assetId: "17" }), undefined, "a frame map is not the poster's");
     assert.equal(controller.busy, false);
     assert.deepEqual(
       calls.map((ids) => ids.length),
       [8, 8, 1],
     );
     assert.deepEqual(calls[2], [{ assetId: 17, timestampMs: 2000 }]);
+  } finally {
+    controller.dispose();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("tile mapping does not re-request targets the service could not score", async () => {
+  const originalFetch = globalThis.fetch;
+  let requests = 0;
+  globalThis.fetch = async () => {
+    requests += 1;
+    return new Response(JSON.stringify({ results: [{ assetId: 1, error: "missing" }] }), {
+      status: 200,
+    });
+  };
+  const controller = new TileMatchAreas();
+  try {
+    const query = { components: [{ text: "dog", weight: 1 }] };
+    controller.configure("test", query, [{ assetId: "1" }, { assetId: "2" }]);
+    const deadline = Date.now() + 3000;
+    while (controller.busy && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    controller.configure("test", query, [{ assetId: "1" }, { assetId: "2" }]);
+    assert.equal(controller.busy, false);
+    assert.equal(requests, 1, "an error and an omitted target both count as failed");
   } finally {
     controller.dispose();
     globalThis.fetch = originalFetch;

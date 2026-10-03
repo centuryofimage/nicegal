@@ -86,6 +86,7 @@
   /* Status */
   --danger: #c42b1c;
   --warning: #a65300;
+  --success: #2b7a0b;
 
   /* Search match caption: the "why this matched" strip pinned over a gallery tile (see
      VirtualGallery.svelte's .match-caption), and the highlighted terms within it. The surface is
@@ -151,12 +152,9 @@
   /* The search row is its own, roomier toolbar. Its field, text buttons, and icon controls use
      this one metric so chrome stays aligned as a theme changes its toolbar density. */
   --toolbar-control-height: 32px;
-  /* Status bar indicator light while a paired device has the gallery open: a lit LED, bright
-     core and a faint halo. */
-  --status-connected-highlight: #d4ffc8;
+  /* Status bar indicator light while a paired device has the gallery open. */
   --status-connected: #3cc93c;
   --status-connected-edge: #238a23;
-  --status-connected-glow: rgba(60, 201, 60, 0.5);
   /* Remote browsers' touch sheets. Rows follow touch-target sizing, not Win32 density. */
   --sheet-max-width: 480px;
   --sheet-row-height: 44px;
@@ -227,6 +225,26 @@
   --duration-fast: 90ms;
 
   color-scheme: light;
+}
+
+/* Popups opened from toolbar controls. Each sets --popup-width and --popup-anchor; browsers with
+ * anchor positioning place it under the trigger, clamped to the window, and older browsers keep
+ * the component's own absolute position. The selector outranks component-scoped rules. */
+.viewport-popup {
+  box-sizing: border-box;
+  width: min(var(--popup-width), calc(100vw - 16px));
+}
+
+@supports (anchor-scope: --popup) and (top: anchor(bottom)) {
+  :root .viewport-popup.viewport-popup {
+    --popup-max-height: min(480px, calc(100dvh - 120px));
+    position: fixed;
+    position-anchor: var(--popup-anchor);
+    inset: clamp(8px, calc(anchor(bottom) + 4px), calc(100dvh - var(--popup-max-height) - 8px)) auto
+      auto clamp(8px, anchor(left), calc(100vw - min(var(--popup-width), 100vw - 16px) - 8px));
+    max-height: var(--popup-max-height);
+    overflow: auto;
+  }
 }
 
 /*

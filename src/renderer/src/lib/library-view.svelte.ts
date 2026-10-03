@@ -16,16 +16,9 @@ import { GalleryScrollState } from "./gallery/scroll-state.svelte";
 import { collapseSearchSections } from "./gallery/search-sections";
 import { GallerySelection, type SelectionModifiers } from "./gallery/selection.svelte";
 import { isActiveJob } from "./job-state";
+import { overlayHistory, type OverlayEntry } from "./overlay-history";
 import { withScope } from "./search-query";
 import { layoutOptions, settings } from "./settings.svelte";
-
-/** Marks the history entry pushed for the open viewer. */
-const DETAIL_HISTORY_KEY = "nicegalDetail";
-
-function readDetailHash(): string | null {
-  if (typeof location === "undefined") return null;
-  return new URLSearchParams(location.hash.slice(1)).get("item");
-}
 
 export type SettingsPage = "gallery" | "search" | "remote" | "about";
 export type ActiveDialog = "manageLibraries" | "settings" | "searchProblem" | null;
@@ -186,6 +179,20 @@ export function createLibraryViewController(
     return index < 0 ? null : index;
   });
   let detailStatus = $state<DetailViewStatus | null>(null);
+  const overlays = overlayHistory();
+  /** The open viewer's history entry, so Back closes it. */
+  let detailEntry: OverlayEntry | undefined;
+  /** Every viewer change goes through here: the status belongs to the item it describes. */
+  function showDetail(item: GalleryItem | undefined): void {
+    selectedDetail = item;
+    detailStatus = null;
+    if (item && !detailEntry) {
+      detailEntry = overlays.open(() => showDetail(undefined));
+    } else if (!item) {
+      detailEntry?.close();
+      detailEntry = undefined;
+    }
+  }
   let restoringLibraryView = catalog.selectedId !== null;
   let disposed = false;
   let cancelSearchWait: (() => void) | undefined;
@@ -235,72 +242,23 @@ export function createLibraryViewController(
     (detailIndex !== null ? filteredItems[detailIndex] : undefined) ?? selectedDetail,
   );
   const libraryName = $derived(catalog.selectedLibrary?.displayName ?? "No library");
-  // The open viewer is one history entry, so a phone's Back closes it instead of leaving the
-  // page. Moving between items replaces that entry rather than stacking more. A reload starts
-  // on the gallery, so an entry left from before it is cleared.
-  if (
-    typeof history !== "undefined" &&
-    (history.state?.[DETAIL_HISTORY_KEY] === true || readDetailHash() !== null)
-  ) {
-    history.replaceState(null, "", location.pathname + location.search);
-  }
-  let historyBackPending = false;
-  function syncDetailHistory(id: string | null): void {
-    if (typeof history === "undefined" || historyBackPending) return;
-    const inDetailEntry = history.state?.[DETAIL_HISTORY_KEY] === true;
-    if (id === null) {
-      if (inDetailEntry) {
-        historyBackPending = true;
-        history.back();
-      }
-    } else if (!inDetailEntry || readDetailHash() !== id) {
-      const url = `#item=${encodeURIComponent(id)}`;
-      if (inDetailEntry) history.replaceState({ [DETAIL_HISTORY_KEY]: true }, "", url);
-      else history.pushState({ [DETAIL_HISTORY_KEY]: true }, "", url);
-    }
-  }
-  $effect(() => {
-    const id = detailId;
-    untrack(() => syncDetailHistory(id));
-  });
-  $effect(() => {
-    if (typeof window === "undefined" || typeof window.addEventListener !== "function")
-      return () => {};
-    const onPopState = (): void => {
-      if (historyBackPending) {
-        historyBackPending = false;
-        // A user can reopen a viewer while the asynchronous Back is still in flight.
-        syncDetailHistory(detailId);
-        return;
-      }
-      const id = history.state?.[DETAIL_HISTORY_KEY] === true ? readDetailHash() : null;
-      if (id === detailId) return;
-      detailStatus = null;
-      selectedDetail = id === null ? undefined : catalog.items.find((item) => item.id === id);
-    };
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  });
   $effect(() => {
     const libraryId = catalog.selectedId;
     const query = ocrSearch.query;
-    const visualReferenceRevision = ocrSearch.visualReferenceRevision;
     const scrollTop = untrack(() => galleryScroll.scrollTop);
     if (libraryId === null || restoringLibraryView) return;
-    void visualReferenceRevision;
     scheduleLibraryViewState(libraryId, query, scrollTop);
   });
   $effect(() => {
-    void ocrSearch.query;
     const libraryId = catalog.selectedId;
+    // A new snapshot is taken for each search identity, so query and visual reference changes
+    // rerun this effect through it.
     const { items, hasOcr: ocrAvailable } = searchCatalog;
     const timeline = searchTimeline;
-    const visualReferenceRevision = ocrSearch.visualReferenceRevision;
     if (!catalog.backendStatus.ready) {
       untrack(() => ocrSearch.suspend());
       return;
     }
-    void visualReferenceRevision;
     const imageTextAvailable = supportsImageTextQueries;
     const imageAvailable = hasImages;
     const imageModel = catalog.imageModelId;
@@ -379,8 +337,7 @@ export function createLibraryViewController(
     ocrSearch.query = withScope(ocrSearch.query, "meaning");
   }
   function openDetail(index: number): void {
-    detailStatus = null;
-    selectedDetail = filteredItems[index];
+    showDetail(filteredItems[index]);
   }
   function openFileMenu(index: number): void {
     const item = filteredItems[index];
@@ -429,20 +386,14 @@ export function createLibraryViewController(
     gallerySelection.endMarquee();
   }
   function closeDetail(): void {
-    selectedDetail = undefined;
-    detailStatus = null;
+    showDetail(undefined);
   }
   function showPrevDetail(): void {
-    if (detailIndex !== null && detailIndex > 0) {
-      detailStatus = null;
-      selectedDetail = filteredItems[detailIndex - 1];
-    }
+    if (detailIndex !== null && detailIndex > 0) showDetail(filteredItems[detailIndex - 1]);
   }
   function showNextDetail(): void {
-    if (detailIndex !== null && detailIndex < filteredItems.length - 1) {
-      detailStatus = null;
-      selectedDetail = filteredItems[detailIndex + 1];
-    }
+    if (detailIndex !== null && detailIndex < filteredItems.length - 1)
+      showDetail(filteredItems[detailIndex + 1]);
   }
   function handleGalleryScroll(state: { scrollTop: number; layout: GalleryLayout }): void {
     galleryScroll.onScroll(state);
@@ -698,6 +649,7 @@ export function createLibraryViewController(
       flushLibraryViewState();
       disposed = true;
       unsubscribeComposer();
+      detailEntry?.close();
       cancelSearchWait?.();
       libraryViewGeneration += 1;
       galleryScroll.finishRestore();

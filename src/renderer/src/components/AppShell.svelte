@@ -82,6 +82,7 @@
 
 <style>
   main {
+    position: relative;
     display: flex;
     height: 100%;
     flex-direction: column;

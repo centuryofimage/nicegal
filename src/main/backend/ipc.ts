@@ -20,7 +20,18 @@ import type {
 import type { NicegalServerClient } from "./nicegal-server-client";
 
 import { IPC_CHANNELS } from "../../shared/ipc-channels";
-import { handleRemotableIpc, type BridgeClient, type IpcSenderValidator } from "../ipc";
+import {
+  handleRemotableIpc,
+  handleTrustedIpc,
+  type BridgeClient,
+  type IpcSenderValidator,
+} from "../ipc";
+
+/** Jobs a paired browser may start. The rest change library contents or download models. */
+const REMOTE_JOB_TYPES: ReadonlySet<JobRequest["type"]> = new Set([
+  "libraryScan",
+  "thumbnailGenerate",
+]);
 
 interface BackendIpcContext {
   status: BackendStatus;
@@ -136,24 +147,24 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(IPC_CHANNELS.backend.listLibraries, context.isTrustedSender, () =>
     requireBackend().listLibraries(),
   );
-  handleRemotableIpc(
+  handleTrustedIpc(
     IPC_CHANNELS.backend.createLibrary,
     context.isTrustedSender,
-    (_client, value: unknown) => requireBackend().createLibrary(validateCreateLibrary(value)),
+    (_event, value: unknown) => requireBackend().createLibrary(validateCreateLibrary(value)),
   );
-  handleRemotableIpc(
+  handleTrustedIpc(
     IPC_CHANNELS.backend.updateLibrary,
     context.isTrustedSender,
-    (_client, libraryId: unknown, definition: unknown) =>
+    (_event, libraryId: unknown, definition: unknown) =>
       requireBackend().updateLibrary(
         validateLibraryId(libraryId),
         validateLibraryDefinition(definition),
       ),
   );
-  handleRemotableIpc(
+  handleTrustedIpc(
     IPC_CHANNELS.backend.deleteLibrary,
     context.isTrustedSender,
-    (_client, libraryId: unknown) => requireBackend().deleteLibrary(validateLibraryId(libraryId)),
+    (_event, libraryId: unknown) => requireBackend().deleteLibrary(validateLibraryId(libraryId)),
   );
   handleRemotableIpc(
     IPC_CHANNELS.backend.listAssets,
@@ -249,11 +260,14 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(
     IPC_CHANNELS.backend.startJob,
     context.isTrustedSender,
-    async (_client, value, requestId) => {
+    async (client, value, requestId) => {
       if (changingRuntime) throw new Error("Search settings change already in progress");
+      const request = validateJobRequest(value);
+      if (client.remote && !REMOTE_JOB_TYPES.has(request.type))
+        throw new Error("This job can only be started on the PC running Nicegal");
       startingJobs += 1;
       try {
-        return await requireBackend().startJob(validateJobRequest(value), validateToken(requestId));
+        return await requireBackend().startJob(request, validateToken(requestId));
       } finally {
         startingJobs -= 1;
       }

@@ -3,10 +3,11 @@
   import type { GalleryItem } from "../lib/gallery/types";
   import type { VectorMatch } from "../lib/ocr-search.svelte";
 
-  import { cleanDiagnostic, errorMessage } from "../lib/errors";
+  import { errorMessage } from "../lib/errors";
   import { loadImageTags, type ImageTag, type ImageTags } from "../lib/image-tags";
   import { formatBytes } from "../lib/job-format";
   import { settings } from "../lib/settings.svelte";
+  import TechnicalDetails from "./TechnicalDetails.svelte";
 
   let {
     asset,
@@ -23,7 +24,6 @@
     onclose: () => void;
   } = $props();
 
-  let copiedText = $state<string | null>(null);
   // An await block discards an older result when selection or catalog snapshot changes.
   const request = $derived.by((): Promise<AssetMetadata> | null => {
     return ready && asset ? window.nicegal.backend.getAssetMetadata(asset.id) : null;
@@ -40,13 +40,15 @@
     const timestamp = new Date(Number(BigInt(value) / 1_000_000n));
     return Number.isNaN(timestamp.getTime()) ? "Unknown" : timestamp.toLocaleString();
   }
-  async function copy(value: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(value);
-      copiedText = value;
-    } catch {
-      copiedText = null;
-    }
+  function seconds(ms: number): string {
+    return `${(ms / 1000).toFixed(1)} s`;
+  }
+  function tagGroups(tags: ImageTags): { label: string; list: ImageTag[] }[] {
+    return [
+      { label: "Simple", list: tags.simple },
+      { label: "Subjects", list: tags.subjects },
+      { label: "Vibes", list: tags.vibes },
+    ];
   }
 </script>
 
@@ -98,9 +100,7 @@
           {#if info.asset.mediaKind === "video"}
             <dt>Duration</dt>
             <dd>
-              {info.asset.durationMs === null
-                ? "Unknown"
-                : `${(info.asset.durationMs / 1000).toFixed(1)} s`}
+              {info.asset.durationMs === null ? "Unknown" : seconds(info.asset.durationMs)}
             </dd>
           {/if}
           <dt>Created</dt>
@@ -112,7 +112,7 @@
           {#if info.asset.animated}<dt>Animation</dt>
             <dd>
               {info.asset.frameCount ?? "Unknown"} frames{info.asset.durationMs !== null
-                ? ` · ${info.asset.durationMs / 1000} s`
+                ? ` · ${seconds(info.asset.durationMs)}`
                 : ""}
             </dd>{/if}
           <dt>Attributes</dt>
@@ -172,21 +172,10 @@
         {/if}
         {#if info.file.error}
           <p>Some file metadata could not be read.</p>
-          <details>
-            <summary>Technical details</summary>
-            <pre>{cleanDiagnostic(info.file.error)}</pre>
-            <button
-              class="ui-button"
-              onclick={() => void copy(cleanDiagnostic(info.file.error ?? ""))}
-              >{copiedText === cleanDiagnostic(info.file.error) ? "Copied" : "Copy details"}</button
-            >
-          </details>
+          <TechnicalDetails text={info.file.error} />
         {/if}
         <h3>Tags</h3>
-        <p>
-          Tags come from a research model trained on unfiltered internet data. They are usually
-          wrong and can reflect harmful biases.
-        </p>
+        <p>Guesses from a research model. Often wrong.</p>
         {#if tagsRequest}
           {#await tagsRequest}
             <p role="status">Loading tags…</p>
@@ -195,7 +184,7 @@
               <p>Tags aren't available for this search model.</p>
             {:else}
               <dl>
-                {#each [["Simple", tags.simple], ["Subjects", tags.subjects], ["Vibes", tags.vibes]] as const as [label, list] (label)}
+                {#each tagGroups(tags) as { label, list } (label)}
                   <dt>{label}</dt>
                   <dd class="tag-list">
                     {#each list as tag (tag.term)}
@@ -211,37 +200,33 @@
             <p>{errorMessage(error)}</p>
           {/await}
         {/if}
-        <h3>Search indexing (debug)</h3>
-        <dl>
-          {#if info.asset.mediaKind === "image"}
-            <dt>OCR</dt>
-            <dd>
-              {{ indexed: "Ready", stale: "Needs update", notIndexed: "Not prepared" }[
-                info.ocrState
-              ]}
-            </dd>
-            <dt>Related text</dt>
-            <dd>
-              {{
-                embedded: "Ready",
-                noText: "No text found",
-                pending: "Pending",
-                notIndexed: "Needs text recognition",
-              }[info.textState]}
-            </dd>
-          {/if}
-          <dt>Image search</dt>
-          <dd>{info.imageIndexed ? "Ready" : "Not prepared"}</dd>
-        </dl>
+        {#if import.meta.env.DEV}
+          <h3>Search indexing (debug)</h3>
+          <dl>
+            {#if info.asset.mediaKind === "image"}
+              <dt>OCR</dt>
+              <dd>
+                {{ indexed: "Ready", stale: "Needs update", notIndexed: "Not prepared" }[
+                  info.ocrState
+                ]}
+              </dd>
+              <dt>Related text</dt>
+              <dd>
+                {{
+                  embedded: "Ready",
+                  noText: "No text found",
+                  pending: "Pending",
+                  notIndexed: "Needs text recognition",
+                }[info.textState]}
+              </dd>
+            {/if}
+            <dt>Image search</dt>
+            <dd>{info.imageIndexed ? "Ready" : "Not prepared"}</dd>
+          </dl>
+        {/if}
       {:catch error}
         <p role="alert">Couldn't load file details.</p>
-        <details>
-          <summary>Technical details</summary>
-          <pre>{errorMessage(error)}</pre>
-          <button class="ui-button" onclick={() => void copy(errorMessage(error))}
-            >{copiedText === errorMessage(error) ? "Copied" : "Copy details"}</button
-          >
-        </details>
+        <TechnicalDetails text={errorMessage(error)} />
       {/await}
     {/if}
   </div>
@@ -319,12 +304,6 @@
     padding: 0 var(--space-4);
     border: 1px solid var(--border-subtle);
     background: var(--surface-0);
-  }
-  pre {
-    max-height: 180px;
-    overflow: auto;
-    white-space: pre-wrap;
-    font-size: var(--font-size-sm);
   }
   textarea.ocr-text {
     box-sizing: border-box;

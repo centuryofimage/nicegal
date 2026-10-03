@@ -145,8 +145,8 @@ export function handleThumbnailRequest(
 }
 
 /**
- * `api://server/v1/...` forwards GET and POST to the same nicegal-server path with the bearer
- * token, passing the status, content type and body through unchanged.
+ * `api://server/v1/...` forwards to the same nicegal-server path with the bearer token, passing
+ * the status, content type and body through unchanged.
  */
 export async function handleApiRequest(
   request: Request,

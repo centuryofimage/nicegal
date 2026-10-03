@@ -15,22 +15,25 @@
   const models = $derived(
     runtime.imageModel?.models.filter((m) => m.available && m.supportsTextQueries) ?? [],
   );
-  onMount(() => {
-    void runtime.refresh();
-  });
   let query = $state(untrack(() => parseQuery(ocrSearch.query).body));
-  // TODO(dev): Initialize both selections from the eligible text-query models, including
-  // when the active model is image-only (DINOv3) or model status arrives after opening.
-  // Validate membership before enabling Compare; a nonempty model ID is not enough.
-  let left = $state(untrack(() => runtime.imageModel?.activeModel ?? ""));
-  let right = $state(
-    untrack(
-      () =>
-        runtime.imageModel?.models.find(
-          (m) => m.available && m.supportsTextQueries && m.id !== left,
-        )?.id ?? "",
-    ),
+  let left = $state("");
+  let right = $state("");
+  const selectionValid = $derived(
+    left !== right && models.some((m) => m.id === left) && models.some((m) => m.id === right),
   );
+
+  /** Fills selections that are empty or ineligible for text queries (the active model may be image-only). */
+  function pickDefaults(): void {
+    const active = runtime.imageModel?.activeModel;
+    if (!models.some((m) => m.id === left))
+      left = models.find((m) => m.id === active)?.id ?? models[0]?.id ?? "";
+    if (!models.some((m) => m.id === right) || right === left)
+      right = models.find((m) => m.id !== left)?.id ?? "";
+  }
+  onMount(() => {
+    pickDefaults();
+    void runtime.refresh().then(pickDefaults);
+  });
   type Column = {
     model: string;
     name: string;
@@ -39,8 +42,9 @@
     elapsed: number;
   };
   let columns = $state<Column[]>([]);
-  let busy = $state(false);
-  let cancelled = $state(false);
+  let run = $state<"idle" | "running" | "stopping">("idle");
+  const busy = $derived(run !== "idle");
+  const stopping = $derived(run === "stopping");
   let status = $state("");
   let error = $state<string | null>(null);
   const overlap = $derived(
@@ -50,11 +54,8 @@
   );
 
   export function requestClose(): void {
-    if (busy) {
-      cancelled = true;
-      return;
-    }
-    onclose();
+    if (busy) run = "stopping";
+    else onclose();
   }
 
   async function switchModel(model: string): Promise<void> {
@@ -65,7 +66,7 @@
       // A queued scan may start between the runtime's cancellation check and the switch.
       // Refresh it so the next attempt can stop it through the normal settings flow.
       await jobs.sync();
-      if (!jobs.running && !runtime.imageModelError?.includes("job started")) break;
+      if (!jobs.running) break;
       await new Promise((resolve) => setTimeout(resolve, 250));
     }
     throw new Error(
@@ -85,27 +86,22 @@
       id,
       name: models.find((m) => m.id === id)?.name ?? id,
     }));
-    busy = true;
-    cancelled = false;
+    run = "running";
     error = null;
     columns = [];
     try {
       for (const choice of choices) {
-        if (cancelled) break;
+        if (stopping) break;
         status = `Loading ${choice.name}…`;
         if (runtime.imageModel?.activeModel !== choice.id) await switchModel(choice.id);
-        if (runtime.imageModel?.activeModel !== choice.id)
-          throw new Error(
-            `Could not activate ${choice.name}. Check for a launch-time model override.`,
-          );
-        if (cancelled) break;
+        if (stopping) break;
         status = `Searching ${choice.name}…`;
         const start = performance.now();
         const result = await window.nicegal.backend.searchOcr({
           query: text,
           type: "image",
           libraryId,
-          folder,
+          folder: folder ?? undefined,
           limit: 10,
         });
         const hits = result.results.flatMap((hit) => {
@@ -141,8 +137,8 @@
           error = `${error ? error + "\n" : ""}Restoring model: ${errorMessage(cause)}`;
         }
       }
-      busy = false;
-      status = cancelled ? "Comparison stopped." : "";
+      status = stopping ? "Comparison stopped." : "";
+      run = "idle";
     }
   }
 </script>
@@ -189,9 +185,7 @@
         type="submit"
         disabled={busy ||
           !query.trim() ||
-          !left ||
-          !right ||
-          left === right ||
+          !selectionValid ||
           catalog.selectedId === null ||
           runtime.saving ||
           runtime.imageModelSaving}>Compare top 10</button
@@ -199,8 +193,8 @@
       {#if busy}<button
           class="ui-button"
           type="button"
-          disabled={cancelled}
-          onclick={() => (cancelled = true)}>Stop after current step</button
+          disabled={stopping}
+          onclick={() => (run = "stopping")}>Stop after current step</button
         >{/if}
       <span role="status">{status}</span>
       {#if overlap !== null}<span>{overlap} shared results in the top 10</span>{/if}

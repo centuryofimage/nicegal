@@ -197,9 +197,6 @@ importers:
       '@types/node':
         specifier: ^22.20.4
         version: 22.20.4
-      '@viselect/vanilla':
-        specifier: ^3.10.1
-        version: 3.10.1
       electron:
         specifier: ^44.5.1
         version: 44.5.1(supports-color@7.2.0)
@@ -1221,9 +1218,6 @@ packages:
   '@typescript-eslint/visitor-keys@8.70.1':
     resolution: {integrity: sha512-Vwj9lUIW5Xq3wQ9w6gv3R86g1hMK8f2zNOdGTAgeXUMMXFK78G9ruCjjqutHMNJc0+CH7LYRnHeUB9IT8wFmcw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
-
-  '@viselect/vanilla@3.10.1':
-    resolution: {integrity: sha512-e0gwuYRXMftxwfuqVX0NyQAxPnrYVwA+agvKqEdVeDz+6iJXV0FN9VsI8vHLLh3K5zcl601w8seUXLiWb2kTwQ==}
 
   '@xmldom/xmldom@0.8.14':
     resolution: {integrity: sha512-T4EDRUBVZYRldYApjEJiU0e1stYWaRAX7CuSnKzrpwdZKo53zGV8/pqfzV6FfwNl9YThD2OumQYvqtvjvgG7aQ==}
@@ -3380,8 +3374,6 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.70.1
       eslint-visitor-keys: 5.0.1
-
-  '@viselect/vanilla@3.10.1': {}
 
   '@xmldom/xmldom@0.8.14': {}
 

@@ -8,6 +8,7 @@ import {
   createLibraryViewController,
   type LibraryViewController,
 } from "../../src/renderer/src/lib/library-view.svelte";
+import { FakeHistory } from "./fake-history";
 
 const plain = { toggle: false, extend: false };
 const toggle = { toggle: true, extend: false };
@@ -37,8 +38,11 @@ assert.deepEqual([...selection.ids], ["2"]);
 let prepared = Promise.withResolvers<string>();
 const starts: string[] = [];
 const groups: string[][] = [];
+const browser = new FakeHistory();
 Object.assign(globalThis, {
+  history: browser,
   window: {
+    addEventListener: browser.addEventListener.bind(browser),
     nicegal: {
       backend: {},
       native: {

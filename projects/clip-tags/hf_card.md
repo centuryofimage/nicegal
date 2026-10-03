@@ -4,6 +4,7 @@ license_link: https://creativecommons.org/licenses/by-nc/4.0/
 tags:
   - clip
   - siglip
+  - perception-encoder
   - zero-shot-image-classification
   - image-tagging
 ---
@@ -19,7 +20,8 @@ wrong and can reflect harmful biases.
 
 ## Files
 
-`vocabulary.tsv` is the tag list shared by every model, one tag per line after a header row.
+`vocabulary` is the extensionless tag list shared by every model, one tag per line after a header row.
+The contents are UTF-8 tab-separated text; the filename has no extension to avoid Windows text indexing.
 Its columns are `term`, `kind` (`simple`, `subject` or `vibe`), `source` (`metaclip` or `wordnet`) and
 `sensitivity` (`ok`, `mature` or `blocked`). Terms never contain tabs or line breaks.
 
@@ -33,6 +35,8 @@ image vector of the reference set described below.
 | [facebook/metaclip-2-worldwide-b16](https://huggingface.co/facebook/metaclip-2-worldwide-b16) | 512        |
 | [facebook/metaclip-2-worldwide-b32](https://huggingface.co/facebook/metaclip-2-worldwide-b32) | 512        |
 | [google/siglip2-base-patch16-256](https://huggingface.co/google/siglip2-base-patch16-256)     | 768        |
+| [facebook/PE-Core-B16-224](https://huggingface.co/facebook/PE-Core-B16-224)                   | 1024       |
+| [facebook/PE-Core-L14-336](https://huggingface.co/facebook/PE-Core-L14-336)                   | 1024       |
 
 ## Scoring
 
@@ -115,6 +119,6 @@ of its words fits. The vocabulary is mostly English.
 ## License
 
 The embeddings come from each model and follow its license: MetaCLIP 2 is CC BY-NC 4.0 and
-SigLIP2 is Apache-2.0. The MetaCLIP metadata is CC BY-NC 4.0 and WordNet uses the
+SigLIP2 and PE Core are Apache-2.0. The MetaCLIP metadata is CC BY-NC 4.0 and WordNet uses the
 [WordNet license](https://wordnet.princeton.edu/license-and-commercial-use). This repository as
 a whole is CC BY-NC 4.0 because it uses MetaCLIP's vocabulary.

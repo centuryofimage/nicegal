@@ -3,6 +3,7 @@ import { get } from "svelte/store";
 
 import type { LayoutOptions } from "./options";
 
+import { distance, type Point } from "../gesture-math";
 import { settings, settingsLimits } from "../settings.svelte";
 import { setTileSize, sizeKey, type SizeKey } from "./wheel-zoom";
 
@@ -65,7 +66,7 @@ export class GalleryPinchZoom {
       target.addEventListener("touchcancel", this.onDetached);
     }
     this.pinch = {
-      distance: distance(event.touches),
+      distance: fingerSpan(event.touches),
       size: current[key],
       key,
       current: current[key],
@@ -89,7 +90,7 @@ export class GalleryPinchZoom {
     const limit = settingsLimits[pinch.key];
     pinch.current = Math.max(
       limit.min,
-      Math.min(limit.max, (pinch.size * distance(event.touches)) / pinch.distance),
+      Math.min(limit.max, (pinch.size * fingerSpan(event.touches)) / pinch.distance),
     );
     const midY =
       (event.touches[0].clientY + event.touches[1].clientY) / 2 -
@@ -132,9 +133,7 @@ function overrideFor(key: SizeKey, size: number): Partial<LayoutOptions> {
   return { cellWidth: size, columns: 0, fillRows: false };
 }
 
-function distance(touches: TouchList): number {
-  return Math.hypot(
-    touches[0].clientX - touches[1].clientX,
-    touches[0].clientY - touches[1].clientY,
-  );
+function fingerSpan(touches: TouchList): number {
+  const point = (touch: Touch): Point => ({ x: touch.clientX, y: touch.clientY });
+  return distance(point(touches[0]), point(touches[1]));
 }

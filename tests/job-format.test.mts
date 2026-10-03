@@ -21,13 +21,7 @@ test("video embedding shows active work before its first asset is committed", ()
 });
 
 test("cataloging and indexing show valid backend phase rates, including zero", () => {
-  for (const phase of [
-    "cataloging",
-    "scanning",
-    "ocr",
-    "imageEmbedding",
-    "textEmbedding",
-  ] as const) {
+  for (const phase of ["cataloging", "scanning", "ocr", "textEmbedding"] as const) {
     const job = { status: "running", phase, progress: { itemsPerSecond: 12.5 } } as JobSnapshot;
     assert.equal(
       jobRateText(job),
@@ -46,6 +40,23 @@ test("cataloging and indexing show valid backend phase rates, including zero", (
     job.phase = "loadingModels";
     assert.equal(jobRateText(job), "");
   }
+});
+
+test("image indexing shows its rate in images while completion stays in files", () => {
+  const job = {
+    status: "running",
+    phase: "imageEmbedding",
+    progress: {
+      itemsPerSecond: 12.5,
+      phaseCompleted: 2,
+      total: 10,
+    },
+  } as JobSnapshot;
+  assert.equal(
+    jobRateText(job),
+    `${(12.5).toLocaleString(undefined, { maximumFractionDigits: 1 })} images/s`,
+  );
+  assert.equal(jobPhaseProgress(job).text, "2 / 10");
 });
 
 test("a library scan shows only the index stages its library runs", () => {
