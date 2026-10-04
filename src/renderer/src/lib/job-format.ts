@@ -37,17 +37,17 @@ export function jobRateText(job: JobSnapshot): string {
 const PHASE_LABELS: Record<JobPhase, string> = {
   queued: "Queued",
   downloadingModels: "Downloading models",
-  loadingModels: "Preparing models",
+  loadingModels: "Loading models",
   // Distinct labels: the walk counts files found, then cataloging restarts at 0 of that count.
   // Sharing one label made the second phase look like progress going backwards.
-  scanning: "Finding files",
+  scanning: "Scanning",
   cataloging: "Syncing",
   thumbnails: "Thumbnails",
   ocr: "OCR",
-  imageEmbedding: "Indexing content",
+  imageEmbedding: "Indexing",
   textEmbedding: "Indexing text",
-  cleanup: "Cleanup",
-  pruning: "Removing deleted files",
+  cleanup: "Cleaning up",
+  pruning: "Removing",
   finished: "Done",
 };
 
@@ -79,7 +79,6 @@ export function jobLabel(snapshot: JobSnapshot): string {
 
   if (snapshot.phase === "queued") return "Queued";
   if (snapshot.progress.download) return "Downloading models";
-  if (snapshot.type === "libraryPurge" && snapshot.phase === "pruning") return "Removing";
   return jobPhaseLabel(snapshot.phase);
 }
 
@@ -139,7 +138,8 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
       return { text: formatBytes(downloadedBytes), ratio: null };
     }
     case "loadingModels":
-      return itemProgress(progress, "Preparing models…");
+      // The phase label already says "Loading models"; without a total there is no count to add.
+      return itemProgress(progress, "");
     case "scanning":
       // `discovered` is what's actually moving while the walk is indeterminate; `total` /
       // `phaseCompleted` only become meaningful once the walk finishes (final discovered count).

@@ -152,6 +152,7 @@
   /* The search row is its own, roomier toolbar. Its field, text buttons, and icon controls use
      this one metric so chrome stays aligned as a theme changes its toolbar density. */
   --toolbar-control-height: 32px;
+  --job-indicator-max-width: 240px;
   /* Status bar indicator light while a paired device has the gallery open. */
   --status-connected: #3cc93c;
   --status-connected-edge: #238a23;

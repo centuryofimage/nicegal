@@ -25,7 +25,17 @@
   } = $props();
 
   const phaseProgress = $derived(jobPhaseProgress(job));
-  const count = $derived(phaseProgress.text);
+  // The pill shows a percent; exact counts stay in the card. The folder walk has no total yet,
+  // so its running file count is the only progress worth showing.
+  const count = $derived(
+    !running
+      ? ""
+      : phaseProgress.ratio !== null
+        ? `${Math.floor(phaseProgress.ratio * 100)}%`
+        : job.phase === "scanning"
+          ? phaseProgress.text
+          : "",
+  );
   const label = $derived(jobLabel(job));
   const hasFileErrors = $derived(job.errors.length > 0);
   const needsAttention = $derived(job.status === "failed" || Boolean(job.error) || hasFileErrors);
@@ -48,7 +58,7 @@
         : "The job stopped before it could finish.",
   );
   const displayLabel = $derived(
-    needsAttention && job.status === "completed" ? "Completed with issues" : label,
+    needsAttention && job.status === "completed" ? "Done with issues" : label,
   );
   const downloading = $derived(
     running && (Boolean(job.progress.download) || job.phase === "downloadingModels"),
@@ -56,7 +66,7 @@
   const compactLabel = $derived(
     downloading
       ? `${job.status === "cancelling" ? "Cancelling" : "Downloading"}${phaseProgress.ratio !== null ? ` ${Math.floor(phaseProgress.ratio * 100)}%` : "…"}`
-      : `${displayLabel}${count ? ` · ${count}` : ""}`,
+      : `${displayLabel}${count ? ` ${count}` : ""}`,
   );
   let cardPinned = $state(false);
   let hiddenAttentionJob = $state<string | null>(null);
@@ -192,6 +202,8 @@
     display: grid;
     box-sizing: border-box;
     height: var(--toolbar-control-height);
+    /* Bounded so a long phase label ellipsizes instead of wrapping the toolbar actions. */
+    max-width: var(--job-indicator-max-width);
     grid-template-columns: auto minmax(0, 1fr);
     align-items: center;
     gap: var(--space-5);

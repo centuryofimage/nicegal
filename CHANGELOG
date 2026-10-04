@@ -1,6 +1,2 @@
-- added very powerful [PE models](https://github.com/facebookresearch/perception_models)
-- cleaned up model picker and added links to the models and suggestions and tiers
-- fixed phone layout
-- fixed phone gestures
-- fixed drag and drop
-- require SSE4.2 capable processor. sorry to all laptops before 2013
+- fixed model patches that may have caused GPU crashes
+- clean up ui
