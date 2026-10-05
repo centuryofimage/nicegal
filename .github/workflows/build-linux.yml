@@ -25,7 +25,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git curl xz-utils unzip python3 build-essential pkg-config libssl-dev libclang-dev cmake nasm libvulkan1 libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxtst6 libatspi2.0-0 libnotify4 libsecret-1-0 xdg-utils
+          apt-get install -y --no-install-recommends ca-certificates git curl jq xz-utils unzip python3 build-essential pkg-config libssl-dev libclang-dev cmake nasm libvulkan1 libgtk-3-0 libnss3 libasound2 libgbm1 libxss1 libxtst6 libatspi2.0-0 libnotify4 libsecret-1-0 xdg-utils
 
       - name: Checkout
         uses: actions/checkout@v7

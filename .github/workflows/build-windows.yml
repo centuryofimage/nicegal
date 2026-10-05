@@ -46,51 +46,21 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building $version (previous tag: ${latest:-none})"
 
-  build-macos:
+  build:
     needs: version
     strategy:
       fail-fast: true
       matrix:
-        include:
-          - os: macos-latest
-            platform: macos-arm64
-            arch: arm64
-          # Intel is skipped for now. Restore its row in .github/RELEASE_NOTES_TEMPLATE.md when
-          # re-enabling it.
-          # - os: macos-26-intel
-          #   platform: macos-intel
-          #   arch: x64
-    uses: ./.github/workflows/build-macos.yml
+        platform: [windows, linux, macos-arm64]
+    uses: ./.github/workflows/build-platform.yml
     with:
       version: ${{ needs.version.outputs.version }}
-      os: ${{ matrix.os }}
       platform: ${{ matrix.platform }}
-      arch: ${{ matrix.arch }}
     secrets:
       NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
-
-  build-windows:
-    needs: version
-    uses: ./.github/workflows/build-platform-windows.yml
-    with:
-      version: ${{ needs.version.outputs.version }}
-    secrets:
-      NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
-
-  build-linux:
-    needs: version
-    uses: ./.github/workflows/build-linux.yml
-    with:
-      version: ${{ needs.version.outputs.version }}
-    secrets:
-      NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
-
-  build-flatpak:
-    needs: [version, build-linux]
-    uses: ./.github/workflows/build-flatpak.yml
 
   attest:
-    needs: [build-macos, build-windows, build-linux, build-flatpak]
+    needs: build
     if: github.repository == 'centuryofimage/nicegal' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-slim
     steps:
