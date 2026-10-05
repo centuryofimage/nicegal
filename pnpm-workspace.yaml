@@ -5,6 +5,7 @@ allowBuilds:
 minimumReleaseAgeExclude:
   - "@types/node@22.20.3"
   - electron@44.4.0 || 44.4.4 || 44.5.1
+  - "@lucide/svelte@1.52.0"
 overrides:
   # selfsigned's @peculiar/x509 needs the same asn1-schema copy as its asn1-* siblings; two
   # copies keep separate schema registries and certificate generation fails.

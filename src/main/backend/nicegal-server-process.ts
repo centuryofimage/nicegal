@@ -73,6 +73,7 @@ export class NicegalServerProcess {
     );
     this.child = child;
     this.log?.write("desktop", "server-spawned", {
+      pid: child.pid,
       executable: options.executable,
       assetDatabase: options.assetDatabase,
       ocrDatabase: options.ocrDatabase,
@@ -87,7 +88,17 @@ export class NicegalServerProcess {
       this.log?.write("server", "stderr", { line });
     });
     child.on("exit", (code, signal) => {
-      this.log?.write("desktop", "server-exited", { code, signal });
+      this.log?.write("desktop", "server-exited", {
+        pid: child.pid,
+        code,
+        // Windows native exception status is often only recognizable in hexadecimal.
+        nativeStatus:
+          process.platform === "win32" && code !== null
+            ? `0x${(code >>> 0).toString(16).padStart(8, "0")}`
+            : undefined,
+        signal,
+        expected: this.stopping,
+      });
       if (this.child === child && !this.stopping) {
         this.child = null;
         this.onUnexpectedExit?.(code, signal);

@@ -41,6 +41,9 @@ for (const scenario of [
     };
     const app = Object.assign(new EventEmitter(), {
       isPackaged: false,
+      getVersion: (): string => "0.0.0",
+      getName: (): string => "Nicegal",
+      getGPUInfo: async () => ({}),
       commandLine: { hasSwitch: (): boolean => false },
       requestSingleInstanceLock: (): boolean => true,
       setAppUserModelId: (): void => {},
@@ -107,6 +110,10 @@ for (const scenario of [
     };
     const vite = await createServer({
       configFile: false,
+      define: {
+        __NICEGAL_FRONTEND_COMMIT__: JSON.stringify("test"),
+        __NICEGAL_BACKEND_COMMIT__: JSON.stringify("test"),
+      },
       cacheDir: "node_modules/.vite-shutdown-tests",
       optimizeDeps: { noDiscovery: true, include: [] },
       plugins: [

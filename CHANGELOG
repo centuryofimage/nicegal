@@ -1,2 +1,3 @@
-- fixed model patches that may have caused GPU crashes
-- clean up ui
+- add idle unload
+- improve logging so it actually has crash reasons
+- fix job cancellation immediately restarting jobs

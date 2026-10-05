@@ -6,9 +6,6 @@ inputs:
     description: Desktop platform identifier, including macos-intel when applicable.
     required: true
 
-env:
-  PNPM_VERSION: 11.28.3
-
 runs:
   using: composite
   steps:
@@ -56,6 +53,10 @@ runs:
         path: |
           ${{ runner.os == 'Windows' && '~\AppData\Local\electron\Cache' || runner.os == 'macOS' && '~/Library/Caches/electron' || '~/.cache/electron' }}
           ${{ runner.os == 'Windows' && '~\AppData\Local\electron-builder\Cache' || runner.os == 'macOS' && '~/Library/Caches/electron-builder' || '~/.cache/electron-builder' }}
+
+    - shell: bash
+      run: |
+        jq -r '"PNPM_VERSION=\(.packageManager | split("@")[1])"' < package.json >> "$GITHUB_ENV"
 
     - name: Setup pnpm
       if: inputs.platform != 'macos-intel'

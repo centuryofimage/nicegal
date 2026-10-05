@@ -93,6 +93,13 @@ export function createLibraryViewController(
   // search; layout switches must retain the ranked results rather than clearing/requerying them.
   const searchTimeline = $derived(preferences.current.sortField);
   const supportsImageTextQueries = $derived(runtime.supportsImageTextQueries);
+  // Session residency is not search availability: cached models reload on demand.
+  const modelReadiness = $derived({
+    text: runtime.models?.text.state === "ready",
+    clipImage: runtime.models?.clipImage.state === "ready",
+    clipText: runtime.models?.clipText.state === "ready",
+  });
+  let previousModelReadiness = { text: false, clipImage: false, clipText: false };
   // Saving scroll position replaces the library registry, and status polls replace row objects.
   // Only an actual change in OCR availability should restart the search. Keep the last count
   // during status loading/errors rather than toggling engines for a transient refresh.
@@ -249,7 +256,7 @@ export function createLibraryViewController(
     if (libraryId === null || restoringLibraryView) return;
     scheduleLibraryViewState(libraryId, query, scrollTop);
   });
-  $effect(() => {
+  function scheduleSearch(): void {
     const libraryId = catalog.selectedId;
     // A new snapshot is taken for each search identity, so query and visual reference changes
     // rerun this effect through it.
@@ -273,6 +280,24 @@ export function createLibraryViewController(
         imageModel,
       ),
     );
+  }
+  $effect(scheduleSearch);
+  $effect(() => {
+    const ready = modelReadiness;
+    const textRecovered = ready.text && !previousModelReadiness.text;
+    const imageRecovered =
+      (ready.clipImage && !previousModelReadiness.clipImage) ||
+      (ready.clipText && !previousModelReadiness.clipText);
+    previousModelReadiness = ready;
+    // Retry a setup-blocked query when an encoder becomes ready. Neither eviction
+    // nor completion of the query's own lazy load should reschedule successful work.
+    untrack(() => {
+      if (
+        (textRecovered && ocrSearch.textSetupRequired) ||
+        (imageRecovered && ocrSearch.imageSetupRequired)
+      )
+        scheduleSearch();
+    });
   });
   $effect(() => {
     const catalogItems = searchCatalog.items;

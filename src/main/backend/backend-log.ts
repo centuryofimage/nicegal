@@ -1,4 +1,4 @@
-import { createWriteStream, type WriteStream } from "node:fs";
+import { appendFileSync, createWriteStream, type WriteStream } from "node:fs";
 import { rename, rm } from "node:fs/promises";
 
 /// Generations kept alongside the live file: `path`, `path.1`, `path.2`. One more rotation drops
@@ -24,7 +24,7 @@ export class BackendLog {
     return new BackendLog(path);
   }
 
-  private constructor(path: string) {
+  private constructor(private readonly path: string) {
     this.stream = createWriteStream(path, { flags: "a", encoding: "utf8" });
     this.stream.on("error", (error) => console.error("Backend log write failed", error));
     this.write("desktop", "log-opened", { path });
@@ -32,9 +32,27 @@ export class BackendLog {
 
   write(source: "desktop" | "server" | "job" | "http", event: string, data?: unknown): void {
     if (this.closed) return;
-    this.stream.write(
-      `${JSON.stringify({ timestamp: new Date().toISOString(), source, event, data })}\n`,
-    );
+    const line = `${JSON.stringify({ timestamp: new Date().toISOString(), source, event, data })}\n`;
+    this.stream.write(line);
+    process.stdout.write(line);
+  }
+
+  /** The process may terminate immediately after an uncaught exception. */
+  writeFatal(error: Error, origin: string): void {
+    if (this.closed) return;
+    try {
+      appendFileSync(
+        this.path,
+        `${JSON.stringify({
+          timestamp: new Date().toISOString(),
+          source: "desktop",
+          event: "uncaught-exception",
+          data: { origin, error: error.stack ?? error.message },
+        })}\n`,
+      );
+    } catch {
+      // Diagnostics must not replace the original fatal exception.
+    }
   }
 
   flush(): Promise<void> {

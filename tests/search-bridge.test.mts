@@ -108,6 +108,8 @@ test("backend error codes survive IPC; other errors pass through unchanged", asy
   };
 
   failure = Object.assign(new Error("Image model not ready"), { code: "models_not_ready" });
+  const wrapped = await list().catch((error: Error) => error);
+  assert.equal(wrapped.cause, failure, "main-process errors retain their original stack and cause");
   const coded = await received();
   assert.equal(errorCode(coded), "models_not_ready");
   assert.equal(errorMessage(coded), "Image model not ready");

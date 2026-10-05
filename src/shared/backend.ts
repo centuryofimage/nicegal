@@ -233,7 +233,7 @@ export interface JobProgress {
   total: number | null;
   /** Items completed within the CURRENT phase — pair with `total` for the within-phase bar. */
   phaseCompleted: number;
-  /** Backend-measured average rate for this phase; null before any work completes.
+  /** Backend-measured rolling five-second average rate; null before any work completes.
    * OCR excludes skipped images, including results retained when resuming.
    * Optional while an older backend binary is in use. */
   itemsPerSecond?: number | null;
@@ -518,8 +518,6 @@ export interface BackendBridge {
   getCatalogRevision(): Promise<string>;
   getOcrModels(): Promise<OcrModelsResponse>;
   getSearchModels(): Promise<SearchModelsResponse>;
-  /** Load a cached search model if present; never downloads. */
-  loadCachedModel(model: "clipText"): Promise<boolean>;
   searchOcr(request: SearchRequest): Promise<SearchResponse>;
   /** Abort all current searches and close their session. The next session must be newer. */
   /** Cancel sessions through this token; never cancel a newer search. */
@@ -528,7 +526,8 @@ export interface BackendBridge {
   getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage>;
   startJob(request: JobRequest, requestId?: string): Promise<JobSnapshot>;
   listJobs(): Promise<JobListResponse>;
-  cancelJob(jobId: string): Promise<JobSnapshot>;
+  /** Atomically stop active and queued work, including starts whose IDs have not arrived yet. */
+  cancelJobs(requestIds: string[]): Promise<JobListResponse>;
   subscribeJob(
     jobId: string,
     listener: (snapshot: JobSnapshot) => void,

@@ -145,9 +145,6 @@ const backend: NicegalBridge["backend"] = {
   getSearchModels(): Promise<SearchModelsResponse> {
     return invoke(IPC_CHANNELS.backend.getSearchModels);
   },
-  loadCachedModel(model: "clipText"): Promise<boolean> {
-    return invoke(IPC_CHANNELS.backend.loadCachedModel, model);
-  },
   searchOcr(request: SearchRequest): Promise<SearchResponse> {
     return invoke(IPC_CHANNELS.backend.search, request, searchClient);
   },
@@ -160,8 +157,8 @@ const backend: NicegalBridge["backend"] = {
   listJobs(): Promise<JobListResponse> {
     return invoke(IPC_CHANNELS.backend.listJobs);
   },
-  cancelJob(jobId: string): Promise<JobSnapshot> {
-    return invoke(IPC_CHANNELS.backend.cancelJob, jobId);
+  cancelJobs(requestIds: string[]): Promise<JobListResponse> {
+    return invoke(IPC_CHANNELS.backend.cancelJobs, requestIds);
   },
   ensureThumbnails(request: EnsureThumbnailsRequest): Promise<EnsureThumbnailsResponse> {
     return invoke(IPC_CHANNELS.backend.ensureThumbnails, request);

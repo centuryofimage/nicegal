@@ -10,12 +10,17 @@ const directory = await mkdtemp(join(tmpdir(), "nicegal-diagnostics-test-"));
 const outputPath = join(directory, "nicegal-diagnostics.zip");
 const dialogResult = { canceled: false, filePath: outputPath };
 const calls = { flushes: 0 };
+let gpuFailure = false;
 const mocks = {
   app: {
     getVersion: () => "1.2.3",
     getName: () => "Nicegal",
     getPath: () => directory,
     isPackaged: true,
+    getGPUInfo: async () => {
+      if (gpuFailure) throw new Error("GPU unavailable");
+      return { gpuDevice: [{ vendorId: 4318, deviceId: 1234, driverVersion: "test-driver" }] };
+    },
   },
   dialog: {
     showSaveDialog: async () => dialogResult,
@@ -84,6 +89,21 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
     "utf8",
   );
 
+  await writeFile(
+    join(directory, "nicegal-server.log"),
+    JSON.stringify({
+      fields: { path: privatePath, error: `decoding ${privatePath}: invalid PNG signature` },
+    }) + "\n",
+  );
+  await writeFile(join(directory, "nicegal-server.log.2"), '{"event":"older-rust-log"}\n');
+  await writeFile(
+    join(directory, "nicegal-panic.log"),
+    JSON.stringify({
+      event: "rust-panic",
+      backtrace: `worker panic\n  at ${privatePath}:42:5`,
+    }) + "\n",
+  );
+  await writeFile(join(directory, "private.dmp"), "raw memory must stay local");
   const savedPath = await diagnostics.collectDiagnostics(
     {},
     {
@@ -102,7 +122,15 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
       .getEntries()
       .map((entry) => entry.entryName)
       .toSorted(),
-    ["backend.log", "backend.log.1", "diagnostics.json", "runtime.json"],
+    [
+      "backend.log",
+      "backend.log.1",
+      "diagnostics.json",
+      "nicegal-panic.log",
+      "nicegal-server.log",
+      "nicegal-server.log.2",
+      "runtime.json",
+    ],
   );
   const savedLog = zip.readAsText("backend.log");
   assert.match(savedLog, /\[redacted local path\]/);
@@ -123,10 +151,25 @@ test("collectDiagnostics saves build details and backend files in a zip", async 
     frontendCommit: "front1234567",
     backendCommit: "back12345678",
   });
-  assert.deepEqual(manifest.backend, { ready: false, error: "[redacted local path]" });
+  assert.deepEqual(manifest.backend, {
+    ready: false,
+    error: "failed to start at [redacted local path]",
+  });
+  assert.ok(manifest.system.release);
+  assert.ok(manifest.system.version);
+  assert.equal(manifest.system.gpu.info.gpuDevice[0].driverVersion, "test-driver");
+  assert.match(zip.readAsText("nicegal-server.log"), /invalid PNG signature/);
+  assert.match(zip.readAsText("nicegal-panic.log"), /:42:5/);
   assert.deepEqual(
     manifest.files.map((file: { name: string }) => file.name),
-    ["backend.log", "backend.log.1", "runtime.json"],
+    [
+      "backend.log",
+      "backend.log.1",
+      "nicegal-server.log",
+      "nicegal-server.log.2",
+      "nicegal-panic.log",
+      "runtime.json",
+    ],
   );
 });
 
@@ -156,4 +199,24 @@ test("recentBackendLog keeps local paths in the last twelve complete lines", asy
   await writeFile(join(directory, "backend.log"), `${lines.join("\n")}\n`, "utf8");
   const recent = await diagnostics.recentBackendLog();
   assert.equal(recent, lines.slice(-12).join("\n"));
+});
+
+test("failed GPU collection does not prevent exporting useful logs", async () => {
+  gpuFailure = true;
+  try {
+    await diagnostics.collectDiagnostics(
+      {},
+      {
+        backendStatus: { ready: false, error: "crashed" },
+        flushBackendLog: async () => {},
+      },
+    );
+    const zip = new AdmZip(await readFile(outputPath));
+    const manifest = JSON.parse(zip.readAsText("diagnostics.json"));
+    assert.equal(manifest.system.gpu, null);
+    assert.ok(manifest.issues.some((issue: string) => issue.includes("GPU unavailable")));
+    assert.ok(zip.getEntry("nicegal-server.log"));
+  } finally {
+    gpuFailure = false;
+  }
 });

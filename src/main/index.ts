@@ -20,7 +20,13 @@ import { registerBackendIpc } from "./backend/ipc";
 import { NicegalServerClient } from "./backend/nicegal-server-client";
 import { NicegalServerProcess, RESTART_EXIT_CODE } from "./backend/nicegal-server-process";
 import { ThumbnailReader } from "./backend/thumbnail-reader";
-import { collectDiagnostics, getAppInfo, recentBackendLog } from "./diagnostics";
+import {
+  collectDiagnostics,
+  getAppInfo,
+  getGpuInfo,
+  getSystemInfo,
+  recentBackendLog,
+} from "./diagnostics";
 import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
 import { registerRemoteIpc } from "./remote/ipc";
@@ -63,6 +69,12 @@ let backendShutdown: Promise<void> | null = null;
 let backendRecovery: Promise<void> | null = null;
 let updates: ReturnType<typeof startUpdates> | null = null;
 let restartForUpdate = false;
+
+// Observe fatal exceptions without changing Node's termination behavior.
+process.on("uncaughtExceptionMonitor", (error, origin) => backendLog?.writeFatal(error, origin));
+app.on("child-process-gone", (_event, details) =>
+  backendLog?.write("desktop", "child-process-gone", details),
+);
 
 function broadcastBackendStatus(): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -205,6 +217,11 @@ function createWindow(): void {
 }
 
 async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
+  mainWindow.webContents.on("render-process-gone", (_event, details) =>
+    backendLog?.write("desktop", "renderer-exited", details),
+  );
+  mainWindow.on("unresponsive", () => backendLog?.write("desktop", "window-unresponsive"));
+  mainWindow.on("responsive", () => backendLog?.write("desktop", "window-responsive"));
   mainWindow.webContents.on("will-navigate", (event, url) => {
     if (!isTrustedRendererUrl(url)) event.preventDefault();
   });
@@ -355,6 +372,13 @@ async function initializeBackend(): Promise<void> {
     process.env["NICEGAL_STATE_DIR"] ?? join(app.getPath("userData"), "nicegal-server");
   await mkdir(stateDirectory, { recursive: true });
   backendLog = await BackendLog.open(join(stateDirectory, "backend.log"));
+  const launchLog = backendLog;
+  launchLog.write("desktop", "environment", { application: getAppInfo(), system: getSystemInfo() });
+  void getGpuInfo().then(
+    (gpu) => launchLog.write("desktop", "gpu-information", gpu),
+    (error: unknown) =>
+      launchLog.write("desktop", "gpu-information-unavailable", { error: String(error) }),
+  );
   backendProcess = new NicegalServerProcess(backendLog, handleUnexpectedExit);
 
   const executableName = process.platform === "win32" ? "nicegal-server.exe" : "nicegal-server";

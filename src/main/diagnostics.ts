@@ -4,6 +4,7 @@ import { open } from "node:fs/promises";
 import { release, type as osType, version as osVersion } from "node:os";
 import { join } from "node:path";
 import { arch, platform, versions } from "node:process";
+import { stripVTControlCharacters } from "node:util";
 
 import type { BackendStatus } from "../shared/backend";
 import type { AppInfo } from "../shared/diagnostics";
@@ -16,11 +17,10 @@ const MAX_SETTINGS_BYTES = 1024 * 1024;
 const RECENT_LOG_BYTES = 64 * 1024;
 const RECENT_LOG_LINES = 12;
 const REDACTED_PATH = "[redacted local path]";
-const WINDOWS_PATH = /(?:^|[^A-Za-z0-9_])[A-Za-z]:[\\/]/;
-const UNC_PATH = /\\\\(?:\?\\)?[^\\\s]+\\[^\\\s]+/;
-const POSIX_PATH =
-  /(?:^|[\s"'=(])\/(?:Users|home|mnt|media|Volumes|var|tmp|opt|etc|private|run|srv|root|Applications)\//i;
-const LABELED_POSIX_PATH = /\b(?:path|directory|folder|file|root)\s*[=:]\s*\/(?!\/)/i;
+// Preserve the error around a path, including an error chain after ": " and stack line numbers.
+// Quoted paths may contain spaces; unquoted paths end at punctuation or an error-chain delimiter.
+const LOCAL_PATH =
+  /(^|[\s"'`=(:])(?:file:\/\/\/?)?(?:[A-Za-z]:[\\/]|\\\\(?:\?\\)?|\/(?!v1(?:\/|\b)))[^\r\n"'`<>|:;,()[\]]+/gm;
 
 interface DiagnosticFile {
   archiveName: string;
@@ -40,6 +40,17 @@ export function getAppInfo(): AppInfo {
     electronVersion: versions.electron ?? "unknown",
     frontendCommit: __NICEGAL_FRONTEND_COMMIT__,
     backendCommit: __NICEGAL_BACKEND_COMMIT__,
+  };
+}
+
+export function getSystemInfo(): Record<string, string> {
+  return { platform, architecture: arch, type: osType(), release: release(), version: osVersion() };
+}
+
+export async function getGpuInfo(): Promise<unknown> {
+  return {
+    source: "Electron/Chromium adapter inventory; ONNX Runtime may select a different adapter",
+    info: await withDeadline(app.getGPUInfo("complete"), 3_000, "reading GPU information"),
   };
 }
 
@@ -76,7 +87,7 @@ export async function collectDiagnostics(
 
   const issues: string[] = [];
   try {
-    await options.flushBackendLog();
+    await withDeadline(options.flushBackendLog(), 3_000, "flushing the desktop log");
   } catch (error) {
     issues.push(`Could not flush the current backend log: ${formatError(error)}`);
   }
@@ -84,17 +95,13 @@ export async function collectDiagnostics(
   const stateDirectory =
     process.env["NICEGAL_STATE_DIR"] ?? join(app.getPath("userData"), "nicegal-server");
   const requestedFiles = [
-    { archiveName: "backend.log", path: join(stateDirectory, "backend.log"), limit: MAX_LOG_BYTES },
-    {
-      archiveName: "backend.log.1",
-      path: join(stateDirectory, "backend.log.1"),
-      limit: MAX_LOG_BYTES,
-    },
-    {
-      archiveName: "backend.log.2",
-      path: join(stateDirectory, "backend.log.2"),
-      limit: MAX_LOG_BYTES,
-    },
+    ...["backend.log", "nicegal-server.log", "nicegal-panic.log"].flatMap((base) =>
+      ["", ".1", ".2"].map((suffix) => ({
+        archiveName: base + suffix,
+        path: join(stateDirectory, base + suffix),
+        limit: MAX_LOG_BYTES,
+      })),
+    ),
     {
       archiveName: "runtime.json",
       path: join(stateDirectory, "runtime.json"),
@@ -113,6 +120,7 @@ export async function collectDiagnostics(
     }
   }
 
+  const gpu = await collectOptional("GPU information", getGpuInfo, issues);
   const info = getAppInfo();
   const manifest = {
     collectedAt: new Date().toISOString(),
@@ -129,11 +137,9 @@ export async function collectDiagnostics(
       node: versions.node,
     },
     system: {
-      platform,
-      architecture: arch,
-      type: osType(),
-      release: release(),
-      version: osVersion(),
+      ...getSystemInfo(),
+      // Chromium's adapter inventory is not proof of the device ONNX Runtime selected.
+      gpu: sanitizeDiagnosticValue(gpu),
     },
     backend: sanitizeDiagnosticValue(options.backendStatus),
     files: files.map(({ archiveName, originalBytes, data, truncated }) => ({
@@ -192,12 +198,41 @@ function sanitizeDiagnosticValue(value: unknown, key = ""): unknown {
 }
 
 function redactDiagnosticString(value: string): string {
-  return WINDOWS_PATH.test(value) ||
-    UNC_PATH.test(value) ||
-    POSIX_PATH.test(value) ||
-    LABELED_POSIX_PATH.test(value)
-    ? REDACTED_PATH
-    : value;
+  return stripVTControlCharacters(value).replace(
+    LOCAL_PATH,
+    (_match, prefix: string) => `${prefix}${REDACTED_PATH}`,
+  );
+}
+
+async function collectOptional(
+  label: string,
+  collect: () => Promise<unknown>,
+  issues: string[],
+): Promise<unknown> {
+  try {
+    return await collect();
+  } catch (error) {
+    issues.push(`Could not collect ${label}: ${formatError(error)}`);
+    return null;
+  }
+}
+
+async function withDeadline<T>(
+  task: Promise<T>,
+  milliseconds: number,
+  operation: string,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${operation} timed out`)), milliseconds);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function readFileTail(

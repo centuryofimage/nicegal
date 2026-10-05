@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
+import { inspect } from "node:util";
 
 import type {
   TextEmbeddingCoverage,
@@ -127,15 +129,6 @@ export class NicegalServerClient {
 
   async getSearchModels(): Promise<SearchModelsResponse> {
     return this.requestJson<SearchModelsResponse>("/v1/models", { method: "GET" });
-  }
-
-  async loadCachedModel(model: "clipText"): Promise<boolean> {
-    const response = await this.requestJson<{ loaded: boolean }>("/v1/models/load-cached", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ model }),
-    });
-    return response.loaded;
   }
 
   async getRuntimeStatus(): Promise<RuntimeStatus> {
@@ -359,11 +352,12 @@ export class NicegalServerClient {
     return (await response.json()) as JobSnapshot;
   }
 
-  async cancelJob(jobId: string): Promise<JobSnapshot> {
-    const response = await this.request(`/v1/jobs/${encodeURIComponent(jobId)}`, {
-      method: "DELETE",
+  async cancelJobs(requestIds: string[]): Promise<JobListResponse> {
+    return this.requestJson<JobListResponse>("/v1/jobs/cancel", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ requestIds }),
     });
-    return (await response.json()) as JobSnapshot;
   }
 
   async listJobs(): Promise<JobListResponse> {
@@ -455,6 +449,8 @@ export class NicegalServerClient {
   async forward(path: string, init: RequestInit): Promise<Response> {
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${this.token}`);
+    const traceId = randomUUID();
+    headers.set("x-nicegal-trace-id", traceId);
     return fetch(new URL(path, this.endpoint), { ...init, headers });
   }
 
@@ -469,7 +465,9 @@ export class NicegalServerClient {
     const headers = new Headers(init.headers);
     headers.set("authorization", `Bearer ${this.token}`);
     const startedAt = Date.now();
-    this.log?.write("http", "request-started", { method, path: url.pathname });
+    const traceId = randomUUID();
+    headers.set("x-nicegal-trace-id", traceId);
+    this.log?.write("http", "request-started", { traceId, method, path: url.pathname });
     let response: Response;
     try {
       response = await fetch(url, { ...init, headers });
@@ -478,10 +476,11 @@ export class NicegalServerClient {
         "http",
         init.signal?.aborted ? "request-cancelled" : "request-transport-failed",
         {
+          traceId,
           method,
           path: url.pathname,
           durationMs: Date.now() - startedAt,
-          error: error instanceof Error ? error.message : String(error),
+          error: inspect(error),
         },
       );
       throw error;
@@ -489,6 +488,7 @@ export class NicegalServerClient {
     if (!response.ok) {
       const detail = await response.text();
       this.log?.write("http", "request-failed", {
+        traceId,
         method,
         path: url.pathname,
         status: response.status,
@@ -497,13 +497,18 @@ export class NicegalServerClient {
       });
       const apiError = parseErrorResponse(detail);
       if (apiError) {
-        throw new NicegalServerError(apiError.code, apiError.message, response.status);
+        throw new NicegalServerError(apiError.code, apiError.message, response.status, {
+          traceId,
+          method,
+          path: url.pathname,
+        });
       }
       throw new Error(
         `nicegal-server ${method} ${url.pathname} failed (${response.status}): ${detail}`,
       );
     }
     this.log?.write("http", "request-completed", {
+      traceId,
       method,
       path: url.pathname,
       status: response.status,
@@ -538,6 +543,7 @@ class NicegalServerError extends Error {
     readonly code: string | undefined,
     message: string,
     readonly status: number,
+    readonly request: { traceId: string; method: string; path: string },
   ) {
     super(message);
     this.name = "NicegalServerError";

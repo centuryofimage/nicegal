@@ -98,9 +98,6 @@ class Application implements ApplicationContext {
   private recoveryRevision = 0;
   private recoveryTask: Promise<void> | null = null;
   private backendInitialized = false;
-  private clipTextWarmupStarted = false;
-  private clipTextWarmupRevision = 0;
-  private runtimeChangePending = false;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
@@ -190,7 +187,6 @@ class Application implements ApplicationContext {
         !!status.instanceId &&
         !!catalog.backendStatus.instanceId &&
         status.instanceId !== catalog.backendStatus.instanceId;
-      const recovered = status.ready && (!catalog.backendStatus.ready || replaced);
       const disconnected = catalog.backendStatus.ready && (!status.ready || replaced);
       if (replaced) catalog.applyBackendStatus({ ready: false, error: null });
       catalog.applyBackendStatus(status);
@@ -198,20 +194,13 @@ class Application implements ApplicationContext {
       if (disconnected) {
         this.recoveryRevision += 1;
         this.recoveryTask = null;
-        this.runtimeChangePending = status.restartReason === "runtime-change";
-        this.clipTextWarmupStarted = false;
-        this.clipTextWarmupRevision += 1;
         runtime.reset();
         this.services.ocrSearch.suspend();
         const providerFallback = status.restartReason === "provider-fallback";
         const resuming = orchestrator.backendDisconnected(providerFallback);
         this.services.jobs.backendDisconnected(resuming);
       }
-      if (recovered) {
-        const runtimeChanged = this.runtimeChangePending;
-        this.runtimeChangePending = false;
-        void this.recoverBackend(runtimeChanged);
-      } else if (status.ready) {
+      if (status.ready) {
         // A reconnect can miss edits even when Rust did not restart.
         void this.recoverBackend();
       }
@@ -220,7 +209,11 @@ class Application implements ApplicationContext {
     // edits and restarts, and the next queued scan starts without any client request.
     const revisionPoll = setInterval(() => {
       void catalog.pollRevision();
-      if (catalog.backendStatus.ready && document.visibilityState === "visible") void jobs.sync();
+      if (catalog.backendStatus.ready && document.visibilityState === "visible") {
+        void jobs.sync();
+        // Preparation may finish between polls, before this window ever follows its job.
+        void runtime.refreshModels();
+      }
     }, 2_000);
     void this.initialize();
 
@@ -230,7 +223,6 @@ class Application implements ApplicationContext {
       this.initializationRevision += 1;
       this.recoveryRevision += 1;
       this.recoveryTask = null;
-      this.clipTextWarmupRevision += 1;
       runtime.dispose();
       unsubscribeSettings();
       unsubscribeVisualSearch();
@@ -267,7 +259,7 @@ class Application implements ApplicationContext {
   }
 
   /** Startup and reconnect share one operation per backend lifetime. */
-  private recoverBackend(runtimeChanged = false): Promise<void> {
+  private recoverBackend(): Promise<void> {
     if (!this.started || !this.services.catalog.backendStatus.ready) return Promise.resolve();
     if (this.recoveryTask) return this.recoveryTask;
     const revision = this.recoveryRevision;
@@ -275,7 +267,7 @@ class Application implements ApplicationContext {
       this.started &&
       revision === this.recoveryRevision &&
       this.services.catalog.backendStatus.ready;
-    const task = this.restoreBackend(current, runtimeChanged)
+    const task = this.restoreBackend(current)
       .catch((error: unknown) => {
         if (!current()) return;
         this.problem = {
@@ -292,7 +284,7 @@ class Application implements ApplicationContext {
     return task;
   }
 
-  private async restoreBackend(current: () => boolean, runtimeChanged: boolean): Promise<void> {
+  private async restoreBackend(current: () => boolean): Promise<void> {
     const { catalog, runtime, orchestrator, jobs } = this.services;
     await catalog.loadLibraries();
     if (!current()) return;
@@ -302,7 +294,6 @@ class Application implements ApplicationContext {
     if (!current()) return;
     await catalog.refreshLibraryStatuses();
     if (!current()) return;
-    this.warmClipTextModel(libraryId, runtimeChanged);
     await jobs.sync();
     if (!current()) return;
     if (!this.backendInitialized) {
@@ -313,42 +304,6 @@ class Application implements ApplicationContext {
     orchestrator.backendReady();
     // A selection made during recovery has already told the backend through `onSelectionChanged`.
     if (libraryId === catalog.selectedId) await window.nicegal.backend.setLibraryView(libraryId);
-  }
-
-  /** At startup, warm only for indexed content. A runtime switch warms the new cached model
-   * before its first scan has produced any vectors. */
-  private warmClipTextModel(libraryId: LibraryId | null, runtimeChanged = false): void {
-    const { catalog, runtime } = this.services;
-    if (!this.started || this.clipTextWarmupStarted || !catalog.backendStatus.ready) return;
-    const revision = ++this.clipTextWarmupRevision;
-    void (async () => {
-      if (!runtimeChanged) {
-        if (libraryId === null) return;
-        try {
-          if (!(await window.nicegal.backend.getImageEmbeddingCoverage(libraryId)).indexed) return;
-        } catch {
-          return;
-        }
-      }
-      if (
-        revision !== this.clipTextWarmupRevision ||
-        this.clipTextWarmupStarted ||
-        !catalog.backendStatus.ready ||
-        catalog.selectedId !== libraryId
-      )
-        return;
-      this.clipTextWarmupStarted = true;
-      try {
-        const loaded = await window.nicegal.backend.loadCachedModel("clipText");
-        if (revision !== this.clipTextWarmupRevision || !catalog.backendStatus.ready) return;
-        if (loaded) void runtime.refreshModels();
-        else this.clipTextWarmupStarted = false;
-      } catch (error) {
-        if (revision !== this.clipTextWarmupRevision || !catalog.backendStatus.ready) return;
-        console.warn("Cached visual search model could not be loaded", error);
-        void runtime.refreshModels();
-      }
-    })();
   }
 
   /**

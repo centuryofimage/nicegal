@@ -221,14 +221,6 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(IPC_CHANNELS.backend.getSearchModels, context.isTrustedSender, () =>
     requireBackend().getSearchModels(),
   );
-  handleRemotableIpc(
-    IPC_CHANNELS.backend.loadCachedModel,
-    context.isTrustedSender,
-    (_client, model: unknown) => {
-      if (model !== "clipText") throw new TypeError("Invalid cached model");
-      return requireBackend().loadCachedModel(model);
-    },
-  );
   handleRemotableIpc(IPC_CHANNELS.backend.search, context.isTrustedSender, (client, value, scope) =>
     requireBackend().search(validateSearchRequest(value), `${client.id}:${validateToken(scope)}`),
   );
@@ -276,8 +268,9 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   handleRemotableIpc(IPC_CHANNELS.backend.listJobs, context.isTrustedSender, () =>
     requireBackend().listJobs(),
   );
-  handleRemotableIpc(IPC_CHANNELS.backend.cancelJob, context.isTrustedSender, (_client, value) => {
-    return requireBackend().cancelJob(validateJobId(value));
+  handleRemotableIpc(IPC_CHANNELS.backend.cancelJobs, context.isTrustedSender, (_client, value) => {
+    if (!Array.isArray(value) || value.length > 64) throw new TypeError("Invalid job request IDs");
+    return requireBackend().cancelJobs(value.map(validateToken));
   });
   handleRemotableIpc(
     IPC_CHANNELS.backend.subscribeJob,

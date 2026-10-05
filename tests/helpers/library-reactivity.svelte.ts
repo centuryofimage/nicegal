@@ -94,6 +94,30 @@ assert.notEqual(view.gallerySelection, selection, "selection resets synchronousl
 flushSync();
 assert.equal(schedules, 4);
 
+// Model residency changes must not reschedule an unchanged query.
+const { runtime } = app.services;
+const readyModel = { state: "ready" as const, error: null };
+const idleModel = { state: "notLoaded" as const, error: null };
+runtime.models = { text: readyModel, clipImage: readyModel, clipText: readyModel };
+flushSync();
+assert.equal(schedules, 4, "completing a lazy load must not duplicate a successful search");
+runtime.models = { text: idleModel, clipImage: idleModel, clipText: idleModel };
+flushSync();
+assert.equal(schedules, 4, "idle eviction must not rerun the current query");
+ocrSearch.imageSetupRequired = true;
+flushSync();
+assert.equal(schedules, 4, "a setup notice alone must not cause a retry loop");
+runtime.models = { text: idleModel, clipImage: idleModel, clipText: readyModel };
+flushSync();
+assert.equal(schedules, 5, "a recovered image encoder retries a blocked visual search");
+ocrSearch.imageSetupRequired = false;
+runtime.models = { text: idleModel, clipImage: idleModel, clipText: { ...readyModel } };
+flushSync();
+assert.equal(schedules, 5, "status polling must not repeat the recovery retry");
+runtime.models = { text: idleModel, clipImage: idleModel, clipText: idleModel };
+flushSync();
+assert.equal(schedules, 5, "a query left visible stays idle after eviction");
+
 // A job updates the live catalog without invalidating an unchanged search snapshot.
 ocrSearch.apply = (items) => ({
   items,

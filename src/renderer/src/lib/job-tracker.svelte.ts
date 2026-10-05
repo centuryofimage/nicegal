@@ -1,6 +1,8 @@
-import type { JobRequest, JobSnapshot, LibraryId } from "../../../shared/backend";
+import { SvelteSet } from "svelte/reactivity";
 
-import { cleanDiagnostic, errorMessage } from "./errors";
+import type { JobListResponse, JobRequest, JobSnapshot, LibraryId } from "../../../shared/backend";
+
+import { cleanDiagnostic, errorCode, errorMessage } from "./errors";
 import { acknowledgeJobErrors, newJobErrors } from "./job-error-history";
 import { summarizeCompletion } from "./job-format";
 import { isTerminalJobStatus } from "./job-state";
@@ -42,7 +44,9 @@ export class JobTracker {
    * `active` can go back to null on a clean completion while the subscription is still live. */
   private currentJobId: string | null = null;
   private generation = 0;
-  private cancelRequested = false;
+  /** Request IDs let the backend stop work even before acceptance reaches this window. */
+  private pendingRequests = new SvelteSet<string>();
+  private backendGeneration = 0;
   /** Orders overlapping polls: a response older than one already applied is dropped. */
   private nextSync = 0;
   private appliedSync = 0;
@@ -84,51 +88,50 @@ export class JobTracker {
    * `queued` until it becomes the active job.
    */
   async start(request: JobRequest): Promise<JobSnapshot | null> {
-    if (this.running) {
-      if (request.type !== "libraryScan") return null;
-      try {
-        const snapshot = await window.nicegal.backend.startJob(request);
-        if (snapshot.status === "queued") this.addQueued(snapshot);
-        else if (snapshot.jobId !== this.currentJobId) void this.sync();
-        return snapshot;
-      } catch (error) {
-        this.fail("Couldn't start the job", error);
-        return null;
+    const following = this.running;
+    if (following && request.type !== "libraryScan") return null;
+    const generation = following ? this.generation : ++this.generation;
+    const backendGeneration = this.backendGeneration;
+    const requestId = crypto.randomUUID();
+    this.pendingRequests.add(requestId);
+    if (!following) {
+      this.starting = true;
+      this.failure = null;
+      this.connectionError = null;
+      this.completionMessage = "";
+      if (this.completionTimer) {
+        clearTimeout(this.completionTimer);
+        this.completionTimer = null;
       }
     }
-    const generation = ++this.generation;
-    this.cancelRequested = false;
-    this.failure = null;
-    this.connectionError = null;
-    this.completionMessage = "";
-    if (this.completionTimer) {
-      clearTimeout(this.completionTimer);
-      this.completionTimer = null;
-    }
-
-    let snapshot: JobSnapshot;
-    this.starting = true;
     try {
-      snapshot = await window.nicegal.backend.startJob(request);
+      const snapshot = await window.nicegal.backend.startJob(request, requestId);
+      if (backendGeneration !== this.backendGeneration) return null;
+      if (!following && generation === this.generation) this.starting = false;
+      // Stop has already handled this request. Fetch current state rather than publishing
+      // an acceptance snapshot that may have been in transit when cancellation finished.
+      if (!this.pendingRequests.has(requestId)) {
+        await this.sync();
+        return null;
+      }
+      if (snapshot.status === "queued") {
+        this.addQueued(snapshot);
+        if (!following) await this.sync();
+      } else if (following) {
+        if (snapshot.jobId !== this.currentJobId) await this.sync();
+      } else if (generation === this.generation) {
+        this.attach(snapshot, generation);
+      }
+      return snapshot;
     } catch (error) {
-      // Leave the previous job's subscription and `active` snapshot exactly as they were — a
-      // failed start must not drop the old subscription while its (now-frozen) snapshot stays
-      // on screen.
-      if (generation === this.generation) this.fail("Couldn't start the job", error);
+      // A failed start must leave the previous job's subscription intact.
+      if (this.pendingRequests.has(requestId) && errorCode(error) !== "job_cancelled")
+        this.fail("Couldn't start the job", error);
       return null;
     } finally {
-      if (generation === this.generation) this.starting = false;
+      this.pendingRequests.delete(requestId);
+      if (!following && generation === this.generation) this.starting = false;
     }
-    if (generation !== this.generation) return null;
-    if (snapshot.status === "queued" && snapshot.type === "libraryScan") {
-      // Another client's job holds the slot; follow whichever job is active instead.
-      this.addQueued(snapshot);
-      await this.sync();
-      return snapshot;
-    }
-    this.attach(snapshot, generation);
-    if (this.cancelRequested) await this.cancel();
-    return snapshot;
   }
 
   /**
@@ -149,6 +152,10 @@ export class JobTracker {
     }
     if (generation !== this.generation || this.starting || sync < this.appliedSync) return;
     this.appliedSync = sync;
+    this.applyJobList(list, pushedSnapshots);
+  }
+
+  private applyJobList(list: JobListResponse, pushedSnapshots: number): void {
     // Polled every two seconds; republish only when the queue actually changed.
     const queued = list.jobs.filter((job) => job.status === "queued");
     if (
@@ -184,22 +191,28 @@ export class JobTracker {
 
   /** Cancels the active job and every queued scan. */
   async cancelAll(): Promise<void> {
-    const queued = this.queued;
-    this.queued = [];
-    await Promise.all([
-      this.cancel(),
-      ...queued.map((job) => window.nicegal.backend.cancelJob(job.jobId).catch(() => undefined)),
-    ]);
-  }
-
-  /** Cancels a library's running and queued scans, e.g. when the user switches away from it. */
-  async cancelLibraryScans(libraryId: LibraryId): Promise<void> {
-    const queued = this.queued.filter((job) => job.libraryId === libraryId);
-    this.queued = this.queued.filter((job) => job.libraryId !== libraryId);
-    await Promise.all([
-      this.scanState(libraryId) === "scanning" ? this.cancel() : undefined,
-      ...queued.map((job) => window.nicegal.backend.cancelJob(job.jobId).catch(() => undefined)),
-    ]);
+    const backendGeneration = this.backendGeneration;
+    const generation = this.generation;
+    const sync = ++this.nextSync;
+    // No pre-Stop poll or start response may restore the old queue while cancellation settles.
+    this.appliedSync = sync;
+    const pushedSnapshots = this.pushedSnapshots;
+    const requestIds = [...this.pendingRequests];
+    try {
+      const list = await window.nicegal.backend.cancelJobs(requestIds);
+      if (backendGeneration !== this.backendGeneration) return;
+      if (generation === this.generation) this.starting = false;
+      for (const requestId of requestIds) {
+        this.pendingRequests.delete(requestId);
+      }
+      if (sync < this.appliedSync) {
+        await this.sync();
+        return;
+      }
+      this.applyJobList(list, pushedSnapshots);
+    } catch (error) {
+      if (backendGeneration === this.backendGeneration) this.fail("Couldn't stop the job", error);
+    }
   }
 
   private addQueued(snapshot: JobSnapshot): void {
@@ -210,6 +223,7 @@ export class JobTracker {
     // Only now that the new job actually started do we tear down the previous subscription.
     this.unsubscribe?.();
     this.unsubscribe = null;
+    this.starting = false;
     this.active = snapshot;
     this.currentJobId = snapshot.jobId;
     this.completedJobId = null;
@@ -232,21 +246,6 @@ export class JobTracker {
     this.queued = this.queued.filter((job) => job.jobId !== snapshot.jobId);
   }
 
-  async cancel(): Promise<void> {
-    if (this.starting) {
-      this.cancelRequested = true;
-      return;
-    }
-    if (!this.active || isTerminalJobStatus(this.active.status)) return;
-    const generation = this.generation;
-    try {
-      const snapshot = await window.nicegal.backend.cancelJob(this.active.jobId);
-      if (generation === this.generation) this.handleSnapshot(snapshot);
-    } catch (error) {
-      if (generation === this.generation) this.fail("Couldn't stop the job", error);
-    }
-  }
-
   /**
    * Acknowledges a terminal result or an operation error. Its file errors are remembered, so a
    * later job that meets only those again reports them in the status bar instead.
@@ -265,12 +264,16 @@ export class JobTracker {
   }
 
   dispose(): void {
+    this.backendGeneration += 1;
+    this.pendingRequests.clear();
     this.generation += 1;
     this.unsubscribe?.();
     if (this.completionTimer) clearTimeout(this.completionTimer);
   }
 
   backendDisconnected(restarting = false): void {
+    this.backendGeneration += 1;
+    this.pendingRequests.clear();
     const interrupted = this.running;
     this.generation += 1;
     this.unsubscribe?.();

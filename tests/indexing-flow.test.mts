@@ -157,7 +157,7 @@ function trackerBackend(overrides: Record<string, unknown>): void {
     nicegal: {
       backend: {
         subscribeJob: () => () => {},
-        cancelJob: async (id: string) => snapshot("libraryScan", "cancelled", id),
+        cancelJobs: async (): Promise<JobListResponse> => ({ activeJobId: null, jobs: [] }),
         listJobs: async (): Promise<JobListResponse> => ({ activeJobId: null, jobs: [] }),
         ...overrides,
       },
@@ -288,16 +288,107 @@ test("sync follows a restarted server job that reuses a completed job ID", async
   tracker.dispose();
 });
 
-test("leaving a library cancels its running and queued scans only", async () => {
-  const cancelled: string[] = [];
+for (const status of ["running", "queued"] as const) {
+  test(`Stop covers a delayed ${status} acceptance without restoring it`, async () => {
+    const reply = Promise.withResolvers<JobSnapshot>();
+    let requestId = "";
+    let cancelled: string[] = [];
+    trackerBackend({
+      startJob: (_request: JobRequest, id: string) => {
+        requestId = id;
+        return reply.promise;
+      },
+      cancelJobs: async (ids: string[]): Promise<JobListResponse> => {
+        cancelled = ids;
+        return { activeJobId: null, jobs: [] };
+      },
+    });
+    const tracker = new Tracker(
+      () => {},
+      () => {},
+      () => {},
+    );
+    const start = tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+    await tracker.cancelAll();
+    assert.equal(tracker.starting, false, "confirmed Stop does not wait for a late start reply");
+    reply.resolve(snapshot("libraryScan", status, "accepted", 3));
+    await start;
+    assert.deepEqual(cancelled, [requestId]);
+    assert.equal(tracker.running, false);
+    assert.deepEqual(tracker.queued, []);
+    tracker.dispose();
+  });
+}
+
+test("Stop can discover an accepted job before its start reply arrives", async () => {
+  const reply = Promise.withResolvers<JobSnapshot>();
+  const stopped = snapshot("libraryScan", "cancelling", "accepted", 3);
+  trackerBackend({
+    startJob: () => reply.promise,
+    cancelJobs: async (): Promise<JobListResponse> => ({
+      activeJobId: "accepted",
+      jobs: [stopped],
+    }),
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  const start = tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+  await tracker.cancelAll();
+  reply.resolve(snapshot("libraryScan", "running", "accepted", 3));
+  await start;
+  assert.equal(tracker.starting, false);
+  assert.equal(tracker.active?.status, "cancelling");
+  tracker.dispose();
+});
+
+test("Stop drops a delayed queued start and an older job poll", async () => {
+  const queuedReply = Promise.withResolvers<JobSnapshot>();
+  const oldPoll = Promise.withResolvers<JobListResponse>();
+  const active = snapshot("libraryScan", "running", "1", 3);
+  const queued = snapshot("libraryScan", "queued", "2", 4);
+  let pendingId = "";
+  let polls = 0;
+  trackerBackend({
+    startJob: (request: JobRequest, id: string) => {
+      if (request.params.libraryId === 3) return Promise.resolve(active);
+      pendingId = id;
+      return queuedReply.promise;
+    },
+    listJobs: () =>
+      ++polls === 1 ? oldPoll.promise : Promise.resolve({ activeJobId: null, jobs: [] }),
+    cancelJobs: async (ids: string[]): Promise<JobListResponse> => {
+      assert.deepEqual(ids, [pendingId]);
+      return { activeJobId: null, jobs: [snapshot("libraryScan", "cancelled", "1", 3)] };
+    },
+  });
+  const tracker = new Tracker(
+    () => {},
+    () => {},
+    () => {},
+  );
+  await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
+  const poll = tracker.sync();
+  const start = tracker.start({ type: "libraryScan", params: { libraryId: 4 } });
+  await tracker.cancelAll();
+  oldPoll.resolve({ activeJobId: "1", jobs: [active, queued] });
+  queuedReply.resolve(queued);
+  await Promise.all([poll, start]);
+  assert.equal(tracker.running, false);
+  assert.deepEqual(tracker.queued, []);
+  tracker.dispose();
+});
+
+test("failed Stop keeps the backend queue visible", async () => {
   trackerBackend({
     listJobs: async (): Promise<JobListResponse> => ({
       activeJobId: "1",
       jobs: [snapshot("libraryScan", "running", "1", 3), snapshot("libraryScan", "queued", "2", 4)],
     }),
-    cancelJob: async (id: string) => {
-      cancelled.push(id);
-      return snapshot("libraryScan", "cancelled", id);
+    cancelJobs: async () => {
+      throw new Error("offline");
     },
   });
   const tracker = new Tracker(
@@ -306,44 +397,16 @@ test("leaving a library cancels its running and queued scans only", async () => 
     () => {},
   );
   await tracker.sync();
-  await tracker.cancelLibraryScans(4);
-  assert.deepEqual(cancelled, ["2"], "the other library's running scan continues");
-  assert.equal(tracker.scanState(4), null);
-  await tracker.cancelLibraryScans(3);
-  assert.deepEqual(cancelled, ["2", "1"]);
-  tracker.dispose();
-});
-
-test("Stop before the start response cancels the accepted backend job", async () => {
-  let accept!: (job: JobSnapshot) => void;
-  const cancelled: string[] = [];
-  trackerBackend({
-    startJob: () =>
-      new Promise<JobSnapshot>((resolve) => {
-        accept = resolve;
-      }),
-    cancelJob: async (id: string) => {
-      cancelled.push(id);
-      return snapshot("libraryScan", "cancelled", id);
-    },
-  });
-  const tracker = new Tracker(
-    () => {},
-    () => {},
-    () => {},
-  );
-  const start = tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
-  await tracker.cancel();
-  accept(snapshot("libraryScan", "running", "accepted", 3));
-  await start;
-  assert.deepEqual(cancelled, ["accepted"]);
-  assert.equal(tracker.running, false);
+  await tracker.cancelAll();
+  assert.equal(tracker.scanState(3), "scanning");
+  assert.equal(tracker.scanState(4), "queued");
+  assert.match(tracker.error, /offline/);
   tracker.dispose();
 });
 
 for (const rejected of [false, true]) {
   test(`old cancellation ${rejected ? "failure" : "response"} cannot affect a restarted job`, async () => {
-    const reply = Promise.withResolvers<JobSnapshot>();
+    const reply = Promise.withResolvers<JobListResponse>();
     const listeners: Array<(job: JobSnapshot) => void> = [];
     const connections: Array<(error: string | null) => void> = [];
     trackerBackend({
@@ -357,7 +420,7 @@ for (const rejected of [false, true]) {
         connections.push(connection);
         return () => {};
       },
-      cancelJob: () => reply.promise,
+      cancelJobs: () => reply.promise,
     });
     const tracker = new Tracker(
       () => {},
@@ -365,13 +428,13 @@ for (const rejected of [false, true]) {
       () => {},
     );
     await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
-    const cancelling = tracker.cancel();
+    const cancelling = tracker.cancelAll();
     tracker.backendDisconnected(true);
     await tracker.start({ type: "libraryScan", params: { libraryId: 3 } });
     listeners[0](snapshot("libraryScan", "cancelled"));
     connections[0]("old connection failed");
     if (rejected) reply.reject(new Error("old cancellation failed"));
-    else reply.resolve(snapshot("libraryScan", "cancelled"));
+    else reply.resolve({ activeJobId: null, jobs: [snapshot("libraryScan", "cancelled")] });
     await cancelling;
     assert.equal(tracker.running, true);
     assert.equal(tracker.active?.status, "running");

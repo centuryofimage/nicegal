@@ -159,14 +159,13 @@ export function createRemoteBridge(): NicegalBridge {
     getCatalogRevision: () => call(channels.catalogRevision),
     getOcrModels: () => call(channels.getOcrModels),
     getSearchModels: () => call(channels.getSearchModels),
-    loadCachedModel: (model) => call(channels.loadCachedModel, model),
     searchOcr: (request) => call(channels.search, request, clientId),
     cancelSearch: (throughSession) => call(channels.cancelSearch, throughSession, clientId),
     getTextEmbeddingCoverage: (libraryId) => call(channels.getTextEmbeddingCoverage, libraryId),
     getImageEmbeddingCoverage: (libraryId) => call(channels.getImageEmbeddingCoverage, libraryId),
     startJob: (request, requestId = uuid()) => call(channels.startJob, request, requestId),
     listJobs: () => call(channels.listJobs),
-    cancelJob: (jobId) => call(channels.cancelJob, jobId),
+    cancelJobs: (requestIds) => call(channels.cancelJobs, requestIds),
     ensureThumbnails: (request) => call(channels.ensureThumbnails, request),
     subscribeJob(jobId, listener, onConnection) {
       let disposed = false;

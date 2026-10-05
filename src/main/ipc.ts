@@ -128,5 +128,5 @@ function callWithIpcCode(call: () => unknown): unknown {
 export function withIpcCode(error: unknown): unknown {
   if (!(error instanceof Error) || !("code" in error) || typeof error.code !== "string")
     return error;
-  return new Error(encodeIpcError({ code: error.code, message: error.message }));
+  return new Error(encodeIpcError({ code: error.code, message: error.message }), { cause: error });
 }

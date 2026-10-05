@@ -15,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import ChevronLeft from "@lucide/svelte/icons/chevron-left";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
@@ -416,7 +417,7 @@
         title="Return to gallery (Escape)"
         aria-label="Return to gallery (Escape)"
       >
-        <ChevronLeft size={16} aria-hidden="true" />
+        <ArrowLeft size={16} aria-hidden="true" />
         <span>Gallery</span>
       </button>
       <button
