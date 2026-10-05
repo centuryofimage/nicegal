@@ -46,21 +46,51 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Building $version (previous tag: ${latest:-none})"
 
-  build:
+  build-macos:
     needs: version
-    strategy:
-      fail-fast: true
-      matrix:
-        platform: [windows, linux, macos-arm64]
-    uses: ./.github/workflows/build-platform.yml
+    uses: ./.github/workflows/build-macos.yml
     with:
       version: ${{ needs.version.outputs.version }}
-      platform: ${{ matrix.platform }}
+      os: macos-latest
+      platform: macos-arm64
+      arch: arm64
     secrets:
       NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
 
+  # Intel stays disabled. Restore its release-notes row when re-enabling this job.
+  # build-macos-intel:
+  #   needs: version
+  #   uses: ./.github/workflows/build-macos.yml
+  #   with:
+  #     version: ${{ needs.version.outputs.version }}
+  #     os: macos-26-intel
+  #     platform: macos-intel
+  #     arch: x64
+  #   secrets:
+  #     NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
+
+  build-windows:
+    needs: version
+    uses: ./.github/workflows/build-platform-windows.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
+
+  build-linux:
+    needs: version
+    uses: ./.github/workflows/build-linux.yml
+    with:
+      version: ${{ needs.version.outputs.version }}
+    secrets:
+      NICEGAL_PAT: ${{ secrets.NICEGAL_PAT }}
+
+  build-flatpak:
+    needs: [version, build-linux]
+    uses: ./.github/workflows/build-flatpak.yml
+
   attest:
-    needs: build
+    needs: [build-macos, build-windows, build-linux, build-flatpak]
     if: github.repository == 'centuryofimage/nicegal' && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-slim
     steps:
