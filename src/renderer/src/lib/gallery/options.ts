@@ -11,8 +11,13 @@ export interface LayoutOptions {
   granularity?: DividerGranularity;
   /** Justified: the height rows aim for before justification stretches or shrinks them. */
   targetRowHeight?: number;
-  /** Justified: hard ceiling for a justified row. Defaults to 1.2x the target. */
+  /** Justified: hard ceiling for a justified row. Defaults to 1.4x the target. */
   maxRowHeight?: number;
+  /**
+   * Justified: a row of narrow tiles grows by its mean aspect ratio to the power of minus this, so
+   * tall images are not drawn at half the area of square ones. 0 keeps every row at the target.
+   */
+  narrowRowGrowth?: number;
   /** Masonry: target column width. The real width is snapped so columns fill the viewport. */
   columnWidth?: number;
   /** Grid: fixed column count. 0 derives the count from `cellWidth` instead. */
@@ -41,6 +46,7 @@ export const layoutDefaults = {
   padding: 14,
   granularity: "none" as DividerGranularity,
   targetRowHeight: 148,
+  narrowRowGrowth: 0.5,
   columnWidth: 200,
   columns: 0,
   cellWidth: 160,
@@ -52,7 +58,7 @@ export function resolveLayoutOptions(options: LayoutOptions = {}): ResolvedLayou
   const merged = { ...layoutDefaults, ...stripUndefined(options) };
   return {
     ...merged,
-    maxRowHeight: options.maxRowHeight ?? merged.targetRowHeight * 1.2,
+    maxRowHeight: options.maxRowHeight ?? merged.targetRowHeight * 1.4,
     clamp: { ...modeClamps[merged.mode], ...stripUndefined(options.clamp ?? {}) },
   };
 }

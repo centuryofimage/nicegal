@@ -32,13 +32,17 @@ import type { RemoteAccessBridge, RemoteAccessStatus } from "../shared/remote";
 import type { UpdateBridge, UpdateStatus } from "../shared/updates";
 
 import { IPC_CHANNELS } from "../shared/ipc-channels";
+import { unwrapCallResult, type CallResult } from "../shared/ipc-error";
 
-/** Report rejected IPC once at the transport boundary, preserving the caller's error. */
-const invoke: typeof ipcRenderer.invoke = (channel, ...args) =>
-  ipcRenderer.invoke(channel, ...args).catch((error: unknown) => {
+/** Unwraps the handler's `CallResult` into a value or a thrown error, reported once here. */
+const invoke: typeof ipcRenderer.invoke = async (channel, ...args) => {
+  try {
+    return unwrapCallResult((await ipcRenderer.invoke(channel, ...args)) as CallResult);
+  } catch (error) {
     console.error(`IPC ${channel} failed`, error);
     throw error;
-  });
+  }
+};
 
 const searchClient = crypto.randomUUID();
 let viewGeneration = 0;

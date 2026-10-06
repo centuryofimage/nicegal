@@ -336,7 +336,14 @@
     setCustomScale(effectiveScale * 1.0015 ** -delta, anchor);
   }
 
+  /** A remote browser keeps its own menu on videos, which offers save and picture-in-picture. */
+  function keepsBrowserMenu(target: EventTarget | null): boolean {
+    return isRemote() && target instanceof Element && target.closest("video") !== null;
+  }
+
   const gestures = new ViewerGestures({
+    isGestureTarget: (target) => !target.closest(".video-controls"),
+    opensFileMenuAt: (target) => !keepsBrowserMenu(target),
     isReady: () => imageReady,
     canPan: () => canPan,
     pan: () => ({ x: panX, y: panY }),
@@ -402,8 +409,7 @@
   aria-label={item.displayName}
   bind:this={viewer}
   oncontextmenu={(event) => {
-    // A remote browser keeps its own menu on videos, which offers save and picture-in-picture.
-    if (isRemote() && event.target instanceof Element && event.target.closest("video")) return;
+    if (keepsBrowserMenu(event.target)) return;
     event.preventDefault();
     onfilemenu();
   }}
@@ -546,7 +552,7 @@
     </div>
   {/if}
 
-  <div class="detail-media">
+  <div class="detail-media" {@attach gestures.attach}>
     {#if failed}
       <div class="detail-error">
         <CircleAlert size={28} aria-hidden="true" />
@@ -566,7 +572,6 @@
         class:is-dragging={gestures.dragging}
         role="presentation"
         bind:this={stage}
-        {@attach gestures.attach}
         onwheel={handleWheel}
         onpointerleave={() => (hoveredPatch = null)}
         ondblclick={handleDoubleClick}
@@ -653,6 +658,9 @@
     min-height: 0;
     align-items: center;
     justify-content: center;
+    /* Swipes step between items whatever the viewer shows, so the browser must not pan or zoom
+       the page under them. */
+    touch-action: none;
   }
 
   .detail-image-stage {
@@ -666,7 +674,6 @@
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    touch-action: none;
   }
 
   .detail-image-stage.is-pannable {

@@ -95,6 +95,10 @@
   --media-badge-bg: rgba(0, 0, 0, 0.62);
   --media-badge-fg: #ffffff;
   --media-badge-inset: 6px;
+  --media-badge-height: var(--space-14);
+  --media-badge-font-size: 9px;
+  /* The preview mute button: a square chip big enough to hit. */
+  --media-badge-button-size: 20px;
   --search-highlight-bg: #ffe58a;
   --search-highlight-fg: #1a1a1a;
   /* Semantic-search nudge: a pale yellow tab attached below the search scope control. */

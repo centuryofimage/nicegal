@@ -36,3 +36,17 @@ export function decodeIpcError(text: string): CodedError | null {
   }
   return null;
 }
+
+/**
+ * A call's outcome as data, the same for window IPC and remote HTTP. Handlers report failure here
+ * instead of rejecting, since Electron prints every rejected invoke handler to stdout.
+ */
+export type CallResult = { value: unknown } | { error: { name: string; message: string } };
+
+/** Returns the call's value or throws its error, as the caller would see a direct call. */
+export function unwrapCallResult(result: CallResult): unknown {
+  if ("value" in result) return result.value;
+  const error = new Error(result.error.message);
+  error.name = result.error.name;
+  throw error;
+}

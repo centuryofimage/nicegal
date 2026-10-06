@@ -6,6 +6,8 @@
   import Volume2 from "@lucide/svelte/icons/volume-2";
   import VolumeX from "@lucide/svelte/icons/volume-x";
 
+  import { formatDuration } from "../lib/duration";
+
   let {
     src,
     initialPlayback = null,
@@ -30,16 +32,6 @@
   let resumeAfterScrub = false;
   const seekPercent = $derived(duration > 0 ? `${(currentTime / duration) * 100}%` : "0%");
   const volumePercent = $derived(`${(muted ? 0 : volume) * 100}%`);
-
-  function formatTime(seconds: number): string {
-    if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
-    const whole = Math.floor(seconds);
-    const minutes = Math.floor(whole / 60);
-    const remainder = String(whole % 60).padStart(2, "0");
-    return minutes >= 60
-      ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}`
-      : `${minutes}:${remainder}`;
-  }
 
   function updatePlayback(): void {
     if (!scrubbing) currentTime = video.currentTime;
@@ -221,8 +213,8 @@
     />
     <span
       class="time-readout"
-      aria-label={`Time ${formatTime(currentTime)} of ${formatTime(duration)}`}
-      >{formatTime(currentTime)} / {formatTime(duration)}</span
+      aria-label={`Time ${formatDuration(currentTime)} of ${formatDuration(duration)}`}
+      >{formatDuration(currentTime)} / {formatDuration(duration)}</span
     >
     <button
       class="player-button"

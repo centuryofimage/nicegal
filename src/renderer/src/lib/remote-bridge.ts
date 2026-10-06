@@ -13,6 +13,7 @@ import type { RemoteAccessBridge } from "../../../shared/remote";
 import type { UpdateBridge } from "../../../shared/updates";
 
 import { IPC_CHANNELS } from "../../../shared/ipc-channels";
+import { unwrapCallResult, type CallResult } from "../../../shared/ipc-error";
 import { REMOTE_CLIENT_HEADER, type RemoteEvent } from "../../../shared/remote";
 import { visualFileBase64 } from "./visual-file";
 
@@ -74,16 +75,7 @@ export function createRemoteBridge(): NicegalBridge {
       }
       if (!response.ok)
         throw new Error((await response.text()) || `Request failed (${response.status})`);
-      const body = (await response.json()) as {
-        value?: unknown;
-        error?: { name: string; message: string };
-      };
-      if (body.error) {
-        const error = new Error(body.error.message);
-        error.name = body.error.name;
-        throw error;
-      }
-      return body.value as T;
+      return unwrapCallResult((await response.json()) as CallResult) as T;
     } catch (error) {
       console.error(`IPC ${channel} failed`, error);
       throw error;

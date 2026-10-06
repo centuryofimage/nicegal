@@ -1,7 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from "electron";
 import { randomUUID } from "node:crypto";
 
-import { encodeIpcError } from "../shared/ipc-error";
+import { encodeIpcError, type CallResult } from "../shared/ipc-error";
 import { isRemoteChannel, type RemoteChannel, type WindowChannel } from "./ipc-access";
 
 export type IpcSenderValidator = (event: IpcMainInvokeEvent) => boolean;
@@ -106,26 +106,32 @@ function handleInvoke(
   ipcMain.handle(channel, (event, ...args: unknown[]) => {
     if (!isTrustedSender(event))
       throw new Error("Untrusted IPC: rejected a call from an untrusted renderer");
-    return callWithIpcCode(() => handler(event, ...args));
+    return settleCall(() => handler(event, ...args));
   });
 }
 
-function callWithIpcCode(call: () => unknown): unknown {
-  let result: unknown;
+/**
+ * Runs a handler and reports its outcome as data, keeping a backend error's code. Only the message
+ * reaches the renderer, so an error without a code, which is a fault rather than an expected
+ * state, is logged here with its stack.
+ */
+export async function settleCall(call: () => unknown): Promise<CallResult> {
   try {
-    result = call();
+    return { value: await call() };
   } catch (error) {
-    throw withIpcCode(error);
+    const coded = withIpcCode(error);
+    if (coded === error) console.error(error);
+    return {
+      error: {
+        name: coded instanceof Error ? coded.name : "Error",
+        message: coded instanceof Error ? coded.message : String(coded),
+      },
+    };
   }
-  return result instanceof Promise
-    ? result.catch((error: unknown) => {
-        throw withIpcCode(error);
-      })
-    : result;
 }
 
 /** Keeps a backend error's code, which Electron would otherwise drop with every other property. */
-export function withIpcCode(error: unknown): unknown {
+function withIpcCode(error: unknown): unknown {
   if (!(error instanceof Error) || !("code" in error) || typeof error.code !== "string")
     return error;
   return new Error(encodeIpcError({ code: error.code, message: error.message }), { cause: error });

@@ -3,8 +3,9 @@ import { after, test } from "node:test";
 import { createServer } from "vite";
 
 import { IPC_CHANNELS } from "../src/shared/ipc-channels.ts";
+import { RendererHandlers } from "./helpers/renderer-handlers.ts";
 
-const handlers = new Map<string, (event: unknown, value: unknown) => unknown>();
+const handlers = new RendererHandlers();
 const revealCalls: string[] = [];
 let fileMenu: { label?: string; click?: () => void }[] = [];
 Object.assign(globalThis, {
@@ -118,13 +119,16 @@ test("native dragging validates IDs, resolves groups in batches and consumes sen
   });
   const prepare = handlers.get(channels.prepareFileDrag)!;
   const start = handlers.get(channels.startFileDrag)!;
-  assert.throws(() => prepare({ ...event, trusted: false }, { assetIds: ["1"] }), /untrusted/);
+  await assert.rejects(
+    async () => prepare({ ...event, trusted: false }, { assetIds: ["1"] }),
+    /untrusted/,
+  );
   await assert.rejects(async () => prepare(event, { assetIds: ["../file"] }), /asset IDs/);
   const ids = Array.from({ length: 513 }, (_, i) => String(i + 1));
   const token = await prepare(event, { assetIds: [...ids, "1"] });
   assert.deepEqual(batches, [512, 1]);
-  assert.throws(() => start({ ...event, sender: {} }, token), /expired/);
-  start(event, token);
+  await assert.rejects(async () => start({ ...event, sender: {} }, token), /expired/);
+  await start(event, token);
   assert.deepEqual(starts, [
     {
       file: `${process.cwd()}/1.png`,
@@ -132,7 +136,7 @@ test("native dragging validates IDs, resolves groups in batches and consumes sen
       icon: { icon: true },
     },
   ]);
-  assert.throws(() => start(event, token), /expired/);
+  await assert.rejects(async () => start(event, token), /expired/);
 });
 
 test("missing files fail the whole drag and old resolutions cannot replace a newer drag", async () => {

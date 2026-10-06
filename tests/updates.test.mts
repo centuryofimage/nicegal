@@ -8,7 +8,9 @@ import { createServer } from "vite";
 
 import type { UpdateStatus } from "../src/shared/updates.ts";
 
-const handlers = new Map<string, (event: unknown, value?: unknown) => unknown>();
+import { RendererHandlers } from "./helpers/renderer-handlers.ts";
+
+const handlers = new RendererHandlers();
 const messages: unknown[] = [];
 const opened: string[] = [];
 const feedUrls: string[] = [];
@@ -162,7 +164,7 @@ test("Flatpak leaves update checks to its package manager", async (t) => {
     true,
   );
   t.after(service.stop);
-  assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
+  assert.deepEqual(await handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
   t.mock.timers.tick(5_000);
   await flushUpdateCheck();
   assert.equal(calls, beforeChecks);
@@ -237,17 +239,20 @@ for (const scenario of [
       true,
     );
     t.after(service.stop);
-    assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "notify" });
+    assert.deepEqual(await handlers.get("updates:preferences")!({}), {
+      enabled: true,
+      mode: "notify",
+    });
     t.mock.timers.tick(5_000);
     await flushUpdateCheck();
-    assert.deepEqual(handlers.get("updates:status")!({}), {
+    assert.deepEqual(await handlers.get("updates:status")!({}), {
       phase: "available",
       version: "0.0.42",
     });
     assert.equal(calls, beforeChecks);
     assert.equal(downloads, beforeDownloads);
     assert.equal(service.installAndRestart(), false);
-    assert.throws(() => handlers.get("updates:restart-and-install")!({}), /No update/);
+    await assert.rejects(async () => handlers.get("updates:restart-and-install")!({}), /No update/);
     const beforeOpened = opened.length;
     await handlers.get("updates:release-notes")!({});
     assert.deepEqual(opened.slice(beforeOpened), [
@@ -282,31 +287,35 @@ test("packaged macOS checks once and offers a release link without installing", 
     true,
   );
   t.after(service.stop);
-  const status = (): UpdateStatus => handlers.get("updates:status")!("trusted") as UpdateStatus;
-  assert.deepEqual(handlers.get("updates:preferences")!("trusted"), {
+  const status = async (): Promise<UpdateStatus> =>
+    (await handlers.get("updates:status")!("trusted")) as UpdateStatus;
+  assert.deepEqual(await handlers.get("updates:preferences")!("trusted"), {
     enabled: true,
     mode: "notify",
   });
-  assert.deepEqual(status(), { phase: "idle", version: null });
+  assert.deepEqual(await status(), { phase: "idle", version: null });
   t.mock.timers.tick(5_000);
   await flushUpdateCheck();
   assert.equal(releaseRequests.length, beforeRequests + 1);
   assert.equal(calls, beforeChecks, "Mac notifier never starts electron-updater");
-  assert.deepEqual(status(), { phase: "available", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "available", version: "0.0.42" });
   await handlers.get("updates:release-notes")!("trusted");
   assert.deepEqual(opened.slice(beforeOpened), [
     "https://github.com/centuryofimage/nicegal/releases/tag/v0.0.42",
   ]);
-  assert.throws(() => handlers.get("updates:restart-and-install")!("trusted"), /No update/);
+  await assert.rejects(
+    async () => handlers.get("updates:restart-and-install")!("trusted"),
+    /No update/,
+  );
   assert.equal(service.installAndRestart(), false);
   assert.equal(restartRequests, 0);
-  handlers.get("updates:set-enabled")!("trusted", false);
-  assert.deepEqual(status(), { phase: "disabled", version: null });
+  await handlers.get("updates:set-enabled")!("trusted", false);
+  assert.deepEqual(await status(), { phase: "disabled", version: null });
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(releaseRequests.length, beforeRequests + 1);
 });
 
-test("ad hoc and branch packages never check for updates", (t) => {
+test("ad hoc and branch packages never check for updates", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
   const previousResources = electronProcess.resourcesPath;
@@ -329,7 +338,7 @@ test("ad hoc and branch packages never check for updates", (t) => {
     false,
   );
   t.after(service.stop);
-  assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
+  assert.deepEqual(await handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(releaseRequests.length, beforeRequests);
   assert.equal(calls, beforeChecks);
@@ -341,7 +350,7 @@ test("ad hoc and branch packages never check for updates", (t) => {
     false,
   );
   t.after(macService.stop);
-  assert.deepEqual(handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
+  assert.deepEqual(await handlers.get("updates:preferences")!({}), { enabled: true, mode: "none" });
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(releaseRequests.length, beforeRequests);
   assert.equal(calls, beforeChecks);
@@ -380,12 +389,19 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.equal(updater.allowDowngrade, false);
   assert.equal(updater.disableDifferentialDownload, false);
   assert.equal(updater.disableWebInstaller, true);
-  assert.throws(() => handlers.get("updates:status")!("foreign"), /Untrusted/);
+  await assert.rejects(async () => handlers.get("updates:status")!("foreign"), /Untrusted/);
   await assert.rejects(async () => handlers.get("updates:release-notes")!("foreign"), /Untrusted/);
-  assert.throws(() => handlers.get("updates:restart-and-install")!("foreign"), /Untrusted/);
-  assert.throws(() => handlers.get("updates:restart-and-install")!("trusted"), /No update/);
-  const status = (): UpdateStatus => handlers.get("updates:status")!("trusted") as UpdateStatus;
-  assert.deepEqual(status(), { phase: "idle", version: null });
+  await assert.rejects(
+    async () => handlers.get("updates:restart-and-install")!("foreign"),
+    /Untrusted/,
+  );
+  await assert.rejects(
+    async () => handlers.get("updates:restart-and-install")!("trusted"),
+    /No update/,
+  );
+  const status = async (): Promise<UpdateStatus> =>
+    (await handlers.get("updates:status")!("trusted")) as UpdateStatus;
+  assert.deepEqual(await status(), { phase: "idle", version: null });
   await handlers.get("updates:release-notes")!("trusted");
   assert.equal(opened.length, openedBefore);
   t.mock.timers.tick(4_999);
@@ -399,23 +415,23 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.deepEqual(feedUrls.slice(feedsBefore), [
     "https://github.com/centuryofimage/nicegal/releases/download/v0.0.42",
   ]);
-  assert.deepEqual(status(), { phase: "downloading", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "downloading", version: "0.0.42" });
   t.mock.timers.tick(6 * 60 * 60 * 1000);
   assert.equal(calls, checksBefore + 1, "no second check while the download promise is pending");
   updater.emit("update-downloaded", { version: "0.0.42" });
   resolveDownload();
   await Promise.resolve();
   await Promise.resolve();
-  assert.deepEqual(status(), { phase: "ready", version: "0.0.42" });
-  assert.deepEqual(messages.at(-1), status());
+  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42" });
+  assert.deepEqual(messages.at(-1), await status());
   await handlers.get("updates:release-notes")!("trusted");
   assert.deepEqual(opened.slice(openedBefore), [
     "https://github.com/centuryofimage/nicegal/releases/tag/v0.0.42",
   ]);
-  handlers.get("updates:restart-and-install")!("trusted");
+  await handlers.get("updates:restart-and-install")!("trusted");
   await flushUpdateCheck();
   assert.equal(restartRequests, 1);
-  handlers.get("updates:restart-and-install")!("trusted");
+  await handlers.get("updates:restart-and-install")!("trusted");
   await flushUpdateCheck();
   assert.equal(restartRequests, 1, "a repeated click cannot queue another restart");
   assert.equal(service.installAndRestart(), true);
@@ -424,7 +440,7 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.equal(calls, checksBefore + 1, "keep the downloaded version stable until quit");
   t.mock.method(console, "error", () => {});
   updater.emit("error", new Error("installation failed"));
-  assert.deepEqual(status(), { phase: "ready", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42" });
   window.emit("query-session-end");
   assert.equal(updater.autoInstallEvent, "manual");
   updater.autoInstallEvent = "onQuit";
@@ -443,7 +459,7 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.equal(calls, checksBefore + 1);
 });
 
-test("dev is disabled and does not schedule checks", (t) => {
+test("dev is disabled and does not schedule checks", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   app.isPackaged = false;
   const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
@@ -457,7 +473,7 @@ test("dev is disabled and does not schedule checks", (t) => {
   const before = calls;
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(calls, before);
-  assert.deepEqual(handlers.get("updates:status")!({}), { phase: "disabled", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "disabled", version: null });
 });
 
 test("failed checks do not retry until the next launch; quitting before the delay cancels the check", async (t) => {
@@ -487,7 +503,7 @@ test("failed checks do not retry until the next launch; quitting before the dela
   t.mock.timers.tick(5_000);
   await flushUpdateCheck();
   assert.equal(attempts, 1);
-  assert.deepEqual(handlers.get("updates:status")!({}), { phase: "error", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "error", version: null });
   t.mock.timers.tick(7 * 24 * 60 * 60 * 1000);
   assert.equal(attempts, 1, "no retry even after a week running");
   first.stop();
@@ -521,11 +537,14 @@ test("opt-out persists, cancels a download, hides ready state and cannot re-arm 
     () => {},
   );
   t.after(service.stop);
-  const setEnabled = (value: unknown): unknown =>
+  const setEnabled = (value: unknown): Promise<unknown> =>
     handlers.get("updates:set-enabled")!("trusted", value);
-  assert.throws(() => handlers.get("updates:set-enabled")!("foreign", false), /Untrusted/);
-  assert.throws(() => setEnabled("false"), /boolean/);
-  assert.deepEqual(handlers.get("updates:preferences")!("trusted"), {
+  await assert.rejects(
+    async () => handlers.get("updates:set-enabled")!("foreign", false),
+    /Untrusted/,
+  );
+  await assert.rejects(async () => setEnabled("false"), /boolean/);
+  assert.deepEqual(await handlers.get("updates:preferences")!("trusted"), {
     enabled: true,
     mode: "automatic",
   });
@@ -534,16 +553,19 @@ test("opt-out persists, cancels a download, hides ready state and cannot re-arm 
   await flushUpdateCheck();
   assert.equal(downloads, previousDownloads + 1);
   const previousCancelled = cancelledDownloads;
-  assert.deepEqual(setEnabled(false), { enabled: false, mode: "automatic" });
+  assert.deepEqual(await setEnabled(false), { enabled: false, mode: "automatic" });
   assert.equal(cancelledDownloads, previousCancelled + 1);
-  assert.throws(() => handlers.get("updates:restart-and-install")!("trusted"), /No update/);
+  await assert.rejects(
+    async () => handlers.get("updates:restart-and-install")!("trusted"),
+    /No update/,
+  );
   assert.equal(updater.autoInstallEvent, "manual");
   assert.equal(
     JSON.parse(readFileSync(join(userData, "update-settings.json"), "utf8")).automaticUpdates,
     false,
   );
   updater.emit("update-downloaded", { version: "0.0.42" });
-  assert.deepEqual(handlers.get("updates:status")!("trusted"), {
+  assert.deepEqual(await handlers.get("updates:status")!("trusted"), {
     phase: "disabled",
     version: null,
   });
@@ -562,7 +584,7 @@ test("opt-out persists, cancels a download, hides ready state and cannot re-arm 
   t.after(nextLaunch.stop);
   t.mock.timers.tick(5_000);
   assert.equal(calls, previousCalls, "saved opt-out is read before scheduling");
-  assert.deepEqual(handlers.get("updates:preferences")!({}), {
+  assert.deepEqual(await handlers.get("updates:preferences")!({}), {
     enabled: false,
     mode: "automatic",
   });
@@ -636,10 +658,10 @@ test("opting out during the release lookup never starts an updater check", async
   const checksBefore = calls;
   const feedsBefore = feedUrls.length;
   t.mock.timers.tick(5_000);
-  handlers.get("updates:set-enabled")!({}, false);
+  await handlers.get("updates:set-enabled")!({}, false);
   finishLookup(Response.json({ tag_name: "v0.0.42", prerelease: false, draft: false }));
   await flushUpdateCheck();
   assert.equal(calls, checksBefore);
   assert.equal(feedUrls.length, feedsBefore);
-  assert.deepEqual(handlers.get("updates:status")!({}), { phase: "disabled", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "disabled", version: null });
 });

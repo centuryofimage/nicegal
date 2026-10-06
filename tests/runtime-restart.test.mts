@@ -7,10 +7,11 @@ import { createServer } from "vite";
 import type { RuntimeController as Controller } from "../src/renderer/src/lib/runtime.svelte.ts";
 
 import { IPC_CHANNELS } from "../src/shared/ipc-channels.ts";
+import { RendererHandlers } from "./helpers/renderer-handlers.ts";
 
 /** A desktop-window IPC event; handlers see it as a stable bridge client. */
 const windowEvent = { sender: Object.assign(new EventEmitter(), { id: 99 }) };
-const handlers = new Map<string, (...args: unknown[]) => unknown>();
+const handlers = new RendererHandlers();
 Object.assign(globalThis, { __runtimeHandlers: handlers });
 const vite = await createServer({
   configFile: false,

@@ -1,3 +1,3 @@
-- add idle unload
-- improve logging so it actually has crash reasons
-- fix job cancellation immediately restarting jobs
+- ui tweaks and refactors
+- flatpak performance is (probably) increased if you are using ~/Pictures/ or ~/Documents/
+- mobile fixes

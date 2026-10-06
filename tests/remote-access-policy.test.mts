@@ -4,7 +4,9 @@ import { createServer as createNetServer } from "node:net";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
-const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>();
+import { RendererHandlers } from "./helpers/renderer-handlers.ts";
+
+const handlers = new RendererHandlers();
 const vite = await createServer({
   configFile: false,
   cacheDir: "node_modules/.vite-remote-access-policy-tests",

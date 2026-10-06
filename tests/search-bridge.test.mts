@@ -3,9 +3,11 @@ import { EventEmitter } from "node:events";
 import { after, test } from "node:test";
 import { createServer } from "vite";
 
+import { RendererHandlers } from "./helpers/renderer-handlers.ts";
+
 /** A desktop-window IPC event; handlers see it as a stable bridge client. */
 const windowEvent = { sender: Object.assign(new EventEmitter(), { id: 99 }) };
-const handlers = new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>();
+const handlers = new RendererHandlers();
 const vite = await createServer({
   configFile: false,
   cacheDir: "node_modules/.vite-search-bridge-tests",
@@ -97,19 +99,16 @@ test("backend error codes survive IPC; other errors pass through unchanged", asy
       },
     },
   });
-  const list = (): Promise<unknown> =>
-    Promise.resolve().then(() => handlers.get("backend:list-libraries")!(windowEvent));
-  // Electron keeps only the message, behind its own prefix.
-  const received = async (): Promise<Error> => {
-    const error = (await list().catch((cause: unknown) => cause)) as Error;
-    return new Error(
-      `Error invoking remote method 'backend:list-libraries': Error: ${error.message}`,
-    );
-  };
+  // What the preload throws into the renderer once it unwraps the call's result.
+  const received = (): Promise<Error> =>
+    Promise.resolve()
+      .then(() => handlers.get("backend:list-libraries")!(windowEvent))
+      .then(
+        () => assert.fail("the call should fail"),
+        (error: unknown) => error as Error,
+      );
 
   failure = Object.assign(new Error("Image model not ready"), { code: "models_not_ready" });
-  const wrapped = await list().catch((error: Error) => error);
-  assert.equal(wrapped.cause, failure, "main-process errors retain their original stack and cause");
   const coded = await received();
   assert.equal(errorCode(coded), "models_not_ready");
   assert.equal(errorMessage(coded), "Image model not ready");

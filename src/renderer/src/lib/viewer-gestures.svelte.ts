@@ -5,6 +5,10 @@ import { startLongPress } from "./long-press";
 
 /** What the gesture handler asks of the viewer it drives. */
 export interface ViewerGestureHost {
+  /** False for a press on a control inside the media, which handles its own pointer. */
+  isGestureTarget(target: Element): boolean;
+  /** False where a long press should get the browser's own menu instead of the file actions. */
+  opensFileMenuAt(target: Element): boolean;
   /** The image is measured and can be zoomed. */
   isReady(): boolean;
   /** The image is larger than the stage, so a drag pans it. */
@@ -25,10 +29,14 @@ export interface ViewerGestureHost {
 }
 
 /**
- * Pointer gestures on the image stage. One finger or the mouse pans a zoomed image; with the image
- * fitting, a horizontal touch swipe steps between items and holding still opens the file actions.
- * Two fingers zoom around the point between them and pan as it moves; lifting one hands the
- * gesture back to the other as a pan.
+ * Pointer gestures on the viewer's media area, whatever it shows: an image, a video, or a load
+ * error. One finger or the mouse pans a zoomed image; with nothing to pan, a horizontal touch swipe
+ * steps between items and holding still opens the file actions. Two fingers zoom an image around
+ * the point between them and pan as it moves; lifting one hands the gesture back to the other as
+ * a pan.
+ *
+ * Touch presses rely on the implicit capture to the touched element, so a tap still clicks the
+ * control under it.
  */
 export class ViewerGestures {
   /** A pan drag is in progress. */
@@ -44,19 +52,19 @@ export class ViewerGestures {
 
   constructor(private readonly host: ViewerGestureHost) {}
 
-  readonly attach: Attachment<HTMLElement> = (stage) => {
-    const down = (event: PointerEvent): void => this.down(event, stage);
+  readonly attach: Attachment<HTMLElement> = (surface) => {
+    const down = (event: PointerEvent): void => this.down(event, surface);
     const move = (event: PointerEvent): void => this.move(event);
-    const end = (event: PointerEvent): void => this.end(event, stage);
-    stage.addEventListener("pointerdown", down);
-    stage.addEventListener("pointermove", move);
-    stage.addEventListener("pointerup", end);
-    stage.addEventListener("pointercancel", end);
+    const end = (event: PointerEvent): void => this.end(event, surface);
+    surface.addEventListener("pointerdown", down);
+    surface.addEventListener("pointermove", move);
+    surface.addEventListener("pointerup", end);
+    surface.addEventListener("pointercancel", end);
     return () => {
-      stage.removeEventListener("pointerdown", down);
-      stage.removeEventListener("pointermove", move);
-      stage.removeEventListener("pointerup", end);
-      stage.removeEventListener("pointercancel", end);
+      surface.removeEventListener("pointerdown", down);
+      surface.removeEventListener("pointermove", move);
+      surface.removeEventListener("pointerup", end);
+      surface.removeEventListener("pointercancel", end);
       this.cancelLongPress?.();
       this.touches.clear();
       this.pinch = null;
@@ -78,13 +86,15 @@ export class ViewerGestures {
     return pinchOf(a, b);
   }
 
-  private down(event: PointerEvent, stage: HTMLElement): void {
+  private down(event: PointerEvent, surface: HTMLElement): void {
     const host = this.host;
+    if (!(event.target instanceof Element) || !host.isGestureTarget(event.target)) return;
     const at = { x: event.clientX, y: event.clientY };
     const touch = event.pointerType === "touch";
     if (touch) {
+      // The first finger down; a touch whose release never reached the surface is stale.
+      if (event.isPrimary) this.touches.clear();
       this.touches.set(event.pointerId, at);
-      stage.setPointerCapture(event.pointerId);
       if (this.touches.size === 2 && host.isReady()) {
         this.cancelLongPress?.();
         this.swipeStart = null;
@@ -99,15 +109,16 @@ export class ViewerGestures {
     if (touch && !host.canPan() && event.isPrimary) {
       this.swipeStart = { pointerId: event.pointerId, origin: at };
       this.cancelLongPress?.();
-      this.cancelLongPress = startLongPress(event, () => {
-        this.swipeStart = null;
-        host.onfilemenu();
-      });
+      if (host.opensFileMenuAt(event.target))
+        this.cancelLongPress = startLongPress(event, () => {
+          this.swipeStart = null;
+          host.onfilemenu();
+        });
       return;
     }
     if (event.button !== 0 || this.dragPointerId !== null || !host.canPan()) return;
     event.preventDefault();
-    stage.setPointerCapture(event.pointerId);
+    surface.setPointerCapture(event.pointerId);
     host.onengage();
     this.startPan(event.pointerId, at);
   }
@@ -134,7 +145,7 @@ export class ViewerGestures {
     host.setPan(start.pan.x + at.x - start.pointer.x, start.pan.y + at.y - start.pointer.y);
   }
 
-  private end(event: PointerEvent, stage: HTMLElement): void {
+  private end(event: PointerEvent, surface: HTMLElement): void {
     const host = this.host;
     this.touches.delete(event.pointerId);
     if (this.pinch) {
@@ -159,7 +170,7 @@ export class ViewerGestures {
       return;
     }
     if (event.pointerId !== this.dragPointerId) return;
-    if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
+    if (surface.hasPointerCapture(event.pointerId)) surface.releasePointerCapture(event.pointerId);
     this.dragPointerId = null;
     this.dragStart = null;
     this.dragging = false;

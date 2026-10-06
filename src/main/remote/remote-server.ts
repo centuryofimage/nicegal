@@ -19,7 +19,7 @@ import type { NicegalServerClient } from "../backend/nicegal-server-client";
 import type { ThumbnailReader } from "../backend/thumbnail-reader";
 
 import { REMOTE_CLIENT_HEADER, type RemoteDevice } from "../../shared/remote";
-import { remotableHandler, withIpcCode, type BridgeClient } from "../ipc";
+import { remotableHandler, settleCall, type BridgeClient } from "../ipc";
 import { resolveProtocolAssetPath } from "../protocol-path";
 import { handleApiRequest, handleThumbnailRequest, resolveOriginalPath } from "../protocols";
 import { guessBrowser, guessDeviceName, pairPage } from "./pair-page";
@@ -304,18 +304,9 @@ ${client.browser}`,
       return sendText(response, 400, "Invalid call arguments");
     }
     if (!Array.isArray(args)) return sendText(response, 400, "Invalid call arguments");
-    try {
-      const value = await handler(client, ...args);
-      sendJson(response, 200, { value: value ?? null });
-    } catch (error) {
-      const coded = withIpcCode(error);
-      sendJson(response, 200, {
-        error: {
-          name: coded instanceof Error ? coded.name : "Error",
-          message: coded instanceof Error ? coded.message : String(coded),
-        },
-      });
-    }
+    const result = await settleCall(() => handler(client, ...args));
+    // JSON drops an undefined value, which would read as a missing result.
+    sendJson(response, 200, "value" in result ? { value: result.value ?? null } : result);
   }
 
   private clientFor(id: string | null, device: RemoteDevice): RemoteClient | null {

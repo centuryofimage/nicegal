@@ -35,6 +35,7 @@
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
   import type { VectorMatch } from "../lib/ocr-search.svelte";
 
+  import { formatDuration } from "../lib/duration";
   import { createGalleryInput } from "../lib/gallery/input";
   import { buildLayout } from "../lib/gallery/layout";
   import { marqueeHitIds, type ContentRect } from "../lib/gallery/marquee";
@@ -42,8 +43,17 @@
   import { selectPromotedIds } from "../lib/gallery/media-policy";
   import { layoutDefaults, type LayoutOptions } from "../lib/gallery/options";
   import { createOverscanController, type OverscanWindow } from "../lib/gallery/overscan";
+  import {
+    anchorScrollTop,
+    captureAnchor,
+    SCROLL_EPSILON_PX,
+    type ScrollAnchor,
+  } from "../lib/gallery/scroll-anchor";
   import { literalSnippetTerms } from "../lib/gallery/snippet-highlight";
-  import { createThumbnailScheduler, type ThumbnailMiss } from "../lib/gallery/thumbnail-scheduler";
+  import {
+    createThumbnailScheduler,
+    orderThumbnailCandidates,
+  } from "../lib/gallery/thumbnail-scheduler";
   import { tileImage } from "../lib/gallery/tile-image";
   import { recyclePool, type PoolTile } from "../lib/gallery/tile-pool";
   import {
@@ -52,7 +62,7 @@
     type GalleryLayout,
     type GallerySection,
   } from "../lib/gallery/types";
-  import { firstVisibleIndex, visibleIndexRange } from "../lib/gallery/visible-range";
+  import { visibleIndexRange } from "../lib/gallery/visible-range";
   import {
     TileMatchAreas,
     type TileMatchTarget,
@@ -61,21 +71,30 @@
   import { parseQuery } from "../lib/search-query";
   import TileMatchOverlay from "./TileMatchOverlay.svelte";
 
-  /** Give up on a poster that keeps failing to ensure (corrupt/unreadable source) rather than
-   * retrying it forever. */
-  const MAX_ENSURE_ATTEMPTS = 3;
-
   let {
     items = [],
+    /** Search result sections, laid out as collapsible groups with a header each. */
     sections = [],
+    /** Collapses or expands the search section with this key. */
     ontogglesection = () => {},
+    /** Names the current reading of the results, such as Date or Relevance order. Each reading
+     * keeps its own scroll position; see the view switch effect. */
     viewKey = "gallery",
+    /** True from a pointer press in the gallery until it is released, cancelled, or the window
+     * loses focus. The caller holds back result updates meanwhile, so a tile is not recycled
+     * between the press and its click. */
     oninteractionchange = () => {},
     layoutOptions = {},
+    /** Most tile slots kept mounted, however far overscan reaches. Bounds DOM size and decode
+     * work; the caller sizes it to the device. */
     imagePoolSize = 300,
+    /** Overscan is counted in layout bands (`GalleryLayout.unitHeight`, about one row or tile)
+     * beyond the viewport. `immediateOverscan` applies on both sides while scrolling; once the
+     * scroll settles the window grows to `overscanBehind` and `overscanAhead` in its direction. */
     immediateOverscan = 1,
     overscanBehind = 4,
     overscanAhead = 12,
+    /** Hides the browser's scrollbar where the caller draws the timeline scrollbar instead. */
     hideNativeScrollbar = false,
     /**
      * `sync` paints a tile only once its image is decoded — no stale frame from the recycled
@@ -94,22 +113,31 @@
      * always wins when the OS expresses a preference. Animated media is promoted only for eligible
      * pooled tiles, after scrolling settles, subject to the concurrency and source-size limits. */
     playAnimatedPreviews = true,
+    /** Stops animated and video previews while something covers the gallery, such as the viewer. */
     previewSuspended = false,
     /** Filename/OCR-text snippets for the current search, by item id. A tile with an entry shows an
      * iBooks-style caption strip over its bottom edge so the user can see *why* it matched. */
     snippets,
+    /** Matched video frame time in ms, by item id. Such a tile shows that frame as its poster and
+     * a match badge, falling back to the normal poster when the frame is missing. */
     matchTimes,
     /** Vector match scores by item id, shown as tile chips; null hides them. */
     matchScores = null,
+    /** The visual query whose match areas are drawn over tiles; null hides them. */
     matchAreas = null,
+    /** The image model the match areas come from; maps from another model are not reused. */
     matchAreaModel = "",
+    /** Vector matches by item id, whatever the chip setting: visual matches decide which tiles get
+     * a match-area map and how strongly it is drawn. */
     matchAreaScores = null,
+    /** True while match-area maps are loading. */
     onmappingchange = () => {},
     /** Raw query text used to highlight matching terms inside the caption. */
     snippetQuery = "",
     /** A changed search starts a new result set, which must begin at the top rather than retain
      * an anchor from the previous query. */
     searchQuery = "",
+    /** Every scroll and every relayout, so the caller's timeline scrollbar stays current. */
     onScroll = () => {},
     /** The app-owned, ID-keyed selection stays stable while this component recycles tile DOM. */
     selectedIds = new SvelteSet<string>(),
@@ -117,14 +145,17 @@
     referenceIds = new Set<string>(),
     /** Fires when a tile is modifier-selected without opening it. */
     onselect = () => {},
-    /** The live marquee hit set as asset IDs, computed from layout geometry. */
+    /** A marquee drag began; modifiers decide whether it adds to the selection or replaces it. */
     onmarqueestart = () => {},
+    /** The live marquee hit set as asset IDs, computed from layout geometry. */
     onmarqueechange = () => {},
     onmarqueeend = () => {},
     /** Fires when a tile is opened by a primary click or Enter. */
     onopen = () => {},
     /** Requests file actions for the right-clicked tile. Selection ownership stays with the app. */
     onfilemenu = () => {},
+    /** Starts a native file drag. `isCurrent` turns false once that pointer gesture ends, so a
+     * drag whose files resolve late is dropped. */
     onfiledrag = () => {},
     /** Fires when the user clicks empty gallery background (not a tile); the caller clears the
      * selection so a stray click does not leave stale targets behind. */
@@ -186,26 +217,31 @@
   let viewportHeight = $state(0);
   let pixelRatio = $state(1);
   let scrollTop = $state(0);
+  /** Replaced by the overscan controller on every scroll; see the overscan effect. */
   let overscan = $state<OverscanWindow>({ before: 1, after: 1 });
-  /** What sits under the top of the viewport, tracked by item id so it survives a relayout. */
-  type ScrollAnchor =
-    | { kind: "top" }
-    | { kind: "section"; key: string; offset: number }
-    | { kind: "item"; id: string; progress: number };
   let anchor = $state<ScrollAnchor>();
-  let sectionHeaderHeight = $state(26);
-  let sectionGap = $state(6);
+  /** Search section header height and the gap above it, from the active theme's
+   * `--search-section-height` and `--search-section-gap`; see `measureSectionMetric`. */
+  let sectionHeaderHeight = $state(0);
+  let sectionGap = $state(0);
   let previousSearchQuery: string | undefined;
+  /** Set while this component writes `scrollTop` to restore the anchor, so the scroll event that
+   * write causes does not re-anchor; see `onscroll`. */
   let restoringAnchor = $state(false);
   const layout = $derived(
     buildLayout(items, viewportWidth, layoutOptions, sections, sectionHeaderHeight, sectionGap),
   );
   let previousViewKey: string | undefined;
+  /** Scroll position and anchor of each reading of the results not currently shown. */
   const viewOffsets = new SvelteMap<string, { top: number; anchor: typeof anchor }>();
   let tiles = $state.raw<PoolTile[]>([]);
   const tileMatchAreas = new TileMatchAreas();
   onDestroy(() => tileMatchAreas.dispose());
   $effect(() => onmappingchange(tileMatchAreas.busy));
+  /** True when a canvas span from `y` down `height` pixels overlaps the viewport. */
+  function intersectsViewport(y: number, height: number): boolean {
+    return y + height >= scrollTop && y <= scrollTop + viewportHeight;
+  }
   /** A video's map is for its matched frame, so none is shown while that frame is missing or the
    * video preview plays. */
   function matchAreaTarget(tile: PoolTile): TileMatchTarget | undefined {
@@ -232,9 +268,7 @@
   $effect(() => {
     const visible = tiles.flatMap((tile) => {
       const target = matchAreaTargets.get(tile.slot);
-      return target && tile.y + tile.height >= scrollTop && tile.y <= scrollTop + viewportHeight
-        ? [target]
-        : [];
+      return target && intersectsViewport(tile.y, tile.height) ? [target] : [];
     });
     const query = matchAreas;
     const model = matchAreaModel;
@@ -279,8 +313,7 @@
         (tile) =>
           tile.itemId === media.hoveredId &&
           tile.mediaKind === "video" &&
-          tile.y + tile.height >= scrollTop &&
-          tile.y <= scrollTop + viewportHeight,
+          intersectsViewport(tile.y, tile.height),
       ) &&
       !media.failedOriginalIds.has(media.hoveredId)
       ? media.hoveredId
@@ -289,6 +322,8 @@
   let previewMuted = $state(true);
   let previewVideo: HTMLVideoElement | null = null;
 
+  /** Hands the hover preview's position and mute state to the viewer opening this video, and
+   * stops the preview. Null when this video is not the one previewing. */
   export function captureVideoPlayback(id: string): { currentTime: number; muted: boolean } | null {
     if (previewVideoId !== id || !previewVideo) return null;
     const playback = { currentTime: previewVideo.currentTime, muted: previewVideo.muted };
@@ -310,6 +345,9 @@
   /** Per-asset cache-bust counter: bumped once an ensure call succeeds, so that asset's poster
    * `<img>` re-requests thumb:// and picks up the now-generated row. */
   const localRefresh = new SvelteMap<string, number>();
+  function refreshPoster(id: string): void {
+    localRefresh.set(id, (localRefresh.get(id) ?? 0) + 1);
+  }
   const thumbnailFailures = new SvelteMap<string, ThumbnailFailure>();
   /** A missing indexed sample falls back to the normal poster for this result. */
   const missingMatchFrames = new SvelteMap<string, number>();
@@ -327,7 +365,7 @@
     thumbnailScheduler.retry(ids);
     for (const id of ids) {
       thumbnailFailures.delete(id);
-      localRefresh.set(id, (localRefresh.get(id) ?? 0) + 1);
+      refreshPoster(id);
     }
   }
 
@@ -337,56 +375,35 @@
   }
   /** Last user scroll direction. Positive means lower items are ahead; negative means upper items
    * are ahead. This is imperative scheduler input, not template state. */
-  let thumbnailDirection = 1;
+  let thumbnailDirection: 1 | -1 = 1;
 
-  function selectThumbnailCandidates(
-    pending: ReadonlyMap<string, ThumbnailMiss>,
-  ): readonly string[] {
-    const visible: Array<{ id: string; distance: number }> = [];
-    const ahead: Array<{ id: string; distance: number }> = [];
-    const behind: Array<{ id: string; distance: number }> = [];
-    const viewportBottom = scrollTop + viewportHeight;
-
-    for (const tile of tiles) {
-      if (!pending.has(tile.itemId)) continue;
-      const tileBottom = tile.y + tile.height;
-      if (tileBottom >= scrollTop && tile.y <= viewportBottom) {
-        visible.push({ id: tile.itemId, distance: Math.abs(tile.y - scrollTop) });
-      } else {
-        const isAhead = thumbnailDirection > 0 ? tile.y > viewportBottom : tileBottom < scrollTop;
-        const distance =
-          thumbnailDirection > 0
-            ? Math.abs(tile.y - viewportBottom)
-            : Math.abs(scrollTop - tileBottom);
-        (isAhead ? ahead : behind).push({ id: tile.itemId, distance });
-      }
-    }
-
-    const byDistance = (
-      left: { id: string; distance: number },
-      right: { id: string; distance: number },
-    ): number => left.distance - right.distance;
-    visible.sort(byDistance);
-    ahead.sort(byDistance);
-    behind.sort(byDistance);
-    return [...visible, ...ahead, ...behind].map((candidate) => candidate.id);
-  }
-
+  onDestroy(() => thumbnailScheduler.dispose());
   const thumbnailScheduler = createThumbnailScheduler({
+    // Requests in flight at once, and assets per request. Small batches let a new viewport's
+    // misses overtake queued ones quickly; a few in flight keep the backend busy without
+    // starving the searches that share it.
     concurrency: 4,
     batchSize: 2,
-    maxAttempts: MAX_ENSURE_ATTEMPTS,
-    selectCandidates: selectThumbnailCandidates,
+    // A poster that keeps failing (an unreadable or corrupt source) is given up on rather than
+    // retried forever. The user can retry it from the thumbnail failures list.
+    maxAttempts: 3,
+    selectCandidates: (pending) =>
+      orderThumbnailCandidates(
+        pending,
+        tiles,
+        { top: scrollTop, bottom: scrollTop + viewportHeight },
+        thumbnailDirection,
+      ),
     requiredSize: (miss) => physicalThumbnailSize(miss.width, miss.height, pixelRatio),
     ensure: (request) => window.nicegal.backend.ensureThumbnails(request),
     onFailed: (failure) => thumbnailFailures.set(failure.assetId, failure),
     onReady: (assetIds) => {
-      for (const id of assetIds) localRefresh.set(id, (localRefresh.get(id) ?? 0) + 1);
+      for (const id of assetIds) refreshPoster(id);
     },
     onRetry: (id) => {
       // Retry only after thumb:// confirms the poster is still absent. This avoids immediately
       // repeating a failed service request when a row was committed despite a transport error.
-      localRefresh.set(id, (localRefresh.get(id) ?? 0) + 1);
+      refreshPoster(id);
     },
   });
 
@@ -444,6 +461,8 @@
     loggedPromotedIds = current;
   });
 
+  // Dividers are few and cheap, so they render one viewport beyond each edge without pooling, and
+  // a header is already in place when it scrolls in.
   const visibleDividers = $derived(
     layout.dividers.filter(
       (divider) =>
@@ -455,6 +474,7 @@
   // Effects synchronize DOM state and schedulers; untracked reads prevent feedback loops.
 
   // Read the previous pool untracked to retain DOM slots without a feedback loop.
+  /** The layout the pool was last filled from, to tell a relayout from a scroll. */
   let pooledLayout: GalleryLayout | undefined;
   $effect(() => {
     const currentLayout = layout;
@@ -464,6 +484,7 @@
       pooledLayout !== currentLayout
         ? (anchorScrollTop(
             currentLayout,
+            items,
             untrack(() => anchor),
           ) ?? scrollTop)
         : scrollTop;
@@ -543,6 +564,7 @@
     };
   });
 
+  /** Scrolls to canvas offset `y`, for the timeline scrollbar and date jumps. */
   export function scrollTo(y: number): void {
     if (!viewport) return;
     restoringAnchor = false;
@@ -551,6 +573,7 @@
     trackAnchor();
   }
 
+  /** Scrolls to the top of the search section with this key. */
   export function scrollToSection(key: string): void {
     const section = layout.dividers.find((divider) => divider.key === key);
     if (section) scrollTo(section.y);
@@ -590,6 +613,8 @@
     });
   }
 
+  /** Positions a pooled frame with a transform, which moves it without layout when its slot is
+   * reused for another item. */
   function tileStyle(tile: PoolTile): string {
     return `transform: translate3d(${tile.x}px, ${tile.y}px, 0); width: ${tile.width}px; height: ${tile.height}px`;
   }
@@ -627,18 +652,41 @@
     if (media.hoveredId === tile.itemId) media.hoveredId = null;
   }
 
+  /** A video's length for its badge, or empty while it is unknown. */
   function videoDuration(durationMs: number | null): string {
-    if (durationMs === null) return "";
-    const seconds = Math.floor(durationMs / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainder = String(seconds % 60).padStart(2, "0");
-    return minutes >= 60
-      ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${remainder}`
-      : `${minutes}:${remainder}`;
+    return durationMs === null ? "" : formatDuration(durationMs / 1000);
   }
 
   function matchTime(timestampMs: number): string {
-    return videoDuration(timestampMs);
+    return formatDuration(timestampMs / 1000);
+  }
+
+  /** Hover text: the name, any match snippet that differs from it, and a video match's time. */
+  function tileTitle(tile: PoolTile): string {
+    return [
+      tile.alt,
+      tile.snippet && tile.snippet !== tile.alt ? tile.snippet : "",
+      tile.matchTimestampMs === undefined
+        ? ""
+        : `Visual match at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  /** Screen reader label: the name, why it shows no thumbnail or where a video matched, and
+   * whether it is a visual search example. */
+  function tileLabel(tile: PoolTile): string {
+    return [
+      thumbnailFailures.has(tile.itemId)
+        ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
+        : tile.matchTimestampMs === undefined
+          ? tile.alt
+          : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`,
+      referenceIds.has(tile.itemId) ? "Visual search example" : "",
+    ]
+      .filter(Boolean)
+      .join(". ");
   }
 
   /** Literal body terms worth highlighting in a caption. `parseQuery` removes the scope prefix
@@ -655,58 +703,19 @@
   const snippetTermsKey = $derived(`${snippetTerms.join("\u0000")}\u0001${filenameQuery}`);
 
   /**
-   * Records what is under the top of the viewport on every scroll, by item id rather than index.
-   * Tracking continuously (instead of capturing just before a known relayout) means the anchor is
-   * already there whatever causes the rebuild — mode switch, a size knob, a resize, or filtering.
+   * Records what is under the top of the viewport on every scroll. Tracking continuously, rather
+   * than just before a known relayout, means the anchor is already there whatever causes the
+   * rebuild.
    */
   function trackAnchor(): void {
-    // Zero is a position in its own right, not the top of the first thumbnail (which follows
-    // padding and possibly a section header). Preserving an item there used to hide the header.
-    if (scrollTop <= 0.5) {
-      anchor = { kind: "top" };
-      return;
-    }
-    const section = layout.dividers.find(
-      (divider) => divider.key && divider.y <= scrollTop && scrollTop < divider.y + divider.height,
-    );
-    if (section?.key) {
-      anchor = { kind: "section", key: section.key, offset: scrollTop - section.y };
-      return;
-    }
-    if (!layout.positions.length) return;
-    const index = firstVisibleIndex(layout, scrollTop);
-    const position = layout.positions[index];
-    const item = items[index];
-    if (!position || !item) return;
-    anchor = {
-      kind: "item",
-      id: item.id,
-      progress: Math.min(1, (scrollTop - position.y) / position.height),
-    };
-  }
-
-  function anchorScrollTop(
-    currentLayout: GalleryLayout,
-    currentAnchor: ScrollAnchor | undefined,
-  ): number | undefined {
-    if (!currentAnchor) return undefined;
-    if (currentAnchor.kind === "top") return 0;
-    if (currentAnchor.kind === "section") {
-      const section = currentLayout.dividers.find((divider) => divider.key === currentAnchor.key);
-      return section ? section.y + currentAnchor.offset : undefined;
-    }
-    const index = items.findIndex((item) => item.id === currentAnchor.id);
-    const position = currentLayout.positions[index];
-    return position
-      ? Math.max(0, position.y + position.height * currentAnchor.progress)
-      : undefined;
+    anchor = captureAnchor(layout, items, scrollTop) ?? anchor;
   }
 
   async function restoreAnchor(currentLayout: GalleryLayout): Promise<void> {
     const currentAnchor = untrack(() => anchor);
     const currentViewport = untrack(() => viewport);
     if (!currentAnchor || !currentViewport) return;
-    const nextScrollTop = anchorScrollTop(currentLayout, currentAnchor);
+    const nextScrollTop = anchorScrollTop(currentLayout, items, currentAnchor);
     if (nextScrollTop === undefined) return;
 
     // Reactive statements run before Svelte patches the DOM, so the canvas is still the previous
@@ -717,7 +726,7 @@
       viewport !== currentViewport ||
       layout !== currentLayout ||
       anchor !== currentAnchor ||
-      Math.abs(nextScrollTop - viewport.scrollTop) < 0.5
+      Math.abs(nextScrollTop - viewport.scrollTop) < SCROLL_EPSILON_PX
     )
       return;
     const previous = viewport.scrollTop;
@@ -726,7 +735,24 @@
     scrollTop = viewport.scrollTop;
     // A clamped write fires no scroll event, which would leave the flag set and swallow the
     // user's next real scroll.
-    if (Math.abs(scrollTop - previous) < 0.5) restoringAnchor = false;
+    if (Math.abs(scrollTop - previous) < SCROLL_EPSILON_PX) restoringAnchor = false;
+  }
+
+  /**
+   * The layout needs the section header size as numbers, but the theme defines it in CSS on an
+   * ancestor, so `.section-metric` takes that size and is measured: once on mount, before the
+   * first layout with a width, and again whenever a theme change resizes it.
+   */
+  function measureSectionMetric(element: HTMLDivElement): () => void {
+    const measure = (): void => {
+      sectionHeaderHeight = element.clientHeight;
+      // The gap is carried as the element's width, so one element reports both values.
+      sectionGap = element.clientWidth;
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    measure();
+    return () => observer.disconnect();
   }
 
   function attachViewport(element: HTMLDivElement): () => void {
@@ -770,7 +796,6 @@
       if (widthTimer !== undefined) clearTimeout(widthTimer);
       window.removeEventListener("resize", updatePixelRatio);
       stopMedia();
-      thumbnailScheduler.dispose();
     };
   }
 </script>
@@ -804,12 +829,7 @@
   {onscroll}
   onpointerdown={() => oninteractionchange(true)}
 >
-  <div
-    class="section-metric"
-    aria-hidden="true"
-    bind:clientHeight={sectionHeaderHeight}
-    bind:clientWidth={sectionGap}
-  ></div>
+  <div class="section-metric" aria-hidden="true" {@attach measureSectionMetric}></div>
   <div class="gallery-canvas" style:height={`${layout.height}px`}>
     {#each tiles as tile (tile.slot)}
       {@const promoted = promotedIds.has(tile.itemId)}
@@ -820,6 +840,7 @@
         missingMatchFrames.get(tile.itemId) !== tile.matchTimestampMs}
       {@const areaTarget = matchAreaTargets.get(tile.slot)}
       {@const areaMap = areaTarget && tileMatchAreas.get(areaTarget)}
+      <!-- A remote browser has no native file drag, so its tiles are not draggable. -->
       <div
         class={{
           "gallery-frame": true,
@@ -828,25 +849,8 @@
           "is-visual-reference": referenceIds.has(tile.itemId),
         }}
         data-gallery-item-id={tile.itemId}
-        title={[
-          tile.alt,
-          tile.snippet && tile.snippet !== tile.alt ? tile.snippet : "",
-          tile.matchTimestampMs === undefined
-            ? ""
-            : `Visual match at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`,
-        ]
-          .filter(Boolean)
-          .join("\n")}
-        aria-label={[
-          thumbnailFailures.has(tile.itemId)
-            ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
-            : tile.matchTimestampMs === undefined
-              ? tile.alt
-              : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`,
-          referenceIds.has(tile.itemId) ? "Visual search example" : "",
-        ]
-          .filter(Boolean)
-          .join(". ")}
+        title={tileTitle(tile)}
+        aria-label={tileLabel(tile)}
         style={tileStyle(tile)}
         role="button"
         draggable={isRemote() ? "false" : "true"}
@@ -893,6 +897,8 @@
               onerror={() => media.onOriginalError(tile)}
               {@attach attachPreview}
             ></video>
+            <!-- Mute toggles stay inside the button: the click must not open the tile, and Enter
+                 or Space must not reach the tile's own key handling. -->
             <button
               class="preview-audio"
               type="button"
@@ -959,6 +965,8 @@
           : undefined}
       >
         {#if divider.key}
+          <!-- A press on the header is not a background press: it must not start a marquee or
+               clear the selection. -->
           <button
             class="section-toggle"
             type="button"
@@ -1050,21 +1058,32 @@
     background: var(--search-section-rule);
   }
 
-  .match-score {
+  /* Chips drawn over a tile's corners share one surface. */
+  .match-score,
+  .media-badge,
+  .preview-audio {
     position: absolute;
-    top: var(--media-badge-inset);
-    left: var(--media-badge-inset);
-    display: inline-flex;
-    align-items: center;
-    height: var(--space-14);
-    padding: 0 var(--space-4);
     border-radius: var(--radius-sm);
     background: var(--media-badge-bg);
     color: var(--media-badge-fg);
-    font-size: 9px;
+  }
+
+  /* Text chips label the tile and never take the pointer from it. */
+  .match-score,
+  .media-badge {
+    display: inline-flex;
+    align-items: center;
+    height: var(--media-badge-height);
+    padding: 0 var(--space-4);
+    font-size: var(--media-badge-font-size);
     font-weight: var(--font-weight-semibold);
-    font-variant-numeric: tabular-nums;
     pointer-events: none;
+  }
+
+  .match-score {
+    top: var(--media-badge-inset);
+    left: var(--media-badge-inset);
+    font-variant-numeric: tabular-nums;
   }
 
   .thumbnail-failed {
@@ -1116,20 +1135,25 @@
     transition: border-color var(--duration-fast) ease;
   }
 
+  /* A highlighted frame draws over its neighbours so its border is not covered. */
+  .gallery-frame:hover,
+  .gallery-frame:focus-visible,
+  .gallery-frame.is-selected,
+  .gallery-frame.is-visual-reference {
+    z-index: var(--z-raised);
+  }
+
   .gallery-frame:hover {
     border-color: var(--accent);
-    z-index: var(--z-raised);
   }
 
   .gallery-frame.is-selected {
     border-color: var(--accent);
     box-shadow: inset 0 0 0 1px var(--accent);
-    z-index: var(--z-raised);
   }
 
   .gallery-frame.is-visual-reference {
     border: 2px solid var(--visual-reference-border);
-    z-index: var(--z-raised);
   }
 
   .gallery-frame.is-selected.is-visual-reference {
@@ -1148,11 +1172,9 @@
   .gallery-frame:focus-visible {
     outline: var(--focus-ring);
     outline-offset: -2px;
-    z-index: var(--z-raised);
   }
 
   .gallery-tile {
-    -webkit-touch-callout: none;
     display: block;
     width: 100%;
     height: 100%;
@@ -1175,6 +1197,7 @@
     visibility: visible;
   }
 
+  /* A video is a replaced element, so insets alone do not stretch it; it needs the size too. */
   .video-preview {
     position: absolute;
     inset: var(--space-2);
@@ -1184,19 +1207,15 @@
   }
 
   .preview-audio {
-    position: absolute;
     z-index: 2;
     bottom: var(--media-badge-inset);
     right: var(--media-badge-inset);
     display: grid;
     place-items: center;
-    width: 20px;
-    height: 20px;
+    width: var(--media-badge-button-size);
+    height: var(--media-badge-button-size);
     padding: 0;
     border: 0;
-    border-radius: var(--radius-sm);
-    background: var(--media-badge-bg);
-    color: var(--media-badge-fg);
     cursor: pointer;
   }
 
@@ -1241,29 +1260,18 @@
   /* Match time and video length share one corner badge. OCR text results use the separate
      bottom-edge caption above. */
   .media-badge {
-    position: absolute;
     right: var(--media-badge-inset);
     bottom: var(--media-badge-inset);
-    display: inline-flex;
-    align-items: center;
     gap: var(--space-2);
-    height: var(--space-14);
-    padding: 0 var(--space-4);
-    border-radius: var(--radius-sm);
-    background: var(--media-badge-bg);
-    color: var(--media-badge-fg);
-    font-size: 9px;
-    font-weight: var(--font-weight-semibold);
     letter-spacing: 0.02em;
     max-width: calc(100% - 2 * var(--space-4));
     overflow: hidden;
     white-space: nowrap;
-    pointer-events: none;
   }
 
   .media-badge.has-match {
     height: auto;
-    min-height: var(--space-14);
+    min-height: var(--media-badge-height);
     flex-direction: column;
     align-items: flex-end;
     gap: 0;

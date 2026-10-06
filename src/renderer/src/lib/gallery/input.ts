@@ -67,7 +67,7 @@ export function createGalleryInput(callbacks: GalleryInputCallbacks): {
   }
 
   /** iOS Safari sends no contextmenu for a long press, so touch presses time their own. Android
-   * sends both, which opens the same menu twice with the same items. */
+   * sends one too; `startLongPress` lets only the first of the two open the menu. */
   function onFramePointerDown(event: PointerEvent, tile: PoolTile): void {
     if (event.pointerType !== "touch" || !event.isPrimary) return;
     // Pooled tiles are reused while scrolling; keep the item that was pressed.

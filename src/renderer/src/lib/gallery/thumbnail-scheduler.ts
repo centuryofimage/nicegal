@@ -42,6 +42,46 @@ export interface ThumbnailScheduler {
   dispose(): void;
 }
 
+/** A tile's vertical extent in canvas pixels. */
+export interface TileSpan {
+  itemId: string;
+  y: number;
+  height: number;
+}
+
+/**
+ * Orders pending thumbnails for launch: tiles on screen first, then tiles ahead in the scroll
+ * direction, then tiles behind it, each group nearest first. `direction` is 1 when scrolling
+ * down and -1 when scrolling up. Tiles with no pending miss are left out.
+ */
+export function orderThumbnailCandidates(
+  pending: ReadonlyMap<string, ThumbnailMiss>,
+  tiles: readonly TileSpan[],
+  viewport: { top: number; bottom: number },
+  direction: 1 | -1,
+): string[] {
+  const visible: Array<{ id: string; distance: number }> = [];
+  const ahead: Array<{ id: string; distance: number }> = [];
+  const behind: Array<{ id: string; distance: number }> = [];
+  for (const tile of tiles) {
+    if (!pending.has(tile.itemId)) continue;
+    const bottom = tile.y + tile.height;
+    if (bottom >= viewport.top && tile.y <= viewport.bottom) {
+      visible.push({ id: tile.itemId, distance: Math.abs(tile.y - viewport.top) });
+      continue;
+    }
+    const isAhead = direction > 0 ? tile.y > viewport.bottom : bottom < viewport.top;
+    const distance =
+      direction > 0 ? Math.abs(tile.y - viewport.bottom) : Math.abs(viewport.top - bottom);
+    (isAhead ? ahead : behind).push({ id: tile.itemId, distance });
+  }
+  const byDistance = (left: { distance: number }, right: { distance: number }): number =>
+    left.distance - right.distance;
+  return [visible, ahead, behind].flatMap((group) =>
+    group.sort(byDistance).map((candidate) => candidate.id),
+  );
+}
+
 export function createThumbnailScheduler(options: ThumbnailSchedulerOptions): ThumbnailScheduler {
   const pending = new Map<string, ThumbnailMiss>();
   const inFlight = new Set<string>();
