@@ -58,6 +58,7 @@ export const IPC_ACCESS = {
   [IPC_CHANNELS.native.chooseDirectory]: "window",
   [IPC_CHANNELS.native.chooseVisualSearchImage]: "window",
   [IPC_CHANNELS.native.showFileContextMenu]: "window",
+  [IPC_CHANNELS.native.showFolderContextMenu]: "window",
   [IPC_CHANNELS.native.prepareFileDrag]: "window",
   [IPC_CHANNELS.native.startFileDrag]: "window",
 } as const satisfies Record<string, "window" | "remote">;

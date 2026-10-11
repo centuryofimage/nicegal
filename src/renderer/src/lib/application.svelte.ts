@@ -11,12 +11,16 @@ import { JobOrchestrator } from "./job-orchestrator.svelte";
 import { stopsForRuntimeSwitch } from "./job-state";
 import { JobTracker } from "./job-tracker.svelte";
 import { sameFolder } from "./library-root";
+import { isWithin } from "./library-status";
 import { OcrSearchController } from "./ocr-search.svelte";
 import { isRemote } from "./platform";
 import { RuntimeController } from "./runtime.svelte";
 import { settings } from "./settings.svelte";
 
 type IndexBucket = 128 | 256 | 512 | 1024;
+
+/** An automatic check waits this long after the library's last scan or check. */
+const AUTOMATIC_CHECK_INTERVAL_MS = 10 * 60_000;
 
 export interface ApplicationServices {
   readonly catalog: CatalogController;
@@ -41,6 +45,21 @@ export interface ApplicationCommands {
     definition: LibraryDefinition,
     name: string | null,
   ) => Promise<void>;
+  /**
+   * Takes a folder out of a library right away: an included folder is removed, a subfolder is
+   * excluded. With `deleteIndexedData`, then purges its data that no other library covers.
+   */
+  readonly removeFolder: (
+    libraryId: LibraryId,
+    path: string,
+    deleteIndexedData: boolean,
+  ) => Promise<void>;
+  /**
+   * Quickly checks the selected library for new, changed and removed files. An automatic check,
+   * on focusing the window or opening a remote browser, is skipped while a job runs, while hidden,
+   * or within a few minutes of the last scan.
+   */
+  readonly checkForChanges: (trigger: "manual" | "automatic") => void;
   /** Requests a scan of every folder, or only pending ones; queued by the backend when busy. */
   readonly scanLibrary: (
     libraryId: LibraryId,
@@ -98,6 +117,7 @@ class Application implements ApplicationContext {
   private recoveryRevision = 0;
   private recoveryTask: Promise<void> | null = null;
   private backendInitialized = false;
+  private lastCheckRequestMs = 0;
 
   constructor() {
     const ocrSearch = new OcrSearchController();
@@ -142,6 +162,9 @@ class Application implements ApplicationContext {
       createLibrary: (folder: string) => this.createLibrary(folder),
       saveLibrary: (libraryId: LibraryId, definition: LibraryDefinition, name: string | null) =>
         this.saveLibrary(libraryId, definition, name),
+      checkForChanges: (trigger: "manual" | "automatic") => this.checkForChanges(trigger),
+      removeFolder: (libraryId: LibraryId, path: string, deleteIndexedData: boolean) =>
+        this.removeFolder(libraryId, path, deleteIndexedData),
       scanLibrary: (
         libraryId: LibraryId,
         options: { scanMode?: "full" | "fast"; pendingOnly?: boolean; retryFailed?: boolean } = {},
@@ -245,6 +268,8 @@ class Application implements ApplicationContext {
       this.initialized = true;
       if (catalog.backendStatus.ready) {
         await this.recoverBackend();
+        // Connecting a remote browser is a return to the gallery, like focusing the window.
+        if (current() && isRemote()) this.checkForChanges("automatic");
       }
     } catch (error) {
       if (!current()) return;
@@ -370,6 +395,55 @@ class Application implements ApplicationContext {
     } else {
       catalog.updateLibraryViewState(libraryId, { name });
     }
+  }
+
+  private checkForChanges(trigger: "manual" | "automatic"): void {
+    const { catalog, jobs, orchestrator } = this.services;
+    const library = catalog.selectedLibrary;
+    if (!library || !catalog.backendStatus.ready) return;
+    if (trigger === "automatic") {
+      if (document.visibilityState !== "visible" || jobs.running) return;
+      const lastScanMs = Math.max(
+        0,
+        ...library.include.map((folder) =>
+          folder.lastScanCompletedNs ? Number(BigInt(folder.lastScanCompletedNs) / 1_000_000n) : 0,
+        ),
+      );
+      const since = Date.now() - Math.max(lastScanMs, this.lastCheckRequestMs);
+      if (since < AUTOMATIC_CHECK_INTERVAL_MS) return;
+    }
+    this.lastCheckRequestMs = Date.now();
+    void orchestrator.scan(library.id, { scanMode: "fast" });
+  }
+
+  private async removeFolder(
+    libraryId: LibraryId,
+    path: string,
+    deleteIndexedData: boolean,
+  ): Promise<void> {
+    const { catalog, jobs, orchestrator } = this.services;
+    const library = catalog.definitions.find((candidate) => candidate.id === libraryId);
+    if (!library) throw new Error("That library no longer exists.");
+    if (deleteIndexedData && jobs.running)
+      throw new Error("Wait for the current job to finish before deleting indexed data.");
+    const included = library.include.some((folder) => sameFolder(folder.path, path));
+    const include = library.include
+      .map((folder) => folder.path)
+      .filter((folder) => !sameFolder(folder, path));
+    if (!include.length)
+      throw new Error("A library needs at least one folder. Remove the library instead.");
+    // Exclusions inside the folder become redundant, and the backend rejects ones outside every
+    // included folder.
+    const exclude = library.exclude.filter((folder) => !isWithin(folder, path));
+    await catalog.updateLibrary(libraryId, {
+      include,
+      exclude: included ? exclude : [...exclude, path],
+      ocr: library.ocr,
+      image: library.image,
+      videos: library.videos,
+    });
+    if (deleteIndexedData && !(await orchestrator.purgeRemovedFolders(libraryId, [path])))
+      throw new Error("The folder was removed, but deleting its indexed data couldn't start.");
   }
 
   private async startThumbnailBackfill(

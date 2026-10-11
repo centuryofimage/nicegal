@@ -248,6 +248,7 @@ for (const scenario of [
     assert.deepEqual(await handlers.get("updates:status")!({}), {
       phase: "available",
       version: "0.0.42",
+      notes: [],
     });
     assert.equal(calls, beforeChecks);
     assert.equal(downloads, beforeDownloads);
@@ -293,12 +294,12 @@ test("packaged macOS checks once and offers a release link without installing", 
     enabled: true,
     mode: "notify",
   });
-  assert.deepEqual(await status(), { phase: "idle", version: null });
+  assert.deepEqual(await status(), { phase: "idle", version: null, notes: [] });
   t.mock.timers.tick(5_000);
   await flushUpdateCheck();
   assert.equal(releaseRequests.length, beforeRequests + 1);
   assert.equal(calls, beforeChecks, "Mac notifier never starts electron-updater");
-  assert.deepEqual(await status(), { phase: "available", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "available", version: "0.0.42", notes: [] });
   await handlers.get("updates:release-notes")!("trusted");
   assert.deepEqual(opened.slice(beforeOpened), [
     "https://github.com/centuryofimage/nicegal/releases/tag/v0.0.42",
@@ -310,7 +311,7 @@ test("packaged macOS checks once and offers a release link without installing", 
   assert.equal(service.installAndRestart(), false);
   assert.equal(restartRequests, 0);
   await handlers.get("updates:set-enabled")!("trusted", false);
-  assert.deepEqual(await status(), { phase: "disabled", version: null });
+  assert.deepEqual(await status(), { phase: "disabled", version: null, notes: [] });
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(releaseRequests.length, beforeRequests + 1);
 });
@@ -401,7 +402,7 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   );
   const status = async (): Promise<UpdateStatus> =>
     (await handlers.get("updates:status")!("trusted")) as UpdateStatus;
-  assert.deepEqual(await status(), { phase: "idle", version: null });
+  assert.deepEqual(await status(), { phase: "idle", version: null, notes: [] });
   await handlers.get("updates:release-notes")!("trusted");
   assert.equal(opened.length, openedBefore);
   t.mock.timers.tick(4_999);
@@ -415,14 +416,14 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.deepEqual(feedUrls.slice(feedsBefore), [
     "https://github.com/centuryofimage/nicegal/releases/download/v0.0.42",
   ]);
-  assert.deepEqual(await status(), { phase: "downloading", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "downloading", version: "0.0.42", notes: [] });
   t.mock.timers.tick(6 * 60 * 60 * 1000);
   assert.equal(calls, checksBefore + 1, "no second check while the download promise is pending");
   updater.emit("update-downloaded", { version: "0.0.42" });
   resolveDownload();
   await Promise.resolve();
   await Promise.resolve();
-  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42", notes: [] });
   assert.deepEqual(messages.at(-1), await status());
   await handlers.get("updates:release-notes")!("trusted");
   assert.deepEqual(opened.slice(openedBefore), [
@@ -440,7 +441,7 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.equal(calls, checksBefore + 1, "keep the downloaded version stable until quit");
   t.mock.method(console, "error", () => {});
   updater.emit("error", new Error("installation failed"));
-  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42" });
+  assert.deepEqual(await status(), { phase: "ready", version: "0.0.42", notes: [] });
   window.emit("query-session-end");
   assert.equal(updater.autoInstallEvent, "manual");
   updater.autoInstallEvent = "onQuit";
@@ -473,7 +474,11 @@ test("dev is disabled and does not schedule checks", async (t) => {
   const before = calls;
   t.mock.timers.tick(24 * 60 * 60 * 1000);
   assert.equal(calls, before);
-  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "disabled", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), {
+    phase: "disabled",
+    version: null,
+    notes: [],
+  });
 });
 
 test("failed checks do not retry until the next launch; quitting before the delay cancels the check", async (t) => {
@@ -503,7 +508,11 @@ test("failed checks do not retry until the next launch; quitting before the dela
   t.mock.timers.tick(5_000);
   await flushUpdateCheck();
   assert.equal(attempts, 1);
-  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "error", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), {
+    phase: "error",
+    version: null,
+    notes: [],
+  });
   t.mock.timers.tick(7 * 24 * 60 * 60 * 1000);
   assert.equal(attempts, 1, "no retry even after a week running");
   first.stop();
@@ -514,6 +523,52 @@ test("failed checks do not retry until the next launch; quitting before the dela
   second.stop();
   t.mock.timers.tick(5_000);
   assert.equal(attempts, 1, "an early quit cancels the pending startup check");
+});
+
+test("long sessions check again on focus once a day, never while hidden", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "setInterval", "Date"], now: 0 });
+  t.mock.method(console, "error", () => {});
+  const electronProcess = process as NodeJS.Process & { resourcesPath?: string };
+  electronProcess.resourcesPath = mkdtempSync(join(tmpdir(), "nicegal-update-daily-"));
+  writeFileSync(join(electronProcess.resourcesPath, "nicegal-installed"), "nsis");
+  const previousAppImage = process.env.APPIMAGE;
+  if (process.platform === "linux") process.env.APPIMAGE = "/test/nicegal.AppImage";
+  t.after(() => {
+    delete electronProcess.resourcesPath;
+    if (previousAppImage === undefined) delete process.env.APPIMAGE;
+    else process.env.APPIMAGE = previousAppImage;
+  });
+  app.isPackaged = true;
+  let attempts = 0;
+  t.mock.method(updater, "checkForUpdates", async () => {
+    attempts++;
+    throw new Error("offline");
+  });
+  const updates = startUpdates(
+    () => true,
+    () => {},
+  );
+  t.after(updates.stop);
+  window.emit("focus");
+  t.mock.timers.tick(5_000);
+  await flushUpdateCheck();
+  assert.equal(attempts, 1, "focus right after launch does not add a check");
+  t.mock.timers.tick(23 * 60 * 60 * 1000);
+  window.emit("focus");
+  await flushUpdateCheck();
+  assert.equal(attempts, 1, "focus within a day of the last check does nothing");
+  t.mock.timers.tick(3 * 24 * 60 * 60 * 1000);
+  await flushUpdateCheck();
+  assert.equal(attempts, 1, "days hidden in the tray do not check");
+  window.emit("focus");
+  window.emit("focus");
+  await flushUpdateCheck();
+  assert.equal(attempts, 2, "the first focus after a day checks once");
+  updates.stop();
+  t.mock.timers.tick(2 * 24 * 60 * 60 * 1000);
+  window.emit("focus");
+  await flushUpdateCheck();
+  assert.equal(attempts, 2, "stopping removes the focus listener");
 });
 
 test("opt-out persists, cancels a download, hides ready state and cannot re-arm this launch", async (t) => {
@@ -568,6 +623,7 @@ test("opt-out persists, cancels a download, hides ready state and cannot re-arm 
   assert.deepEqual(await handlers.get("updates:status")!("trusted"), {
     phase: "disabled",
     version: null,
+    notes: [],
   });
   setEnabled(true);
   assert.equal(updater.autoInstallEvent, "manual");
@@ -612,19 +668,19 @@ test("invalid saved preferences fail closed; preference writes preserve unrelate
 });
 
 test("latest release lookup accepts only a successful stable numeric release", async (t) => {
-  const { latestStableReleaseFeed } = await vite.ssrLoadModule("/src/main/updates.ts");
+  const { latestStableRelease } = await vite.ssrLoadModule("/src/main/updates.ts");
   let response = Response.json({ tag_name: "v0.0.7", prerelease: false, draft: false });
   t.mock.method(net, "fetch", async () => response);
   assert.equal(
-    await latestStableReleaseFeed(),
+    (await latestStableRelease()).feedUrl,
     "https://github.com/centuryofimage/nicegal/releases/download/v0.0.7",
   );
   response = Response.json({ tag_name: "v0.0.8-beta.1", prerelease: true, draft: false });
-  await assert.rejects(latestStableReleaseFeed(), /stable numeric release/);
+  await assert.rejects(latestStableRelease(), /stable numeric release/);
   response = Response.json({ tag_name: "v0.0.8/../../other", prerelease: false, draft: false });
-  await assert.rejects(latestStableReleaseFeed(), /stable numeric release/);
+  await assert.rejects(latestStableRelease(), /stable numeric release/);
   response = new Response("rate limited", { status: 403 });
-  await assert.rejects(latestStableReleaseFeed(), /HTTP 403/);
+  await assert.rejects(latestStableRelease(), /HTTP 403/);
 });
 
 test("opting out during the release lookup never starts an updater check", async (t) => {
@@ -663,5 +719,9 @@ test("opting out during the release lookup never starts an updater check", async
   await flushUpdateCheck();
   assert.equal(calls, checksBefore);
   assert.equal(feedUrls.length, feedsBefore);
-  assert.deepEqual(await handlers.get("updates:status")!({}), { phase: "disabled", version: null });
+  assert.deepEqual(await handlers.get("updates:status")!({}), {
+    phase: "disabled",
+    version: null,
+    notes: [],
+  });
 });

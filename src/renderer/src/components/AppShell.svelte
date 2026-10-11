@@ -6,7 +6,7 @@
   import UpdateAvailableDialog from "./UpdateAvailableDialog.svelte";
   import UpdateStatus from "./UpdateStatus.svelte";
 
-  let update = $state<UpdateState>({ phase: "disabled", version: null });
+  let update = $state<UpdateState>({ phase: "disabled", version: null, notes: [] });
   let showingUpdateDialog = $state(false);
   function receiveUpdateStatus(status: UpdateState): void {
     update = status;
@@ -72,6 +72,7 @@
   <div class="modal-layer" data-theme={theme}>
     <UpdateAvailableDialog
       version={update.version}
+      notes={update.notes}
       installReady={update.phase === "ready"}
       onclose={() => (showingUpdateDialog = false)}
       onnotes={() => window.nicegal.updates.openReleaseNotes()}

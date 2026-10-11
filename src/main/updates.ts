@@ -13,9 +13,37 @@ declare const __NICEGAL_RELEASE_UPDATES__: boolean;
 
 const RELEASES = "https://github.com/centuryofimage/nicegal/releases";
 const LATEST_RELEASE_API = "https://api.github.com/repos/centuryofimage/nicegal/releases/latest";
+/** Unauthenticated GitHub API calls are rate limited per IP, so long sessions check daily at most. */
+const DAILY_CHECK_MS = 24 * 60 * 60 * 1000;
+
+const MAX_NOTES = 20;
+const MAX_NOTE_LENGTH = 300;
+
+/** Pulls the changelog bullets out of a release body as plain text, ignoring everything after
+ * the first heading that follows them (the generated download table). */
+export function releaseNotes(body: unknown): string[] {
+  if (typeof body !== "string") return [];
+  const notes: string[] = [];
+  for (const line of body.split(/\r?\n/)) {
+    if (/^\s*#/.test(line) && notes.length > 0) break;
+    const bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
+    if (!bullet) continue;
+    const text = bullet[1]
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\*\*|`/g, "")
+      .trim();
+    if (text) notes.push(text.slice(0, MAX_NOTE_LENGTH));
+    if (notes.length === MAX_NOTES) break;
+  }
+  return notes;
+}
 
 /** GitHub's web /releases/latest redirects; updater feed requests expect JSON from it. */
-export async function latestStableRelease(): Promise<{ version: string; feedUrl: string }> {
+export async function latestStableRelease(): Promise<{
+  version: string;
+  feedUrl: string;
+  notes: string[];
+}> {
   const response = await net.fetch(LATEST_RELEASE_API, {
     headers: {
       Accept: "application/vnd.github+json",
@@ -42,11 +70,8 @@ export async function latestStableRelease(): Promise<{ version: string; feedUrl:
   return {
     version: release.tag_name.slice(1),
     feedUrl: `${RELEASES}/download/${release.tag_name}`,
+    notes: "body" in release ? releaseNotes(release.body) : [],
   };
-}
-
-export async function latestStableReleaseFeed(): Promise<string> {
-  return (await latestStableRelease()).feedUrl;
 }
 
 export function isNewerRelease(latest: string, current: string): boolean {
@@ -130,14 +155,16 @@ export function startUpdates(
   const mayUpdate = (): boolean => supported && !disabledForSession;
   const mayNotify = (): boolean => notifyOnly && !disabledForSession;
   const enabled = mayUpdate() || mayNotify();
-  let status: UpdateStatus = { phase: enabled ? "idle" : "disabled", version: null };
+  let status: UpdateStatus = { phase: enabled ? "idle" : "disabled", version: null, notes: [] };
+  // The release lookup's notes, matched by version to what the updater reports.
+  let latest: { version: string; notes: string[] } | undefined;
   let stopped = false;
   const timers: {
     initial?: ReturnType<typeof setTimeout>;
   } = {};
 
   const publish = (phase: UpdateStatus["phase"], version: string | null = null): void => {
-    status = { phase, version };
+    status = { phase, version, notes: version && latest?.version === version ? latest.notes : [] };
     for (const window of BrowserWindow.getAllWindows()) {
       if (!window.webContents.isDestroyed())
         window.webContents.send(IPC_CHANNELS.updates.statusChanged, status);
@@ -189,15 +216,50 @@ export function startUpdates(
     autoUpdater.quitAndInstall({ isSilent: true, isForceRunAfter: true });
     return true;
   };
+  let runCheck: (() => Promise<void>) | undefined;
+  let checkInFlight = false;
+  let lastCheckAt = 0;
+  const startCheck = (): void => {
+    if (!runCheck || checkInFlight || stopped) return;
+    checkInFlight = true;
+    lastCheckAt = Date.now();
+    void runCheck().finally(() => {
+      checkInFlight = false;
+    });
+  };
+  const checkIfDue = (): void => {
+    if (disabledForSession || Date.now() - lastCheckAt < DAILY_CHECK_MS) return;
+    // A download in progress or waiting for restart already has what a check would find.
+    if (status.phase === "downloading" || status.phase === "ready") return;
+    startCheck();
+  };
+  const watchFocus = (window: BrowserWindow): void => {
+    window.on("focus", checkIfDue);
+  };
+  const onWindowCreated = (_event: Electron.Event, window: BrowserWindow): void =>
+    watchFocus(window);
+  /** One check shortly after launch, then again on focus (including reopening from the tray)
+   * once a day has passed. Nothing polls while the app sits hidden. */
+  const scheduleChecks = (run: () => Promise<void>): void => {
+    runCheck = run;
+    lastCheckAt = Date.now();
+    timers.initial = setTimeout(startCheck, 5_000);
+    timers.initial.unref();
+    BrowserWindow.getAllWindows().forEach(watchFocus);
+    app.on("browser-window-created", onWindowCreated);
+  };
   const stop = (): void => {
     stopped = true;
     clearTimeout(timers.initial);
+    for (const window of BrowserWindow.getAllWindows()) window.off("focus", checkIfDue);
+    app.off("browser-window-created", onWindowCreated);
   };
   if (mayNotify()) {
     const checkRelease = async (): Promise<void> => {
       try {
         const release = await latestStableRelease();
         if (stopped || !mayNotify()) return;
+        latest = release;
         const available = isNewerRelease(release.version, app.getVersion());
         publish(available ? "available" : "idle", available ? release.version : null);
       } catch (error) {
@@ -205,8 +267,7 @@ export function startUpdates(
         if (!stopped && mayNotify()) publish("error");
       }
     };
-    timers.initial = setTimeout(() => void checkRelease(), 5_000);
-    timers.initial.unref();
+    scheduleChecks(checkRelease);
     return { stop, deferInstallation, installAndRestart };
   }
   if (!enabled) {
@@ -258,11 +319,18 @@ export function startUpdates(
   const check = async (): Promise<void> => {
     if (stopped || !mayUpdate()) return;
     try {
-      const feedUrl = await latestStableReleaseFeed();
+      const release = await latestStableRelease();
       if (stopped || !mayUpdate()) return;
+      latest = release;
       // Keep electron-updater's verified NSIS/AppImage downloads and versioned blockmap URLs,
-      // while bypassing its GitHub provider's broken /releases/latest JSON lookup.
-      autoUpdater.setFeedURL({ provider: "generic", url: feedUrl });
+      // while bypassing its GitHub provider's broken /releases/latest JSON lookup. GitHub release
+      // assets answer multi-range requests with 501, which silently turns every differential
+      // download into a full one, so fetch changed blocks one range at a time like its provider.
+      autoUpdater.setFeedURL({
+        provider: "generic",
+        url: release.feedUrl,
+        useMultipleRangeRequest: false,
+      });
       const result = await autoUpdater.checkForUpdates();
       if (!result?.isUpdateAvailable || stopped || !mayUpdate()) return;
       const token = result.cancellationToken;
@@ -276,8 +344,6 @@ export function startUpdates(
       cancelDownload = undefined;
     }
   };
-  // One check per launch, after initial gallery startup. No polling or in-session retry.
-  timers.initial = setTimeout(() => void check(), 5_000);
-  timers.initial.unref();
+  scheduleChecks(check);
   return { stop, deferInstallation, installAndRestart };
 }

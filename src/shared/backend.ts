@@ -122,6 +122,18 @@ export interface NativeFileMenuRequest {
   assetIds: string[];
 }
 
+/** A folder of a library's tree, right-clicked in the Libraries pane. */
+export interface NativeFolderMenuRequest {
+  libraryId: LibraryId;
+  path: string;
+  /** False for a library's only included folder, which can't be removed. */
+  canRemove: boolean;
+}
+
+/** What the renderer must finish after the folder menu closes; null when nothing was chosen or
+ * the menu handled the action itself. */
+export type NativeFolderMenuChoice = "remove" | null;
+
 /** A session-only snapshot chosen through Electron's native file picker. It is never catalogued. */
 export interface ExternalVisualReference {
   displayName: string;
@@ -547,6 +559,7 @@ export interface NativeBridge {
   chooseVisualSearchImage(): Promise<ExternalVisualReference | null>;
   onAddToVisualSearch(listener: (assetIds: string[], replace: boolean) => void): () => void;
   showFileContextMenu(request: NativeFileMenuRequest): Promise<void>;
+  showFolderContextMenu(request: NativeFolderMenuRequest): Promise<NativeFolderMenuChoice>;
   prepareFileDrag(request: NativeFileMenuRequest): Promise<string>;
   startFileDrag(token: string): Promise<void>;
 }

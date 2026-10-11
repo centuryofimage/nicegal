@@ -216,13 +216,14 @@ export function createRemoteBridge(): NicegalBridge {
     chooseVisualSearchImage: chooseImageFile,
     onAddToVisualSearch: () => () => undefined,
     showFileContextMenu: async () => undefined,
+    showFolderContextMenu: async () => null,
     startFileDrag: async () => undefined,
   };
 
   const updates: UpdateBridge = {
     getPreferences: async () => ({ enabled: false, mode: "none" }),
     setEnabled: atThePc("Change update settings"),
-    getStatus: async () => ({ phase: "disabled", version: null }),
+    getStatus: async () => ({ phase: "disabled", version: null, notes: [] }),
     onStatusChanged: () => () => undefined,
     openReleaseNotes: async () => undefined,
     restartAndInstall: atThePc("Install updates"),

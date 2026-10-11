@@ -58,6 +58,7 @@ export const IPC_CHANNELS = {
     chooseVisualSearchImage: "native:choose-visual-search-image",
     addToVisualSearch: "native:add-to-visual-search",
     showFileContextMenu: "native:show-file-context-menu",
+    showFolderContextMenu: "native:show-folder-context-menu",
     prepareFileDrag: "native:prepare-file-drag",
     startFileDrag: "native:start-file-drag",
   },

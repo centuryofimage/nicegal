@@ -1,5 +1,6 @@
 import {
   BrowserWindow,
+  clipboard,
   dialog,
   Menu,
   nativeImage,
@@ -11,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 
+import type { NativeFolderMenuChoice } from "../../shared/backend";
 import type { AppInfo } from "../../shared/diagnostics";
 import type { NicegalServerClient } from "../backend/nicegal-server-client";
 import type { IpcSenderValidator } from "../ipc";
@@ -28,6 +30,7 @@ import {
   revealFile,
   type ResolvedFileTarget,
 } from "./file-actions";
+import { openFolderLabel, resolveFolderTarget } from "./folder-actions";
 
 export interface NativeIpcContext {
   isTrustedSender: IpcSenderValidator;
@@ -187,6 +190,43 @@ export function registerNativeIpc(context: NativeIpcContext): void {
           ),
         ),
       ).popup({ window: owner });
+    },
+  );
+
+  handleTrustedIpc(
+    IPC_CHANNELS.native.showFolderContextMenu,
+    context.isTrustedSender,
+    async (event, value: unknown): Promise<NativeFolderMenuChoice> => {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      if (!owner) throw new Error("Folder menu requires an owning application window");
+      if (!context.client) throw new Error("Folder actions require the catalog backend");
+      const folder = resolveFolderTarget(await context.client.listLibraries(), value);
+      return new Promise((resolve) => {
+        Menu.buildFromTemplate([
+          {
+            label: openFolderLabel(),
+            click: () =>
+              runFileAction(owner, "Open failed", async () => {
+                const error = await shell.openPath(folder.path);
+                if (error) throw new Error(error);
+              }),
+          },
+          {
+            label: "Copy path",
+            click: () => clipboard.writeText(folder.externalPath),
+          },
+          { type: "separator" },
+          {
+            label: "Remove from library…",
+            enabled: folder.canRemove,
+            click: () => resolve("remove"),
+          },
+        ]).popup({
+          window: owner,
+          // A chosen item settles first; the close callback only covers a dismissed menu.
+          callback: () => setTimeout(() => resolve(null)),
+        });
+      });
     },
   );
 }

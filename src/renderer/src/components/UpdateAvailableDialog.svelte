@@ -3,12 +3,15 @@
 
   let {
     version,
+    notes,
     installReady,
     onclose,
     onnotes,
     onrestart,
   }: {
     version: string | null;
+    /** Plain-text changelog bullets from the release notes. */
+    notes: string[];
     installReady: boolean;
     onclose: () => void;
     onnotes: () => Promise<void>;
@@ -56,6 +59,11 @@
         it manually.
       {/if}
     </p>
+    {#if notes.length > 0}
+      <ul class="update-notes" aria-label="Changes">
+        {#each notes as note, index (index)}<li>{note}</li>{/each}
+      </ul>
+    {/if}
     {#if error}<p class="update-error" role="alert">{error}</p>{/if}
     <footer>
       <button class="ui-button ui-button-compact" onclick={openNotes} disabled={restarting}
@@ -99,6 +107,14 @@
 
   p {
     margin-top: var(--space-10);
+    line-height: var(--line-height-normal);
+  }
+
+  .update-notes {
+    max-height: 160px;
+    margin: var(--space-10) 0 0;
+    padding-left: var(--space-16);
+    overflow-y: auto;
     line-height: var(--line-height-normal);
   }
 

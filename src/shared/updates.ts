@@ -1,6 +1,8 @@
 export interface UpdateStatus {
   phase: "disabled" | "idle" | "checking" | "downloading" | "ready" | "available" | "error";
   version: string | null;
+  /** Bullet points from that version's release notes, as plain text. */
+  notes: string[];
 }
 
 export interface UpdatePreferences {

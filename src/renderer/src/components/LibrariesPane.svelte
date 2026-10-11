@@ -15,7 +15,8 @@
     visibleFolderRows,
     type FolderRow,
   } from "../lib/folder-tree";
-  import { folderStatus, libraryOptionsSummary } from "../lib/library-status";
+  import { folderStatus, isWithin, libraryOptionsSummary } from "../lib/library-status";
+  import { isRemote } from "../lib/platform";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { parseQuery, withFolder } from "../lib/search-query";
   import {
@@ -24,6 +25,7 @@
     settingsLimits,
     type FolderSort,
   } from "../lib/settings.svelte";
+  import RemoveFolderFlyout from "./RemoveFolderFlyout.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
 
   let {
@@ -46,7 +48,10 @@
   /** The "All folders" row's place in the keyboard cursor, beside real folder paths. */
   const ALL = "";
 
-  const { catalog, ocrSearch, jobs } = useApplication().services;
+  const {
+    services: { catalog, ocrSearch, jobs },
+    commands,
+  } = useApplication();
   const selected = $derived(catalog.selectedLibrary);
   const ready = $derived(catalog.backendStatus.ready);
   let menuOpen = $state(false);
@@ -185,6 +190,58 @@
         filterInput?.focus();
     }
     event.preventDefault();
+  }
+
+  /** A folder waiting for the remove confirmation, with where its menu opened. */
+  let removing = $state<{
+    libraryId: LibraryId;
+    path: string;
+    name: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  /** Opens the native folder menu for a row, by pointer or by keyboard (Shift+F10, Menu key). */
+  async function onTreeContextmenu(event: MouseEvent): Promise<void> {
+    event.preventDefault();
+    if (isRemote() || !selected) return;
+    // A keyboard-opened menu targets the focused tree itself; use the cursor row.
+    const keyboard = event.target === treeElement;
+    const index = keyboard ? cursorIndex : rowAt(event);
+    const row: FolderRow | undefined = rows[index - 1];
+    if (!row) return;
+    cursor = row.node.path;
+    let { clientX: x, clientY: y } = event;
+    if (keyboard) {
+      const bounds = document.getElementById(rowId(index))?.getBoundingClientRect();
+      if (bounds) ({ left: x, bottom: y } = bounds);
+    }
+    const library = selected;
+    const path = row.node.path;
+    const root = library.include.some((folder) => folder.path === path);
+    try {
+      const choice = await window.nicegal.native.showFolderContextMenu({
+        libraryId: library.id,
+        path,
+        canRemove: !root || library.include.length > 1,
+      });
+      if (choice === "remove" && catalog.selectedId === library.id)
+        removing = { libraryId: library.id, path, name: row.node.name, x, y };
+    } catch (error) {
+      console.error("Folder menu failed", error);
+    }
+  }
+
+  async function removeFolder(deleteIndexedData: boolean): Promise<void> {
+    if (!removing) return;
+    const { libraryId, path } = removing;
+    await commands.removeFolder(libraryId, path, deleteIndexedData);
+    if (focused && isWithin(focused, path)) focus(null);
+  }
+
+  function closeRemoveFlyout(): void {
+    removing = null;
+    treeElement?.focus();
   }
 
   function onFilterKeydown(event: KeyboardEvent): void {
@@ -345,6 +402,7 @@
     onkeydown={onTreeKeydown}
     onclick={onTreeClick}
     ondblclick={onTreeDblclick}
+    oncontextmenu={onTreeContextmenu}
   >
     {#if selected}
       <div
@@ -423,6 +481,15 @@
       </p>
     {/if}
   </div>
+  {#if removing}
+    <RemoveFolderFlyout
+      name={removing.name}
+      x={removing.x}
+      y={removing.y}
+      onremove={removeFolder}
+      onclose={closeRemoveFlyout}
+    />
+  {/if}
   <!-- A focusable separator is the ARIA window-splitter widget; Svelte treats the role as static. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <div

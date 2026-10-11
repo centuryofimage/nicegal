@@ -3,6 +3,7 @@ export interface GalleryShortcutActions {
   toggleInfo: () => void;
   closeInfo: () => void;
   dismissView: () => void;
+  checkForChanges: () => void;
 }
 
 /** Workspace-wide shortcuts live here. SearchBar and DetailView own keys local to
@@ -24,6 +25,12 @@ export function createGalleryShortcutHandler(
     ) {
       event.preventDefault();
       actions.focusSearch();
+      return;
+    }
+
+    if (event.key === "F5" && !command && !event.altKey && !event.shiftKey && !event.repeat) {
+      event.preventDefault();
+      actions.checkForChanges();
       return;
     }
 

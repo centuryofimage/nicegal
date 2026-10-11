@@ -111,6 +111,7 @@
     toggleInfo,
     closeInfo,
     dismissView: view.dismissSelectionOrDetail,
+    checkForChanges: () => commands.checkForChanges("manual"),
   });
   function openDetail(index: number): void {
     const item = view.filteredItems[index];
@@ -125,7 +126,12 @@
   onDestroy(() => view.dispose());
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<!-- Returning to the gallery checks for new files; a window hidden in the tray never focuses. -->
+<svelte:window onkeydown={handleKeydown} onfocus={() => commands.checkForChanges("automatic")} />
+<svelte:document
+  onvisibilitychange={() =>
+    document.visibilityState === "visible" && commands.checkForChanges("automatic")}
+/>
 
 {#snippet toolbar()}
   <GalleryToolbar
@@ -370,6 +376,8 @@
         {mappingPatches}
         selectedCount={view.gallerySelection.count}
         status={catalog.selectedStatus}
+        checking={catalog.selectedId !== null && Boolean(jobs.scanState(catalog.selectedId))}
+        oncheck={() => commands.checkForChanges("manual")}
         job={jobs.active}
         message={view.statusMessage}
         backendReady={catalog.backendStatus.ready}

@@ -29,6 +29,7 @@ function fixture(): {
     toggleInfo: () => calls.push("info"),
     closeInfo: () => calls.push("close-info"),
     dismissView: () => calls.push("dismiss"),
+    checkForChanges: () => calls.push("check"),
   });
   function press(key: string, options: Partial<KeyboardEvent> = {}): KeyboardEvent {
     const event = {
@@ -104,4 +105,14 @@ test("Escape respects local handling, closes focused Info first, then dismisses 
     Object.assign(document, { fullscreenElement: null });
   }
   assert.deepEqual(calls, ["close-info", "dismiss"]);
+});
+
+test("F5 checks for changes unless modified or repeated", () => {
+  const { calls, press } = fixture();
+  const event = press("F5");
+  assert.equal(event.defaultPrevented, true);
+  press("F5", { ctrlKey: true });
+  press("F5", { shiftKey: true });
+  press("F5", { repeat: true });
+  assert.deepEqual(calls, ["check"]);
 });

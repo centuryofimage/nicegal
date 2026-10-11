@@ -12,6 +12,7 @@
   segment disappears only when its eligible-image total also duplicates the library count.
 -->
 <script lang="ts">
+  import RefreshCw from "@lucide/svelte/icons/refresh-cw";
   import X from "@lucide/svelte/icons/x";
 
   import type { JobSnapshot } from "../../../shared/backend";
@@ -34,6 +35,8 @@
     mappingPatches,
     selectedCount,
     status,
+    checking,
+    oncheck,
     message,
     backendReady,
     backendError,
@@ -57,6 +60,10 @@
     mappingPatches: boolean;
     selectedCount: number;
     status: LibraryRowStatus | undefined;
+    /** A scan of this library is running or queued. */
+    checking: boolean;
+    /** Quickly checks the library for new, changed and removed files. */
+    oncheck: () => void;
     message: string | undefined;
     backendReady: boolean;
     backendError: string | null;
@@ -128,7 +135,15 @@
 
 <span class="status-segment library" title={libraryTitle || undefined}>{libraryName}</span>
 {#if hasLibrary}
-  <span class="status-segment count item-count" role="status" title={itemsTitle}>{itemsText}</span>
+  <span class="status-segment count item-count"
+    ><span role="status" title={itemsTitle}>{itemsText}</span><button
+      class={["check-button", { checking }]}
+      title="Check for new files (F5)"
+      aria-label="Check for new files"
+      disabled={!backendReady}
+      onclick={oncheck}><RefreshCw size={11} aria-hidden="true" /></button
+    ></span
+  >
   {#if selectedCount > 0}
     <span class="status-segment count selected-count" role="status"
       >{selectedCount.toLocaleString()} selected</span
@@ -162,7 +177,7 @@
 {/if}
 {#if searching || mappingPatches || message}
   <span class="status-segment message" role="status">
-    {#if searching}<ActivitySpinner /> Searching…{:else if mappingPatches}<ActivitySpinner /> Mapping…{:else}{message}{/if}
+    {#if searching}Searching…{:else if mappingPatches}<ActivitySpinner /> Mapping…{:else}{message}{/if}
   </span>
 {/if}
 {#if hasLibrary}
@@ -188,6 +203,48 @@
   .index-status {
     display: inline-flex;
     align-items: center;
+  }
+
+  .item-count {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .check-button {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .check-button:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+  .check-button:disabled {
+    color: var(--text-tertiary);
+  }
+  .check-button:focus-visible {
+    outline: var(--focus-ring);
+    outline-offset: var(--focus-ring-offset);
+  }
+  .check-button.checking :global(svg) {
+    animation: check-spin 1.2s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .check-button.checking :global(svg) {
+      animation: none;
+    }
+  }
+  @keyframes check-spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .provider,

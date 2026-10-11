@@ -20,6 +20,8 @@ import type {
   NativeBridge,
   ExternalVisualReference,
   NativeFileMenuRequest,
+  NativeFolderMenuChoice,
+  NativeFolderMenuRequest,
   NicegalBridge,
   OcrModelsResponse,
   SearchModelsResponse,
@@ -255,6 +257,9 @@ const native: NativeBridge = {
   },
   showFileContextMenu(request: NativeFileMenuRequest): Promise<void> {
     return invoke(IPC_CHANNELS.native.showFileContextMenu, request);
+  },
+  showFolderContextMenu(request: NativeFolderMenuRequest): Promise<NativeFolderMenuChoice> {
+    return invoke(IPC_CHANNELS.native.showFolderContextMenu, request);
   },
 };
 
