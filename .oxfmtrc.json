@@ -9,6 +9,7 @@
     "out",
     "dist",
     "nicegal-server",
+    "src/shared/paraglide",
     "pnpm-lock.yaml",
     "LICENSE.md",
     "tsconfig.json",

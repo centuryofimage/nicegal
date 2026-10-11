@@ -6,6 +6,7 @@
   import Volume2 from "@lucide/svelte/icons/volume-2";
   import VolumeX from "@lucide/svelte/icons/volume-x";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { formatDuration } from "../lib/duration";
 
   let {
@@ -169,8 +170,8 @@
   <button
     class="video-surface"
     type="button"
-    aria-label={playing ? "Pause video" : "Play video"}
-    title={playing ? "Pause" : "Play"}
+    aria-label={playing ? m.video_player_pause_video() : m.video_player_play_video()}
+    title={playing ? m.video_player_pause() : m.video_player_play()}
     onclick={togglePlayback}
   >
     <!-- svelte-ignore a11y_media_has_caption -->
@@ -182,13 +183,13 @@
       {@attach observeVideo}
     ></video>
   </button>
-  <div class="video-controls" role="group" aria-label="Video controls">
+  <div class="video-controls" role="group" aria-label={m.video_player_controls_group_aria()}>
     <button
       class="player-button"
       type="button"
       onclick={togglePlayback}
-      aria-label={playing ? "Pause" : "Play"}
-      title={playing ? "Pause" : "Play"}
+      aria-label={playing ? m.video_player_pause() : m.video_player_play()}
+      title={playing ? m.video_player_pause() : m.video_player_play()}
     >
       {#if playing}<Pause size={13} fill="currentColor" aria-hidden="true" />{:else}<Play
           size={13}
@@ -204,7 +205,7 @@
       step="0.01"
       value={currentTime}
       style:--range-progress={seekPercent}
-      aria-label="Seek video"
+      aria-label={m.video_player_seek_aria()}
       disabled={duration <= 0}
       onpointerdown={beginScrubbing}
       onpointerup={finishScrubbing}
@@ -213,15 +214,17 @@
     />
     <span
       class="time-readout"
-      aria-label={`Time ${formatDuration(currentTime)} of ${formatDuration(duration)}`}
-      >{formatDuration(currentTime)} / {formatDuration(duration)}</span
+      aria-label={m.video_player_time_aria({
+        current: formatDuration(currentTime),
+        duration: formatDuration(duration),
+      })}>{formatDuration(currentTime)} / {formatDuration(duration)}</span
     >
     <button
       class="player-button"
       type="button"
       onclick={toggleMute}
-      aria-label={muted ? "Unmute" : "Mute"}
-      title={muted ? "Unmute" : "Mute"}
+      aria-label={muted ? m.video_player_unmute() : m.video_player_mute()}
+      title={muted ? m.video_player_unmute() : m.video_player_mute()}
     >
       {#if muted || volume === 0}<VolumeX size={14} aria-hidden="true" />{:else}<Volume2
           size={14}
@@ -236,15 +239,15 @@
       step="1"
       value={muted ? 0 : Math.round(volume * 100)}
       style:--range-progress={volumePercent}
-      aria-label="Volume"
+      aria-label={m.video_player_volume_aria()}
       oninput={setVolume}
     />
     <button
       class="player-button fullscreen-button"
       type="button"
       onclick={() => void toggleFullscreen()}
-      aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-      title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+      aria-label={fullscreen ? m.video_player_exit_fullscreen() : m.video_player_fullscreen()}
+      title={fullscreen ? m.video_player_exit_fullscreen() : m.video_player_fullscreen()}
     >
       {#if fullscreen}<Minimize size={13} aria-hidden="true" />{:else}<Maximize
           size={13}

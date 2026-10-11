@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { cleanDiagnostic } from "../lib/errors";
   import TechnicalDetails from "./TechnicalDetails.svelte";
 
@@ -38,7 +39,10 @@
   {#if title}<strong>{title}</strong>{/if}
   {#if tone === "error" && placement === "overlay"}
     {#if guidance}<span role="alert">{guidance}</span>{/if}
-    {#if message}<TechnicalDetails text={message} copyHeading={title ?? "Error"} />{/if}
+    {#if message}<TechnicalDetails
+        text={message}
+        copyHeading={title ?? m.app_message_default_title()}
+      />{/if}
   {:else}
     <span>{diagnostic}</span>
   {/if}

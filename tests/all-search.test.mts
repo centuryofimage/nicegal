@@ -142,7 +142,7 @@ test("All publishes fast results, independent lanes, top-ten related tail and de
     view.sections?.map((section) => section.count),
     [8],
   );
-  assert.equal(view.sources?.get("1"), "Names and text, Visual results");
+  assert.equal(view.sources?.get("1"), "literal,visual");
   assert.equal(f.search.displaySnippets.get("1"), "needle", "All keeps literal OCR excerpts");
   assert.equal(
     f.search.displaySnippets.get("3"),
@@ -158,7 +158,7 @@ test("All publishes fast results, independent lanes, top-ten related tail and de
     dated.items.map((item) => item.id),
     ["1", "2", "3", "4", "5", "6", "7", "8"],
   );
-  assert.equal(f.search.sliderLabel, "Visual similarity");
+  assert.equal(f.search.sliderKind, "visual");
   assert.equal(f.search.sliderApplicable, true);
   f.search.minMatchPercentile = 0;
   assert.equal(f.search.apply(catalog).items.length, 8);
@@ -235,7 +235,7 @@ test("All caps related text at ten hits and appends it inside the literal sectio
     ["30", "2", "1", "3", "4", "5", "6", "7", "8", "9", "10"],
   );
   assert.equal(f.search.displaySnippets.has("11"), false);
-  assert.equal(view.sources?.get("2"), "Names and text");
+  assert.equal(view.sources?.get("2"), "literal");
   assert.equal(view.sections?.[0].status, "");
   f.search.dispose();
 });

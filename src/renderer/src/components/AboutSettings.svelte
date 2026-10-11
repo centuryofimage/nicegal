@@ -1,11 +1,13 @@
 <script lang="ts">
+  import { ParaglideMessage } from "@inlang/paraglide-js-svelte";
   import { TriangleAlert } from "@lucide/svelte";
   import { onMount } from "svelte";
 
   import type { AppInfo } from "../../../shared/diagnostics";
 
   import { version } from "../../../../package.json";
-  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
+  import { m } from "../../../shared/paraglide/messages.js";
+  import { desktopOnlyTitle, isRemote } from "../lib/platform";
 
   let appInfo = $state<AppInfo | null>(null);
   let collecting = $state(false);
@@ -53,7 +55,7 @@
     collecting = true;
     try {
       const savedPath = await window.nicegal.native.collectDiagnostics();
-      if (savedPath) status = "Diagnostics saved.";
+      if (savedPath) status = m.about_settings_diagnostics_saved();
     } catch (cause) {
       error = formatError(cause);
     } finally {
@@ -68,29 +70,45 @@
 
 <section class="about-settings" aria-labelledby="about-title">
   <h2 id="about-title">Nicegal <span class="about-version">{version}</span></h2>
-  <p>A desktop gallery with local OCR, text and image search.</p>
-  <p>Copyright 2026 bep</p>
+  <p>{m.about_settings_description()}</p>
+  <p>{m.about_settings_copyright()}</p>
   <dl class="about-build-info">
     <dt>Electron</dt>
-    <dd>{appInfo?.electronVersion ?? "Loading…"}</dd>
-    <dt>Frontend commit</dt>
-    <dd>{appInfo?.frontendCommit ?? "Loading…"}</dd>
-    <dt>Backend commit</dt>
-    <dd>{appInfo?.backendCommit ?? "Loading…"}</dd>
+    <dd>{appInfo?.electronVersion ?? m.common_loading()}</dd>
+    <dt>{m.about_settings_frontend_commit_label()}</dt>
+    <dd>{appInfo?.frontendCommit ?? m.common_loading()}</dd>
+    <dt>{m.about_settings_backend_commit_label()}</dt>
+    <dd>{appInfo?.backendCommit ?? m.common_loading()}</dd>
   </dl>
   <p class="about-links">
-    <a href="https://github.com/centuryofimage/nicegal" onclick={openLink}>Frontend source</a>
-    <a href="https://github.com/centuryofimage/nicegal-server" onclick={openLink}>Backend source</a>
+    <a href="https://github.com/centuryofimage/nicegal" onclick={openLink}
+      >{m.about_settings_frontend_source_link()}</a
+    >
+    <a href="https://github.com/centuryofimage/nicegal-server" onclick={openLink}
+      >{m.about_settings_backend_source_link()}</a
+    >
   </p>
   <p>
-    Frontend: <a href="https://opensource.org/license/mit" onclick={openLink}>MIT</a>. Backend:
-    <a href="https://www.gnu.org/licenses/agpl-3.0.html" onclick={openLink}>AGPL-3.0-only</a>.
+    <ParaglideMessage message={m.about_settings_license_summary} inputs={{}}>
+      {#snippet mit({ children })}
+        <a href="https://opensource.org/license/mit" onclick={openLink}>{@render children?.()}</a>
+      {/snippet}
+      {#snippet agpl({ children })}
+        <a href="https://www.gnu.org/licenses/agpl-3.0.html" onclick={openLink}
+          >{@render children?.()}</a
+        >
+      {/snippet}
+    </ParaglideMessage>
   </p>
   <p>
     {#if isRemote()}
-      <span class="about-desktop-only" title={DESKTOP_ONLY_TITLE}>License information</span>
+      <span class="about-desktop-only" title={desktopOnlyTitle()}
+        >{m.about_settings_license_information()}</span
+      >
     {:else}
-      <a href="#license-information" onclick={openLicenses}>License information</a>
+      <a href="#license-information" onclick={openLicenses}
+        >{m.about_settings_license_information()}</a
+      >
     {/if}
   </p>
   <div class="about-diagnostics">
@@ -98,14 +116,14 @@
       class="ui-button"
       type="button"
       onclick={collectDiagnostics}
-      title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+      title={isRemote() ? desktopOnlyTitle() : undefined}
       disabled={collecting || isRemote()}
     >
-      {collecting ? "Collecting…" : "Collect diagnostics"}
+      {collecting ? m.common_collecting_diagnostics() : m.common_collect_diagnostics()}
     </button>
     <p class="about-warning">
       <TriangleAlert size={13} aria-hidden="true" />
-      Diagnostics may contain file names and error details.
+      {m.about_settings_diagnostics_warning()}
     </p>
   </div>
   {#if status}<p class="about-status" aria-live="polite">{status}</p>{/if}

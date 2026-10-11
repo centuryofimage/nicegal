@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
   import ModelPicker from "./ModelPicker.svelte";
@@ -13,12 +14,12 @@
 </script>
 
 <section aria-labelledby="search-models-title" class="model-section">
-  <h2 id="search-models-title">Search</h2>
+  <h2 id="search-models-title">{m.search_models_title()}</h2>
   {#if !catalog.backendStatus.ready && catalog.backendStatus.error}
     <div class="service-status" role="status">
-      <span>Search settings are unavailable while the gallery service is offline.</span>
+      <span>{m.search_models_service_offline()}</span>
       <button class="ui-button ui-button-compact" onclick={onshowservicedetails}
-        >Show details</button
+        >{m.search_models_show_details()}</button
       >
     </div>
   {/if}
@@ -31,18 +32,14 @@
       !catalog.backendStatus.ready}
   />
   {#if !runtime.supportsImageTextQueries}
-    <p>
-      This model finds similar images from image examples. Text descriptions are unavailable; file
-      name and OCR text searches still work.
-    </p>
+    <p>{m.search_models_text_unavailable_note()}</p>
   {/if}
   <p>
     {runtime.stoppingJobs
-      ? "Stopping indexing…"
+      ? m.search_stopping_indexing()
       : runtime.imageModelSaving
-        ? "Switching image model…"
-        : jobNote ||
-          "Each model keeps its own index. Switching briefly restarts the gallery service."}
+        ? m.search_models_switching_model()
+        : jobNote || m.search_models_default_note()}
   </p>
   {#if runtime.imageModelError}<p class="model-error" role="alert">
       {runtime.imageModelError}

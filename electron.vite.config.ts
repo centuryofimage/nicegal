@@ -1,7 +1,10 @@
+import { paraglideVitePlugin } from "@inlang/paraglide-js";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "electron-vite";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+
+import { paraglideOptions } from "./scripts/paraglide-options.mjs";
 
 const repositoryDirectory = fileURLToPath(new URL(".", import.meta.url));
 
@@ -43,6 +46,7 @@ export default defineConfig({
       cssMinify: true,
       sourcemap: true,
     },
-    plugins: [svelte()],
+    // Main and preload use the output of `pnpm run messages`; this keeps it fresh while the dev server runs.
+    plugins: [svelte(), paraglideVitePlugin(paraglideOptions)],
   },
 });

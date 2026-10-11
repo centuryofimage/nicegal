@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import ActivitySpinner from "./ActivitySpinner.svelte";
 
   let reconnecting = $state(false);
@@ -10,8 +11,8 @@
 
 <!-- A remote browser that lost the PC, e.g. after the phone woke up. The gallery stays usable. -->
 {#if reconnecting}
-  <span class="status-segment reconnecting" role="status" title="Can't reach Nicegal on your PC">
-    <ActivitySpinner />Reconnecting…
+  <span class="status-segment reconnecting" role="status" title={m.reconnecting_status_title()}>
+    <ActivitySpinner />{m.reconnecting_status_label()}
   </span>
 {/if}
 

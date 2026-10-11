@@ -3,6 +3,7 @@
 
   import type { RuntimeController } from "../lib/runtime.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { errorMessage } from "../lib/errors";
   import { groupImageModels, imageModels, shortModelName } from "../lib/image-models";
 
@@ -60,12 +61,9 @@
 
 {#snippet options()}
   <fieldset class={["picker", { compact }]} {disabled}>
-    <legend>Image search model</legend>
+    <legend>{m.model_picker_legend()}</legend>
     {#if !compact}
-      <p class="intro">
-        Chooses how pictures are compared with example images and descriptions. It does not change
-        OCR or related-text search.
-      </p>
+      <p class="intro">{m.model_picker_intro()}</p>
     {/if}
     <div class="options">
       {#each groups as group (group.id)}
@@ -77,7 +75,7 @@
           {#each group.models as model (model.id)}
             {@const info = imageModels[model.id]}
             <div class={["option", { chosen: model.id === activeModel }]}>
-              <label title={compact ? info?.description : undefined}>
+              <label title={compact ? info?.description() : undefined}>
                 <input
                   type="radio"
                   name={`${id}-image-model`}
@@ -90,22 +88,24 @@
                   <span class="name">
                     {compact
                       ? shortModelName(model.name)
-                      : model.name}{#if compact && !model.available}
-                      · Unavailable{/if}{#if !compact && info?.recommended}<span class="recommended"
-                        >Recommended</span
+                      : model.name}{#if compact && !model.available}{m.common_separator()}{m.model_picker_unavailable()}{/if}{#if !compact && info?.recommended}<span
+                        class="recommended">{m.model_picker_recommended()}</span
                       >{/if}
                   </span>
                   <span class="description">
-                    {(compact ? info?.compactDescription : info?.description) ??
-                      "Image search model."}
+                    {(compact ? info?.compactDescription() : info?.description()) ??
+                      m.model_picker_default_description()}
                   </span>
                 </span>
               </label>
               {#if !compact}
                 {#if info?.license}
-                  <a href={model.url} title="Model page" onclick={openLink}>{info.license}</a>
+                  <a href={model.url} title={m.model_picker_model_page_title()} onclick={openLink}
+                    >{info.license()}</a
+                  >
                 {/if}
-                {#if !model.available}<span class="unavailable">Unavailable</span>{/if}
+                {#if !model.available}<span class="unavailable">{m.model_picker_unavailable()}</span
+                  >{/if}
               {/if}
             </div>
           {/each}
@@ -124,10 +124,12 @@
     bind:this={trigger}
     {disabled}
     popovertarget={id}
-    aria-label={`Image search model: ${shortModelName(runtime.imageModelName ?? "")}`}
+    aria-label={m.model_picker_trigger_label({
+      model: shortModelName(runtime.imageModelName ?? ""),
+    })}
     aria-expanded={open}
     aria-haspopup="dialog"
-    title="Choose image search model"
+    title={m.model_picker_trigger_title()}
     onclick={position}
   >
     {shortModelName(runtime.imageModelName ?? "")}<ChevronDown size={10} aria-hidden="true" />
@@ -138,7 +140,7 @@
     style:width={`min(${popupWidth}px, calc(100vw - 16px))`}
     popover="auto"
     role="dialog"
-    aria-label="Choose image search model"
+    aria-label={m.model_picker_trigger_title()}
     bind:this={popup}
     ontoggle={(event) => (open = event.newState === "open")}
   >

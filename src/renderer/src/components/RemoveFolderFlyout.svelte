@@ -6,6 +6,7 @@
 <script lang="ts">
   import type { Attachment } from "svelte/attachments";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { errorMessage } from "../lib/errors";
   import { popoverDismiss } from "../lib/popover-dismiss";
 
@@ -61,18 +62,21 @@
   {@attach place}
   {@attach popoverDismiss(!removing, onclose)}
 >
-  <p id="remove-folder-title" class="title">Remove “{name}” from this library?</p>
-  <p id="remove-folder-note">The files stay on disk.</p>
+  <p id="remove-folder-title" class="title">{m.remove_folder_flyout_title({ name })}</p>
+  <p id="remove-folder-note">{m.remove_folder_flyout_note()}</p>
   <label
-    ><input type="checkbox" bind:checked={deleteIndexedData} disabled={removing} />Also delete its
-    thumbnails and search data</label
+    ><input
+      type="checkbox"
+      bind:checked={deleteIndexedData}
+      disabled={removing}
+    />{m.remove_folder_flyout_delete_data()}</label
   >
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="actions">
     <button class="ui-button ui-button-primary remove" onclick={remove} disabled={removing}
-      >Remove</button
+      >{m.remove_folder_flyout_remove()}</button
     >
-    <button class="ui-button" onclick={onclose} disabled={removing}>Cancel</button>
+    <button class="ui-button" onclick={onclose} disabled={removing}>{m.common_cancel()}</button>
   </div>
 </div>
 

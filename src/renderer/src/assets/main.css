@@ -236,6 +236,43 @@ body {
   color: var(--text-primary);
 }
 
+/* The panel inside a Modal. .dialog-shell is the bare frame for components that lay out their own
+   content; .dialog-panel adds the layout for a title, body text and a footer of right-aligned buttons. */
+.dialog-shell,
+.dialog-panel {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-0);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-primary);
+}
+.dialog-panel {
+  display: grid;
+  gap: var(--space-10);
+  padding: var(--space-16);
+}
+.dialog-panel > h1,
+.dialog-panel > p {
+  margin: 0;
+}
+.dialog-panel > h1 {
+  font-size: var(--dialog-title-size);
+}
+.dialog-panel > p {
+  line-height: var(--line-height-normal);
+}
+.dialog-panel > .dialog-error {
+  color: var(--danger);
+}
+.dialog-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root {
     --duration-fast: 0ms;

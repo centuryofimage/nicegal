@@ -1,4 +1,5 @@
 import "./lib/install-bridge";
+import "./lib/install-locale";
 import { mount } from "svelte";
 
 import "./assets/main.css";

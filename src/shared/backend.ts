@@ -571,9 +571,12 @@ export interface ConnectionBridge {
 
 export interface NicegalBridge {
   updates: import("./updates").UpdateBridge;
+  language: import("./locale").LanguageBridge;
   remote: import("./remote").RemoteAccessBridge;
   /** True in a browser connected over remote access rather than the desktop window. */
   isRemote: boolean;
+  /** The UI locale main chose. A remote browser has none and follows its own languages. */
+  locale?: string;
   connection: ConnectionBridge;
   backend: BackendBridge;
   native: NativeBridge;

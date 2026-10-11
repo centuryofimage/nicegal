@@ -3,6 +3,7 @@
   import PanelRight from "@lucide/svelte/icons/panel-right";
   import { onDestroy } from "svelte";
 
+  import { m } from "../../shared/paraglide/messages.js";
   import AppMessage from "./components/AppMessage.svelte";
   import AppShell from "./components/AppShell.svelte";
   import BackendFailureMessage from "./components/BackendFailureMessage.svelte";
@@ -143,7 +144,7 @@
 {/snippet}
 
 {#snippet paneToggles()}
-  <div class="app-toolbar-group" role="group" aria-label="Panes">
+  <div class="app-toolbar-group" role="group" aria-label={m.gallery_panes_group_label()}>
     {@render librariesToggle()}
     {@render infoToggle()}
   </div>
@@ -158,10 +159,10 @@
     aria-controls="libraries-pane"
     aria-pressed={view.librariesPaneOpen}
     disabled={Boolean(view.detailItem)}
-    title="Show or hide libraries"
+    title={m.gallery_libraries_toggle_tooltip()}
     onclick={toggleLibraries}
   >
-    <PanelLeft size={13} aria-hidden="true" /><span>Libraries</span>
+    <PanelLeft size={13} aria-hidden="true" /><span>{m.common_libraries()}</span>
   </button>
 {/snippet}
 
@@ -173,10 +174,10 @@
       : "status-pane-toggle"}
     aria-controls="metadata-panel"
     aria-pressed={infoOpen}
-    title="Show or hide file info (I / Ctrl+I / Cmd+I)"
+    title={m.gallery_info_toggle_tooltip()}
     onclick={toggleInfo}
   >
-    <PanelRight size={13} aria-hidden="true" /><span>Info</span>
+    <PanelRight size={13} aria-hidden="true" /><span>{m.gallery_info_toggle_label()}</span>
   </button>
 {/snippet}
 
@@ -249,48 +250,48 @@
           guidance={application.problem.guidance}
           message={application.problem.message}
           placement="overlay"
-          actionLabel={application.problem.retry ? "Try again" : "Dismiss"}
+          actionLabel={application.problem.retry ? m.common_try_again() : m.common_dismiss()}
           onaction={application.problem.retry ? commands.retryStartup : commands.dismissProblem}
         />{:else if !catalog.backendStatus.ready && !catalog.backendStatus.error}<AppMessage
-          title="Starting gallery…"
-          message="Opening your local catalog."
+          title={m.gallery_starting_title()}
+          message={m.gallery_starting_message()}
           placement="overlay"
           tone="neutral"
         />{:else if !catalog.backendStatus.ready && catalog.backendStatus.error}<BackendFailureMessage
           error={catalog.backendStatus.error}
         />{:else if catalog.loadError}<AppMessage
-          title="Couldn't read the library"
-          guidance="Check that its drive is connected, then try again."
-          actionLabel="Try again"
+          title={m.gallery_load_error_title()}
+          guidance={m.gallery_load_error_guidance()}
+          actionLabel={m.common_try_again()}
           onaction={() => catalog.refresh()}
           message={catalog.loadError}
           placement="overlay"
         />{:else if offline.length}<AppMessage
-          title={offline.length === 1 ? "Folder not connected" : "Folders not connected"}
+          title={m.gallery_folders_offline_title({ count: offline.length })}
           message={offline.map((folder) => folder.hostPath ?? folder.path).join(", ")}
-          guidance="Connect the drive or restore the folder, then try again."
-          actionLabel="Try again"
+          guidance={m.gallery_folders_offline_guidance()}
+          actionLabel={m.common_try_again()}
           onaction={() =>
             catalog.selectedId !== null &&
             commands.scanLibrary(catalog.selectedId, { pendingOnly: true })}
           placement="overlay"
         />{:else if catalog.librariesLoaded && catalog.selectedId === null}<AppMessage
-          title="No library yet"
+          title={m.gallery_no_library_title()}
           message={isRemote()
-            ? "Add a folder of photos or videos on the PC running Nicegal."
-            : "Choose a folder of photos or videos to get started."}
+            ? m.gallery_no_library_remote_message()
+            : m.gallery_no_library_message()}
           placement="overlay"
           tone="neutral"
-          actionLabel={isRemote() ? undefined : "Choose media folder…"}
+          actionLabel={isRemote() ? undefined : m.gallery_choose_media_folder_button()}
           onaction={view.addLibrary}
         />{:else if !catalog.loading && catalog.items.length === 0 && catalog.selectedLibrary}<AppMessage
-          title="No photos or videos"
+          title={m.gallery_empty_library_title()}
           message={jobs.scanState(catalog.selectedLibrary.id)
-            ? "Scanning this library's folders…"
-            : "No photos or videos were found in this library's folders. Add a folder, or check its exclusions."}
+            ? m.gallery_empty_library_scanning()
+            : m.gallery_empty_library_message()}
           placement="overlay"
           tone="neutral"
-          actionLabel="Edit library…"
+          actionLabel={m.gallery_edit_library_button()}
           onaction={() => view.editLibrary(catalog.selectedLibrary!.id)}
         />{/if}
       {#if jobs.failure && catalog.backendStatus.ready && !catalog.loadError && !application.problem}
@@ -299,14 +300,14 @@
           guidance={jobs.failure.guidance}
           message={jobs.failure.message}
           placement="overlay"
-          actionLabel="Dismiss"
+          actionLabel={m.common_dismiss()}
           onaction={() => jobs.dismiss()}
         />
       {:else if jobs.connectionError && catalog.backendStatus.ready}
         <AppMessage
-          title="Progress updates interrupted"
+          title={m.gallery_progress_interrupted_title()}
           message={jobs.connectionError}
-          guidance="The job may still be running. Reconnecting…"
+          guidance={m.gallery_progress_interrupted_guidance()}
           placement="overlay"
         />
       {/if}
@@ -398,9 +399,11 @@
         </span>
       {/if}
       {#if view.detailStatus?.loading}
-        <span class="status-segment viewer-meta" role="status">Loading…</span>
+        <span class="status-segment viewer-meta" role="status">{m.common_loading()}</span>
       {:else if view.detailStatus?.failed}
-        <span class="status-segment viewer-error" role="status">Load failed</span>
+        <span class="status-segment viewer-error" role="status"
+          >{m.gallery_viewer_load_failed_status()}</span
+        >
       {:else if view.detailStatus?.zoom}
         <span class="status-segment viewer-meta" aria-live="polite">{view.detailStatus.zoom}</span>
       {/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { JobSnapshot } from "../../../shared/backend";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import Modal from "./Modal.svelte";
 
   let { errors, onclose }: { errors: JobSnapshot["errors"]; onclose: () => void } = $props();
@@ -8,19 +9,19 @@
   const selected = $derived(errors[Math.min(selectedIndex, errors.length - 1)]);
 
   function fileName(path: string | null | undefined): string {
-    return path?.split(/[\\/]/).pop() || "Job error";
+    return path?.split(/[\\/]/).pop() || m.job_errors_fallback_file_name();
   }
 </script>
 
 <Modal labelledby="job-errors-title" {onclose}>
-  <section class="error-dialog">
+  <section class="dialog-panel">
     <header>
-      <h1 id="job-errors-title">Reported errors <span>({errors.length.toLocaleString()})</span></h1>
-      <button class="ui-button ui-button-compact" onclick={onclose}>Close</button>
+      <h1 id="job-errors-title">{m.job_errors_title({ count: errors.length })}</h1>
+      <button class="ui-button ui-button-compact" onclick={onclose}>{m.common_close()}</button>
     </header>
-    <p>Select a file to see the full error. Closing this window keeps the job summary.</p>
+    <p>{m.job_errors_intro()}</p>
     <div class="error-browser">
-      <nav aria-label="Reported errors">
+      <nav aria-label={m.job_errors_list_aria()}>
         {#each errors as error, index (index)}
           <button
             class:selected={selectedIndex === index}
@@ -33,11 +34,11 @@
           </button>
         {/each}
       </nav>
-      <section class="error-detail" aria-label="Selected error" aria-live="polite">
+      <section class="error-detail" aria-label={m.job_errors_selected_aria()} aria-live="polite">
         {#if selected}
           <h2>{fileName(selected.path)}</h2>
           {#if selected.path}<p class="path">{selected.path}</p>{/if}
-          <h3>Error details</h3>
+          <h3>{m.job_errors_details_heading()}</h3>
           <p class="message">{selected.message}</p>
         {/if}
       </section>
@@ -46,11 +47,6 @@
 </Modal>
 
 <style>
-  .error-dialog {
-    padding: var(--space-12);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-  }
   header {
     display: flex;
     align-items: center;
@@ -66,13 +62,11 @@
   h1 {
     font-size: var(--dialog-title-size);
   }
-  h1 span,
   .path,
   .error-number {
     color: var(--text-secondary);
   }
-  .error-dialog > p {
-    margin: var(--space-8) 0;
+  .dialog-panel > p {
     color: var(--text-secondary);
   }
   button {

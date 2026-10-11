@@ -9,6 +9,7 @@
   CLIP-only slider. Related text in All has its own fixed cutoff, not controlled by this slider.
 -->
 <script lang="ts">
+  import { m } from "../../../shared/paraglide/messages.js";
   import { MATCH_QUALITY_STEP, type SearchSortMode } from "../lib/ocr-search.svelte";
   import SegmentedControl from "./SegmentedControl.svelte";
 
@@ -20,7 +21,7 @@
     shownCount,
     matchTotal,
     truncated,
-    sliderLabel = "Match quality",
+    sliderKind = "meaning",
     sections = [],
     onsection = () => {},
     notice = "",
@@ -35,15 +36,20 @@
     matchTotal: number;
     /** Whether ranked mode's top-N cutoff dropped anything, which changes what the count means. */
     truncated: boolean;
-    sliderLabel?: string;
+    /** Which scores the slider cuts; picks the label and the tooltip. */
+    sliderKind?: "meaning" | "visual";
     sections?: readonly { key: string; label: string; count: number; status?: string }[];
     onsection?: (key: string) => void;
     notice?: string;
   } = $props();
 
   const sortOptions = [
-    { value: "relevance", label: "Relevance", title: "Best match first" },
-    { value: "date", label: "Date", title: "Newest first, grouped by date" },
+    {
+      value: "relevance",
+      label: m.search_options_relevance(),
+      title: m.search_options_relevance_tooltip(),
+    },
+    { value: "date", label: m.search_options_date(), title: m.search_options_date_tooltip() },
   ] as const satisfies ReadonlyArray<{ value: SearchSortMode; label: string; title: string }>;
 
   /** One tick per stop, with the ends and the midpoint drawn tall — the ruler's job here is to
@@ -55,18 +61,30 @@
 
   const countText = $derived(
     truncated
-      ? `Top ${shownCount.toLocaleString()} of ${matchTotal.toLocaleString()} matches`
-      : `${matchTotal.toLocaleString()} ${matchTotal === 1 ? "match" : "matches"}`,
+      ? m.search_options_count_truncated({
+          shown: shownCount.toLocaleString(),
+          total: matchTotal.toLocaleString(),
+        })
+      : m.search_options_count({ count: matchTotal }),
+  );
+  const sliderLabel = $derived(
+    sliderKind === "visual"
+      ? m.search_options_visual_similarity_label()
+      : m.search_options_match_quality_label(),
   );
 </script>
 
 <div class="search-options">
-  <span class="label" aria-hidden="true">Sort:</span>
-  <SegmentedControl bind:value={sortMode} options={sortOptions} label="Sort search results" />
+  <span class="label" aria-hidden="true">{m.search_options_sort_label()}</span>
+  <SegmentedControl
+    bind:value={sortMode}
+    options={sortOptions}
+    label={m.search_options_sort_group_aria()}
+  />
 
   {#if showSlider}
     <div class="cutoff" class:disabled={sliderDisabled}>
-      <label class="label" for="min-match">{sliderLabel}:</label>
+      <label class="label" for="min-match">{sliderLabel}</label>
       <div class="trackbar-wrap">
         <div class="ruler" aria-hidden="true">
           {#each ticks as tick (tick.at)}
@@ -85,10 +103,10 @@
           step={MATCH_QUALITY_STEP}
           disabled={sliderDisabled}
           title={sliderDisabled
-            ? "Every result scored the same, so there is nothing to cut"
-            : sliderLabel === "Visual similarity"
-              ? "Drag right to keep fewer visual results. Names and text results are unchanged."
-              : "Drag right to keep only the stronger matches"}
+            ? m.search_options_slider_disabled_tooltip()
+            : sliderKind === "visual"
+              ? m.search_options_visual_slider_tooltip()
+              : m.search_options_slider_tooltip()}
           bind:value={minMatchPercentile}
         />
       </div>
@@ -96,11 +114,12 @@
   {/if}
 
   {#if sections.length}
-    <nav class="search-sections" aria-label="Search result sections">
+    <nav class="search-sections" aria-label={m.search_options_sections_aria()}>
       {#each sections as section (section.key)}
         <button
           class="section-link"
-          title={section.status || `Jump to ${section.label.toLowerCase()}`}
+          title={section.status ||
+            m.search_options_section_jump_tooltip({ section: section.label })}
           onclick={() => onsection(section.key)}
           >{section.label} <span>{section.count.toLocaleString()}</span></button
         >

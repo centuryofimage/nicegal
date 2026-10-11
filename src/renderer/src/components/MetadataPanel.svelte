@@ -3,6 +3,8 @@
   import type { GalleryItem } from "../lib/gallery/types";
   import type { VectorMatch } from "../lib/ocr-search.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
+  import { getLocale } from "../../../shared/paraglide/runtime.js";
   import { errorMessage } from "../lib/errors";
   import { loadImageTags, type ImageTag, type ImageTags } from "../lib/image-tags";
   import { formatBytes } from "../lib/job-format";
@@ -31,99 +33,136 @@
   const tagsRequest = $derived.by((): Promise<ImageTags> | null => {
     return ready && asset ? loadImageTags(asset.id, $settings.hideOffensiveTags) : null;
   });
+  type SourceState = AssetMetadata["file"]["sourceState"];
+  type TagGroupId = "simple" | "subjects" | "vibes";
+
+  const tagGroupLabels: Record<TagGroupId, () => string> = {
+    simple: () => m.metadata_panel_tag_group_simple(),
+    subjects: () => m.metadata_panel_tag_group_subjects(),
+    vibes: () => m.metadata_panel_tag_group_vibes(),
+  };
+
+  function fixed(value: number, digits: number): string {
+    return value.toLocaleString(getLocale(), {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  }
+  function byteCount(size: AssetMetadata["asset"]["sourceSize"]): string {
+    return BigInt(size).toLocaleString(getLocale());
+  }
   function tagTitle(tag: ImageTag): string {
-    const rating = tag.sensitivity === "ok" ? "" : ` · ${tag.sensitivity}`;
-    return `Score ${tag.score.toFixed(3)} · cosine ${tag.similarity.toFixed(3)} · ${tag.source}${rating}`;
+    const score = fixed(tag.score, 3);
+    const similarity = fixed(tag.similarity, 3);
+    return tag.sensitivity === "ok"
+      ? m.metadata_panel_tag_title({ score, similarity, source: tag.source })
+      : m.metadata_panel_tag_title_rated({
+          score,
+          similarity,
+          source: tag.source,
+          sensitivity: tag.sensitivity,
+        });
   }
   function date(value: string | null): string {
-    if (value === null) return "Unknown";
+    if (value === null) return m.metadata_panel_unknown();
     const timestamp = new Date(Number(BigInt(value) / 1_000_000n));
-    return Number.isNaN(timestamp.getTime()) ? "Unknown" : timestamp.toLocaleString();
+    return Number.isNaN(timestamp.getTime())
+      ? m.metadata_panel_unknown()
+      : timestamp.toLocaleString(getLocale());
   }
   function seconds(ms: number): string {
-    return `${(ms / 1000).toFixed(1)} s`;
+    return m.metadata_panel_seconds({ seconds: fixed(ms / 1000, 1) });
   }
-  function tagGroups(tags: ImageTags): { label: string; list: ImageTag[] }[] {
+  function sourceNotice(state: SourceState): string {
+    if (state === "changed") return m.metadata_panel_source_changed();
+    if (state === "missing") return m.metadata_panel_source_missing();
+    return m.metadata_panel_source_unreadable();
+  }
+  function tagGroups(tags: ImageTags): { id: TagGroupId; list: ImageTag[] }[] {
     return [
-      { label: "Simple", list: tags.simple },
-      { label: "Subjects", list: tags.subjects },
-      { label: "Vibes", list: tags.vibes },
+      { id: "simple", list: tags.simple },
+      { id: "subjects", list: tags.subjects },
+      { id: "vibes", list: tags.vibes },
     ];
   }
 </script>
 
 <aside id="metadata-panel" class="metadata-panel" aria-labelledby="metadata-heading">
   <header>
-    <h2 id="metadata-heading">Info</h2>
-    <button class="ui-button" aria-label="Close info" onclick={onclose}>Close</button>
+    <h2 id="metadata-heading">{m.metadata_panel_heading()}</h2>
+    <button class="ui-button" aria-label={m.metadata_panel_close_label()} onclick={onclose}
+      >{m.common_close()}</button
+    >
   </header>
   <div class="metadata-body">
     {#if !ready}
-      <p role="status">The gallery service is unavailable.</p>
+      <p role="status">{m.metadata_panel_unavailable()}</p>
     {:else if !request}
       <p>
         {selectedCount > 1
-          ? `${selectedCount} files selected. Select one to see its details.`
-          : "Select a file to see its details."}
+          ? m.metadata_panel_multi_selected({ count: selectedCount })
+          : m.metadata_panel_select_one()}
       </p>
     {:else}
       {#await request}
-        <p role="status">Loading details…</p>
+        <p role="status">{m.metadata_panel_loading()}</p>
       {:then info}
         <h3 class="filename">{info.asset.displayName}</h3>
         {#if info.file.sourceState !== "current"}
-          <p role="status">
-            {info.file.sourceState === "changed"
-              ? "This file has changed. Update the library to refresh its catalog details."
-              : info.file.sourceState === "missing"
-                ? "This file is missing. Showing saved catalog details."
-                : "Couldn't read this file. Showing saved catalog details."}
-          </p>
+          <p role="status">{sourceNotice(info.file.sourceState)}</p>
         {/if}
         <dl>
-          <dt>Location</dt>
+          <dt>{m.metadata_panel_location()}</dt>
           <dd>{info.hostPath ?? info.asset.path}</dd>
-          <dt>Format</dt>
+          <dt>{m.metadata_panel_format()}</dt>
           <dd>{info.asset.mediaFormat.toUpperCase()}</dd>
-          <dt>Size</dt>
-          <dd title={`${info.asset.sourceSize} bytes`}>
-            {formatBytes(Number(info.asset.sourceSize))} ({BigInt(
-              info.asset.sourceSize,
-            ).toLocaleString()} bytes)
+          <dt>{m.metadata_panel_size()}</dt>
+          <dd title={m.metadata_panel_size_title({ bytes: byteCount(info.asset.sourceSize) })}>
+            {formatBytes(Number(info.asset.sourceSize))}
+            {m.metadata_panel_size_bytes({ bytes: byteCount(info.asset.sourceSize) })}
           </dd>
-          <dt>Dimensions</dt>
+          <dt>{m.metadata_panel_dimensions()}</dt>
           <dd>
             {info.asset.width && info.asset.height
-              ? `${info.asset.width} × ${info.asset.height}`
-              : "Unknown"}
+              ? m.metadata_panel_dimensions_value({
+                  width: info.asset.width,
+                  height: info.asset.height,
+                })
+              : m.metadata_panel_unknown()}
           </dd>
           {#if info.asset.mediaKind === "video"}
-            <dt>Duration</dt>
+            <dt>{m.metadata_panel_duration()}</dt>
             <dd>
-              {info.asset.durationMs === null ? "Unknown" : seconds(info.asset.durationMs)}
+              {info.asset.durationMs === null
+                ? m.metadata_panel_unknown()
+                : seconds(info.asset.durationMs)}
             </dd>
           {/if}
-          <dt>Created</dt>
+          <dt>{m.metadata_panel_created()}</dt>
           <dd>{date(info.asset.createdNs)}</dd>
-          <dt>Modified</dt>
+          <dt>{m.metadata_panel_modified()}</dt>
           <dd>{date(info.asset.modifiedNs)}</dd>
-          <dt>Captured</dt>
+          <dt>{m.metadata_panel_captured()}</dt>
           <dd>{date(info.asset.captureNs)}</dd>
-          {#if info.asset.animated}<dt>Animation</dt>
+          {#if info.asset.animated}<dt>{m.metadata_panel_animation()}</dt>
             <dd>
-              {info.asset.frameCount ?? "Unknown"} frames{info.asset.durationMs !== null
-                ? ` · ${seconds(info.asset.durationMs)}`
-                : ""}
+              {info.asset.frameCount === null
+                ? m.metadata_panel_unknown()
+                : m.metadata_panel_frames({
+                    frames: info.asset.frameCount,
+                  })}{#if info.asset.durationMs !== null}{m.common_separator()}{seconds(
+                  info.asset.durationMs,
+                )}{/if}
             </dd>{/if}
-          <dt>Attributes</dt>
+          <dt>{m.metadata_panel_attributes()}</dt>
           <dd>
             {["missing", "unavailable"].includes(info.file.sourceState)
-              ? "Unavailable"
-              : info.file.attributes.join(", ") || "None"}
+              ? m.metadata_panel_unavailable_value()
+              : info.file.attributes.join(", ") || m.metadata_panel_none()}
           </dd>
         </dl>
         {#if info.asset.mediaKind === "video"}
-          <h3>Video</h3>
+          <h3>{m.metadata_panel_video_heading()}</h3>
           {#if info.file.video.length}
             <dl>
               {#each info.file.video as field (field.label)}
@@ -132,65 +171,66 @@
               {/each}
             </dl>
           {:else}
-            <p>Video metadata unavailable.</p>
+            <p>{m.metadata_panel_video_unavailable()}</p>
           {/if}
         {/if}
         {#if vectorMatch}
-          <h3>Current search</h3>
+          <h3>{m.metadata_panel_current_search_heading()}</h3>
           <dl>
-            <dt>{vectorMatch.kind === "visual" ? "Visual match" : "Text match"}</dt>
+            <dt>
+              {vectorMatch.kind === "visual"
+                ? m.metadata_panel_visual_match()
+                : m.metadata_panel_text_match()}
+            </dt>
             <dd class="match-value" title={String(vectorMatch.similarity)}>
               {vectorMatch.similarity}
             </dd>
           </dl>
         {/if}
         {#if info.asset.mediaKind === "image"}
-          <h3>Recognized text</h3>
+          <h3>{m.metadata_panel_recognized_text_heading()}</h3>
           {#if info.ocrText?.trim()}
             <textarea
               class="ocr-text"
-              aria-label="Recognized text"
+              aria-label={m.metadata_panel_recognized_text_heading()}
               readonly
               spellcheck={false}
               value={info.ocrText}></textarea>
           {:else if info.ocrState === "indexed"}
-            <p>No text found in this file.</p>
+            <p>{m.metadata_panel_no_text_found()}</p>
           {:else}
-            <p>Enable text recognition in Library manager to read words in this file.</p>
+            <p>{m.metadata_panel_enable_text_recognition()}</p>
           {/if}
         {/if}
-        {#if info.decodeFailed}<p>
-            The file could not be decoded during indexing. Use Library manager → Retry failed files
-            after checking the file.
-          </p>{/if}
+        {#if info.decodeFailed}<p>{m.metadata_panel_decode_failed()}</p>{/if}
         {#if info.asset.mediaKind === "image" && info.file.exif.length}
-          <h3>Camera / EXIF</h3>
+          <h3>{m.metadata_panel_exif_heading()}</h3>
           <dl>
             {#each info.file.exif as field (field.label)}<dt>{field.label}</dt>
               <dd>{field.value}</dd>{/each}
           </dl>
         {/if}
         {#if info.file.error}
-          <p>Some file metadata could not be read.</p>
+          <p>{m.metadata_panel_metadata_read_error()}</p>
           <TechnicalDetails text={info.file.error} />
         {/if}
-        <h3>Tags</h3>
-        <p>Guesses from a research model. Often wrong.</p>
+        <h3>{m.metadata_panel_tags_heading()}</h3>
+        <p>{m.metadata_panel_tags_disclaimer()}</p>
         {#if tagsRequest}
           {#await tagsRequest}
-            <p role="status">Loading tags…</p>
+            <p role="status">{m.metadata_panel_tags_loading()}</p>
           {:then tags}
             {#if !tags.supported}
-              <p>Tags aren't available for this search model.</p>
+              <p>{m.metadata_panel_tags_unsupported()}</p>
             {:else}
               <dl>
-                {#each tagGroups(tags) as { label, list } (label)}
-                  <dt>{label}</dt>
+                {#each tagGroups(tags) as { id, list } (id)}
+                  <dt>{tagGroupLabels[id]()}</dt>
                   <dd class="tag-list">
                     {#each list as tag (tag.term)}
                       <span class="tag" title={tagTitle(tag)}>{tag.term}</span>
                     {:else}
-                      None
+                      {m.metadata_panel_none()}
                     {/each}
                   </dd>
                 {/each}
@@ -225,7 +265,7 @@
           </dl>
         {/if}
       {:catch error}
-        <p role="alert">Couldn't load file details.</p>
+        <p role="alert">{m.metadata_panel_load_error()}</p>
         <TechnicalDetails text={errorMessage(error)} />
       {/await}
     {/if}

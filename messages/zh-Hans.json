@@ -1,0 +1,1192 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "about_settings_backend_commit_label": "后端提交",
+  "about_settings_backend_source_link": "后端源代码",
+  "about_settings_copyright": "版权所有 2026 bep",
+  "about_settings_description": "一款支持本地 OCR、文本和图像搜索的桌面图库。",
+  "about_settings_diagnostics_saved": "诊断信息已保存。",
+  "about_settings_diagnostics_warning": "诊断信息可能包含文件名和错误详细信息。",
+  "about_settings_frontend_commit_label": "前端提交",
+  "about_settings_frontend_source_link": "前端源代码",
+  "about_settings_license_information": "许可证信息",
+  "about_settings_license_summary": "前端：{#mit}MIT{/mit}。后端：{#agpl}AGPL-3.0-only{/agpl}。",
+  "app_folder_already_in_library": "该文件夹已在“{library_name}”中。请选择该媒体库或添加其他文件夹。",
+  "app_folder_purge_failed": "文件夹已移除，但无法开始删除其索引数据。",
+  "app_libraries_check_failed": "无法检查现有媒体库：{error}",
+  "app_menu_close_window": "关闭窗口",
+  "app_menu_file": "文件(&F)",
+  "app_menu_quit": "退出",
+  "app_menu_toggle_devtools": "切换开发人员工具(&T)",
+  "app_menu_view": "视图(&V)",
+  "app_message_default_title": "错误",
+  "app_open_failed_guidance": "Nicegal 无法连接到其图库服务。请重试或重启应用。",
+  "app_open_failed_title": "无法打开图库",
+  "app_reconnect_failed_guidance": "请重试以刷新媒体库并继续索引。",
+  "app_reconnect_failed_title": "无法重新连接到图库",
+  "app_remove_folder_wait_for_job": "请等待当前作业完成后再删除索引数据。",
+  "app_remove_last_folder": "媒体库至少需要一个文件夹。请改为移除媒体库。",
+  "app_runtime_switch_timeout": "索引未及时停止。请重试。",
+  "backend_app_closing": "应用正在关闭",
+  "backend_failure_diagnostics_saved": "诊断信息已保存到 {path}",
+  "backend_failure_guidance": "图库服务无法启动或意外停止。请重启它。如果再次失败，请重启应用。",
+  "backend_failure_loading_log": "正在加载最近的日志行…",
+  "backend_failure_read_log_failed": "无法读取最近的日志行：{reason}",
+  "backend_failure_report_problem": "要报告问题，请将诊断 zip 附加到{#link}错误报告{/link}。",
+  "backend_failure_restart_failed": "无法重启服务：{reason}",
+  "backend_failure_restart_service": "重启服务",
+  "backend_failure_restarting": "正在重启…",
+  "backend_failure_save_diagnostics_failed": "无法保存诊断信息：{reason}",
+  "backend_failure_title": "图库服务不可用",
+  "backend_job_starting_busy": "作业正在启动；请在完成后重试",
+  "backend_remote_job_not_allowed": "此作业只能在运行 Nicegal 的电脑上启动",
+  "backend_search_settings_busy": "搜索设置更改已在进行中",
+  "backend_service_already_running": "图库服务已在运行或正在启动",
+  "common_add_to_visual_search": "添加到视觉搜索",
+  "common_cancel": "取消",
+  "common_cancelling": "正在取消",
+  "common_clear_search": "清除搜索",
+  "common_close": "关闭",
+  "common_collect_diagnostics": "收集诊断信息",
+  "common_collecting_diagnostics": "正在收集…",
+  "common_compose_visual_search": "创建视觉搜索",
+  "common_copied": "已复制",
+  "common_copy_details": "复制详细信息",
+  "common_copy_failed": "请选择详细信息并手动复制。",
+  "common_dismiss": "忽略",
+  "common_find_similar": "查找相似图像",
+  "common_libraries": "媒体库",
+  "common_library_manager": "媒体库管理器",
+  "common_library_manager_ellipsis": "媒体库管理器…",
+  "common_library_missing": "该媒体库已不存在。",
+  "common_loading": "正在加载…",
+  "common_mapping": "正在映射…",
+  "common_no_library": "无媒体库",
+  "common_pairing_code": "配对代码",
+  "common_remote_access": "远程访问",
+  "common_rescan_library": "重新扫描媒体库",
+  "common_save_diagnostics": "保存诊断信息",
+  "common_search_settings_ellipsis": "搜索设置…",
+  "common_searching": "正在搜索…",
+  "common_separator": " · ",
+  "common_settings": "设置",
+  "common_switch_after_job": "在当前作业完成后切换。",
+  "common_try_again": "重试",
+  "common_update_available": "有可用更新",
+  "common_visual_image_too_large": "请选择小于 16 MB 的图像用于视觉搜索。",
+  "common_visualize_unavailable": "{model} 可视化效果不佳",
+  "detail_view_actual_size": "实际大小 (1)",
+  "detail_view_enter_fullscreen": "进入全屏 (F)",
+  "detail_view_exit_fullscreen": "退出全屏 (F)",
+  "detail_view_fit_to_window": "适应窗口 (0)",
+  "detail_view_gallery_label": "图库",
+  "detail_view_hide_match_areas": "隐藏区域相似度和匹配区域 (H)",
+  "detail_view_hover_to_compare": "悬停在某个区域上可比较各区域",
+  "detail_view_image_controls_aria": "图像查看器控件",
+  "detail_view_legend_strong": "强",
+  "detail_view_legend_weak": "弱",
+  "detail_view_match_score": "匹配 {score}",
+  "detail_view_matches_for": "{#q}{query}{/q} 的匹配项",
+  "detail_view_media_navigation_aria": "媒体导航",
+  "detail_view_model_fallback": "此图像模型",
+  "detail_view_next": "下一个",
+  "detail_view_original_load_failed": "无法加载原始文件。它可能已被移动或删除。",
+  "detail_view_pooled_score_tooltip": "整张图像与搜索的余弦相似度。颜色覆盖此图像自身最弱到最强的区域。",
+  "detail_view_previous": "上一个",
+  "detail_view_return_to_gallery": "返回图库 (Escape)",
+  "detail_view_show_match_areas": "显示区域相似度和匹配区域 (H)",
+  "detail_view_similar_to_outlined_area": "与所勾勒区域相似",
+  "detail_view_visualize_match_areas": "可视化匹配区域 (H)",
+  "detail_view_zoom_fit": "适应",
+  "detail_view_zoom_in": "放大",
+  "detail_view_zoom_out": "缩小",
+  "detail_view_zoom_percent": "{percent}%",
+  "diagnostics_zip_filter_name": "ZIP 压缩文件",
+  "file_action_add_count_to_visual_search": "将 {count} 添加到视觉搜索",
+  "file_action_cant_share_file_type": "此浏览器无法共享此类型的文件。",
+  "file_action_copy_image": "复制图像",
+  "file_action_couldnt_convert_image": "无法转换图像。",
+  "file_action_couldnt_load_file": "无法加载文件 ({status})。",
+  "file_action_download": "下载",
+  "file_action_items_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个项目"
+      }
+    }
+  ],
+  "file_action_open_in_new_tab": "在新标签页中打开",
+  "file_action_preparing": "正在准备…",
+  "file_action_ready_tap_to_share": "已就绪。点击共享",
+  "file_action_share": "共享…",
+  "gallery_choose_media_folder_button": "选择媒体文件夹…",
+  "gallery_edit_library_button": "编辑媒体库…",
+  "gallery_empty_library_message": "在此媒体库的文件夹中未找到照片或视频。请添加文件夹，或检查其排除项。",
+  "gallery_empty_library_scanning": "正在扫描此媒体库的文件夹…",
+  "gallery_empty_library_title": "没有照片或视频",
+  "gallery_folders_offline_guidance": "请连接驱动器或还原文件夹，然后重试。",
+  "gallery_folders_offline_title": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "文件夹未连接"
+      }
+    }
+  ],
+  "gallery_info_toggle_label": "信息",
+  "gallery_info_toggle_tooltip": "显示或隐藏文件信息 (I / Ctrl+I / Cmd+I)",
+  "gallery_libraries_toggle_tooltip": "显示或隐藏媒体库",
+  "gallery_load_error_guidance": "请检查其驱动器是否已连接，然后重试。",
+  "gallery_load_error_title": "无法读取媒体库",
+  "gallery_no_library_message": "请选择包含照片或视频的文件夹以开始使用。",
+  "gallery_no_library_remote_message": "请在运行 Nicegal 的电脑上添加包含照片或视频的文件夹。",
+  "gallery_no_library_title": "尚无媒体库",
+  "gallery_panes_group_label": "窗格",
+  "gallery_progress_interrupted_guidance": "作业可能仍在运行。正在重新连接…",
+  "gallery_progress_interrupted_title": "进度更新已中断",
+  "gallery_size_slider_label": "图像大小",
+  "gallery_size_slider_title": "图像大小：{value} px",
+  "gallery_size_slider_title_auto_columns": "图像大小：调整后将恢复自动列数",
+  "gallery_size_slider_value_text": "{value} px",
+  "gallery_starting_message": "正在打开本地目录。",
+  "gallery_starting_title": "正在启动图库…",
+  "gallery_toolbar_stop_indexing": "停止索引",
+  "gallery_toolbar_switching_provider": "正在切换到 OpenVINO…",
+  "gallery_viewer_load_failed_status": "加载失败",
+  "getting_started_add_folder": "添加文件夹",
+  "getting_started_add_folder_instructions": "在下方选择 {#b}添加文件夹{/b}，或使用 {#b}媒体库管理器{/b}。文件保留在原位。",
+  "getting_started_build_visual_search": "构建视觉搜索",
+  "getting_started_choose_what_to_search": "选择搜索内容",
+  "getting_started_compose_caption": "{#b}撰写视觉搜索{/b}混合描述和图像。调整权重可增加或减少各部分的比重。编辑时结果会更新。",
+  "getting_started_description": "浏览照片和视频文件夹，按名称、文本或外观查找文件。",
+  "getting_started_larger_models": "大型模型搜索更准确。请在 {#b}设置 → 搜索{/b}中选择。",
+  "getting_started_reopen_hint": "可从 {#b}设置 → 入门{/b}重新打开本指南。",
+  "getting_started_search_menu_image_alt": "搜索菜单，包含“全部”、“视觉搜索”和“文件名”，位于“精确文本”和“相关文本”上方",
+  "getting_started_search_menu_intro": "使用搜索菜单，或键入前缀：",
+  "getting_started_search_menu_options": "{#b}全部{/b}会合并可用的搜索；{#b}文件名{/b}仅搜索名称。精确文本和相关文本需要文本识别。",
+  "getting_started_search_type_exact": "{#b}精确文本{/b} ({#code}ocr:{/code})：图片中的文字。",
+  "getting_started_search_type_related": "{#b}相关文本{/b} ({#code}meaning:{/code})：相似的措辞或含义。",
+  "getting_started_search_type_visual": "{#b}视觉搜索{/b} ({#code}like:{/code})：描述照片或视频，或使用示例图像。",
+  "getting_started_sort_and_filter_help": "{#b}相关度{/b}对结果分组；{#b}日期{/b}将它们放到时间线上。{#b}视觉相似度{/b}可缩小视觉匹配范围。尝试 {#code}during:2020-12{/code} 将搜索限制到某个月。",
+  "getting_started_text_recognition_tip": "如需搜索图片中的文字，请在媒体库管理器中开启 {#b}文本识别{/b}。",
+  "getting_started_title": "欢迎使用 Nicegal",
+  "getting_started_visual_search_image_alt": "视觉搜索编辑器，sunset 权重 2.00，crowds 权重 −1.00",
+  "getting_started_visual_search_setup": "视觉搜索会自动设置。首次运行会下载搜索模型；文件保留在您的计算机上。",
+  "getting_started_visual_search_steps": "右键单击文件：{#b}查找相似图像{/b}开始搜索；{#b}添加到视觉搜索{/b}添加另一个示例。",
+  "image_model_danbooru_siglip_compact": "基于 Danbooru 训练，适合动漫和艺术；在其他方面用处较小。索引非常慢。",
+  "image_model_danbooru_siglip_description": "基于 Danbooru 标签训练的专业模型。适合动漫和艺术，在其他方面用处较小。索引非常慢，比 MetaCLIP2 L/14 还慢。",
+  "image_model_dinov3_compact": "使用可视化快速搜索图像示例。不支持文本描述。",
+  "image_model_dinov3_description": "快速图像搜索。尝试可视化查看哪些区域与您的示例匹配。无法根据描述进行搜索。",
+  "image_model_license_apache": "Apache 2.0",
+  "image_model_license_cc_by_nc": "CC BY-NC 4.0",
+  "image_model_license_dinov3": "DINOv3 许可证",
+  "image_model_metaclip2_b16_compact": "比 B/32 更擅长小字；在 GPU 上速度相近。",
+  "image_model_metaclip2_b16_description": "比 B/32 更可靠地读取照片中的小字或文字。使用独立 GPU 时速度大致相同，因此如果有独立 GPU，这是轻松升级。在集成显卡上慢得多。",
+  "image_model_metaclip2_b32_compact": "快速通用搜索；可能遗漏小字。",
+  "image_model_metaclip2_b32_description": "速度快，适合大多数搜索。可能遗漏照片中的小字或文字。集成显卡的最佳选择。",
+  "image_model_metaclip2_l14_compact": "MetaCLIP2 中最擅长小字。索引非常慢；3 GB。",
+  "image_model_metaclip2_l14_description": "在读取照片中的小字方面，这是最可靠的 MetaCLIP2 模型。索引非常慢。下载 3 GB。",
+  "image_model_pe_b16_compact": "找到与 MetaCLIP2 不同的匹配。需要独立 GPU。1.7 GB。",
+  "image_model_pe_b16_description": "与 MetaCLIP2 不同的模型系列，会找到不同的匹配。当搜索没有结果时可尝试。在独立 GPU 上几乎与 B/32 一样快；在集成显卡上慢得多。下载 1.7 GB。",
+  "image_model_pe_l14_compact": "更大的 PE B/16，也与 MetaCLIP2 不同。索引非常慢；2.5 GB。",
+  "image_model_pe_l14_description": "PE B/16 的更大版本，因此找到的匹配结果也不同于 MetaCLIP2。索引非常慢，比 MetaCLIP2 L/14 慢，但比 Danbooru 模型快。下载大小 2.5 GB。",
+  "image_model_siglip2_compact": "适合场景和姿势；小字能力较弱。大小与 MetaCLIP2 B/16 相近。",
+  "image_model_siglip2_description": "适合场景和姿势。可能遗漏 MetaCLIP2 能找到的照片中的小字。大小与 MetaCLIP2 B/16 相近。",
+  "image_model_tier_balanced_description": "在性能足够的 GPU 上速度快",
+  "image_model_tier_balanced_label": "均衡",
+  "image_model_tier_fast_description": "最适合较慢的 GPU",
+  "image_model_tier_fast_label": "快速",
+  "image_model_tier_large_description": "索引慢得多",
+  "image_model_tier_large_label": "大型",
+  "job_bytes_format": [
+    {
+      "declarations": [
+        "input amount",
+        "input unit",
+        "local amountText = amount: number maximumFractionDigits=1"
+      ],
+      "selectors": ["amountText"],
+      "match": {
+        "amountText=*": "{amountText} {unit}"
+      }
+    }
+  ],
+  "job_cancel_label_library_scan": "媒体库扫描",
+  "job_cancel_label_model_prepare": "搜索模型准备",
+  "job_cancel_label_ocr_model_load": "OCR 模型加载",
+  "job_cancel_label_prune": "清理",
+  "job_cancel_label_thumbnail_generate": "缩略图生成",
+  "job_cancelled": "已取消",
+  "job_cancelled_summary": "{label}已取消",
+  "job_cleaning_up": "正在清理",
+  "job_connecting": "正在连接…",
+  "job_done": "完成",
+  "job_downloading_models": "正在下载模型",
+  "job_errors_details_heading": "错误详细信息",
+  "job_errors_fallback_file_name": "作业错误",
+  "job_errors_intro": "选择一个文件以查看完整错误。关闭此窗口将保留作业摘要。",
+  "job_errors_list_aria": "报告的错误",
+  "job_errors_selected_aria": "选定的错误",
+  "job_errors_title": [
+    {
+      "declarations": ["input count", "local countText = count: number"],
+      "selectors": ["countText"],
+      "match": {
+        "countText=*": "报告的错误 ({countText})"
+      }
+    }
+  ],
+  "job_failed": "失败",
+  "job_indexing": "正在索引",
+  "job_indexing_text": "正在索引文本",
+  "job_indicator_cancel_aria": "取消{label}",
+  "job_indicator_compact_downloading": "正在下载",
+  "job_indicator_compact_label": "{label} {count}",
+  "job_indicator_compact_pending": "{label}…",
+  "job_indicator_dismiss_job": "关闭作业",
+  "job_indicator_done_with_issues": "完成但有问题",
+  "job_indicator_issue_completed": "作业的其余部分已完成。",
+  "job_indicator_issue_continuing": "作业正在继续处理其余文件。",
+  "job_indicator_issue_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个文件错误已报告"
+      }
+    }
+  ],
+  "job_indicator_issue_stopped": "作业在完成前停止了。",
+  "job_indicator_job_did_not_complete": "此作业未完成。关闭它以继续。",
+  "job_indicator_job_failed_title": "作业失败",
+  "job_indicator_percent": "{percent}%",
+  "job_indicator_progress_aria": "{label}进度",
+  "job_indicator_review_errors": "查看错误…",
+  "job_indicator_show_progress_aria": "显示{label}进度",
+  "job_known_file_errors": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个已知文件错误"
+      }
+    }
+  ],
+  "job_library_purge_removed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已移除 {countText} 个项目"
+      }
+    }
+  ],
+  "job_loading_models": "正在加载模型",
+  "job_ocr": "OCR",
+  "job_ocr_models_ready": "OCR 模型已就绪",
+  "job_processing_files": [
+    {
+      "declarations": [
+        "input count",
+        "input progress",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{progress} · 正在处理 {countText} 个文件"
+      }
+    }
+  ],
+  "job_progress_files_aria": "正在处理的文件",
+  "job_progress_metric_candidates": "候选",
+  "job_progress_metric_deleted": "已删除",
+  "job_progress_metric_failed": "失败",
+  "job_progress_metric_model_data": "模型数据",
+  "job_progress_metric_skipped": "已跳过",
+  "job_progress_phase_complete_aria": "{phase}，完成",
+  "job_progress_phase_current_aria": "{phase}，当前阶段",
+  "job_progress_phases_aria": "作业阶段",
+  "job_progress_processing": "正在处理",
+  "job_progress_processing_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "正在处理 · {countText} 个文件"
+      }
+    }
+  ],
+  "job_progress_total_unknown_text": "{progress} 已完成；总数未知",
+  "job_progress_waiting_next_file": "正在等待下一个文件…",
+  "job_progress_within_phase_aria": "{label}进度",
+  "job_prune_deleted": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已删除 {countText} 个缺失条目"
+      }
+    }
+  ],
+  "job_queued": "已排队",
+  "job_rate_format": [
+    {
+      "declarations": [
+        "input rate",
+        "input unit",
+        "local rateText = rate: number maximumFractionDigits=1"
+      ],
+      "selectors": ["rateText"],
+      "match": {
+        "rateText=*": "{rateText} {unit}"
+      }
+    }
+  ],
+  "job_rate_unit_images_per_second": "图像/秒",
+  "job_rate_unit_items_per_second": "项/秒",
+  "job_removing": "正在移除",
+  "job_scan_deleted_removed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已从媒体库移除 {countText} 个已删除文件"
+      }
+    }
+  ],
+  "job_scan_folders_attention": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个文件夹需要关注"
+      }
+    }
+  ],
+  "job_scan_scanned": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已扫描 {countText} 个文件"
+      }
+    }
+  ],
+  "job_scan_scanned_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "input indexed",
+        "local countPlural = count: plural",
+        "local indexedText = indexed: number",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已扫描 {countText} 个文件，已索引 {indexedText} 个"
+      }
+    }
+  ],
+  "job_scanning": "正在扫描",
+  "job_search_models_ready": "搜索模型已就绪",
+  "job_step_download": "下载",
+  "job_step_images": "图像",
+  "job_step_load": "加载",
+  "job_step_prepare": "准备",
+  "job_step_prune": "清理",
+  "job_step_remove": "移除",
+  "job_step_sync": "同步",
+  "job_step_text": "文本",
+  "job_step_thumbs": "缩略图",
+  "job_switch_stops_indexing": "切换会停止索引。关闭设置后会继续。",
+  "job_syncing": "正在同步",
+  "job_thumbnails": "缩略图",
+  "job_thumbnails_generated": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已生成 {countText} 个缩略图"
+      }
+    }
+  ],
+  "job_tracker_failure_try_again_guidance": "请重试。如果一直失败，请重启应用。",
+  "job_tracker_indexing_stopped_guidance": "图库服务在此作业完成前停止了。服务再次运行后会恢复索引。已完成的工作会保留。",
+  "job_tracker_indexing_stopped_title": "索引已停止",
+  "job_tracker_start_failed_title": "无法启动作业",
+  "job_tracker_stop_failed_title": "无法停止作业",
+  "job_unit_bytes": "B",
+  "job_unit_gib": "GiB",
+  "job_unit_kib": "KiB",
+  "job_unit_mib": "MiB",
+  "language_restart_body": "Nicegal 重启后会显示新语言。",
+  "language_restart_later": "稍后",
+  "language_restart_now": "立即重启",
+  "language_restart_title": "重启以更改语言",
+  "language_restarting": "正在重启…",
+  "layout_mode_grid": "网格",
+  "layout_mode_justified": "对齐",
+  "layout_mode_masonry": "瀑布流",
+  "libraries_manager_choose_or_create": "从列表中选择一个媒体库，或创建一个。",
+  "libraries_manager_duplicate_folder": "重复的文件夹",
+  "libraries_manager_empty": "还没有媒体库。选择一个文件夹以创建一个。",
+  "libraries_manager_file_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个文件"
+      }
+    }
+  ],
+  "libraries_manager_job_running": "有任务正在运行。请先停止它，再移除此媒体库。",
+  "libraries_manager_list_aria": "要管理的媒体库",
+  "libraries_manager_new_library": "新建媒体库…",
+  "libraries_manager_remove_delete_data": "移除并删除索引数据",
+  "libraries_manager_remove_keep_data": "移除，保留索引数据",
+  "libraries_manager_remove_library": "移除媒体库…",
+  "libraries_manager_remove_reassurance": "原始文件绝不会被改动。其他媒体库使用的索引数据会保留。",
+  "libraries_manager_remove_title": "移除“{name}”？",
+  "libraries_manager_stop_jobs": "停止正在运行和排队的任务",
+  "libraries_manager_stopping_jobs": "正在停止任务…",
+  "libraries_manager_wait_for_job": "等待当前任务停止，然后重试。",
+  "libraries_pane_add_folder_hint": "使用媒体库管理器添加文件夹。",
+  "libraries_pane_all_folders": "所有文件夹",
+  "libraries_pane_discovering": "正在发现文件夹…",
+  "libraries_pane_filter_label": "筛选文件夹",
+  "libraries_pane_filter_placeholder": "筛选",
+  "libraries_pane_folders_error": "无法加载文件夹。",
+  "libraries_pane_libraries_error": "无法加载媒体库。",
+  "libraries_pane_no_match": "没有匹配的文件夹。",
+  "libraries_pane_sort_label": "排序文件夹",
+  "libraries_pane_sort_name": "名称",
+  "libraries_pane_sort_name_title": "按名称排序文件夹",
+  "libraries_pane_sort_newest": "最新",
+  "libraries_pane_sort_newest_title": "最近更改的文件夹排在最前",
+  "libraries_pane_splitter_label": "调整媒体库窗格大小",
+  "libraries_pane_splitter_title": "拖动以调整大小。双击以重置。",
+  "libraries_pane_tree_label": "文件夹",
+  "library_default_name": "媒体库",
+  "library_derived_name": "{first_folder} + {more_count}",
+  "library_editor_add_another_hint": "可以为此媒体库添加另一个文件夹。",
+  "library_editor_add_folder": "添加文件夹…",
+  "library_editor_added_status": "已添加",
+  "library_editor_advanced": "高级",
+  "library_editor_changes_status": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 项更改 · 离开此视图时保存"
+      }
+    }
+  ],
+  "library_editor_choose_subfolder": "选择此媒体库中某个文件夹的子文件夹。",
+  "library_editor_date_range": "日期范围",
+  "library_editor_delete_indexed_data": "删除索引数据",
+  "library_editor_exclude_confirm": "从此媒体库排除 {path}？",
+  "library_editor_exclude_folder": "排除文件夹…",
+  "library_editor_exclude_folder_group": "排除文件夹",
+  "library_editor_excluded_hint": "从此媒体库中隐藏，将来的扫描会跳过。",
+  "library_editor_excluded_legend": "已排除的文件夹",
+  "library_editor_fallback_name": "媒体库",
+  "library_editor_folder_excluded": "该文件夹已被排除。请改为重新包含它。",
+  "library_editor_folders_legend": "文件夹",
+  "library_editor_from": "从",
+  "library_editor_generate": "生成",
+  "library_editor_include_again_label": "重新包含 {path}",
+  "library_editor_include_again_title": "删除排除并重新包含此文件夹",
+  "library_editor_include_videos": "包含视频",
+  "library_editor_included_list_label": "已包含的文件夹",
+  "library_editor_keep_indexed_data": "保留索引数据",
+  "library_editor_missing": "此媒体库已不存在。",
+  "library_editor_name_label": "名称",
+  "library_editor_needs_folder": "媒体库至少需要一个文件夹。要删除它，请使用此对话框中的“移除媒体库”。",
+  "library_editor_no_folders": "没有文件夹。添加一个以保留此媒体库。",
+  "library_editor_ocr_hint": "比图像搜索慢�� 10 倍，但适合精确文本搜索。模型会自动下载；图片保留在你的计算机上。",
+  "library_editor_purge_failed": "更改已保存，但无法开始删除索引数据。请再次保存。",
+  "library_editor_remove_folder_confirm": "从此媒体库移除 {path}？",
+  "library_editor_remove_folder_group": "移除文件夹",
+  "library_editor_remove_folder_label": "从此媒体库移除 {path}",
+  "library_editor_remove_folder_title": "从此媒体库移除文件夹",
+  "library_editor_remove_last_folder_title": "移除此媒体库以移除其最后一个文件夹",
+  "library_editor_retry": "重试",
+  "library_editor_retry_failed": "重试失败的文件",
+  "library_editor_scan_actions_label": "媒体库扫描操作",
+  "library_editor_scan_error_details": "扫描错误详细信息",
+  "library_editor_search_legend": "搜索",
+  "library_editor_search_settings_hint": "选择图像模型和执行提供程序；适用于所有媒体库。",
+  "library_editor_thumbnail_size": "{size} 像素",
+  "library_editor_thumbnails_heading": "缩略图",
+  "library_editor_thumbnails_hint": "缩略图按需生成。仅在需要时预生成。",
+  "library_editor_title": "编辑“{name}”",
+  "library_editor_to": "到",
+  "library_editor_wait_for_job": "等待当前任务完成后再删除索引的文件夹数据。",
+  "library_status_added": "已添加",
+  "library_status_added_detail": "保存此更改后进行扫描",
+  "library_status_image_search": "图像搜索",
+  "library_status_last_scanned": "上次扫描：{time}",
+  "library_status_offline": "脱机",
+  "library_status_options_summary": "{search} · 已排除 {count} 个",
+  "library_status_paused": "已暂停",
+  "library_status_search_off": "搜索关闭",
+  "library_status_text_recognition": "文本识别",
+  "library_view_add_folder_failed_title": "无法添加文件夹",
+  "library_view_add_folder_guidance": "检查文件夹是否存在且可以打开，然后重试。",
+  "library_view_drag_failed": "无法拖动文件：{message}",
+  "library_view_file_actions_failed": "无法显示文件操作：{message}",
+  "library_view_loading_catalog": "正在加载目录…",
+  "metadata_panel_animation": "动画",
+  "metadata_panel_attributes": "属性",
+  "metadata_panel_captured": "拍摄日期",
+  "metadata_panel_close_label": "关闭信息",
+  "metadata_panel_created": "创建时间",
+  "metadata_panel_current_search_heading": "当前搜索",
+  "metadata_panel_decode_failed": "索引期间无法解码此文件。检查文件后，使用媒体库管理器 → 重试失败的文件。",
+  "metadata_panel_dimensions": "尺寸",
+  "metadata_panel_dimensions_value": "{width} × {height}",
+  "metadata_panel_duration": "时长",
+  "metadata_panel_enable_text_recognition": "在媒体库管理器中启用文本识别，以读取此文件中的文字。",
+  "metadata_panel_exif_heading": "相机 / EXIF",
+  "metadata_panel_format": "格式",
+  "metadata_panel_frames": [
+    {
+      "declarations": [
+        "input frames",
+        "local framesPlural = frames: plural",
+        "local framesText = frames: number"
+      ],
+      "selectors": ["framesPlural"],
+      "match": {
+        "framesPlural=*": "{framesText} 帧"
+      }
+    }
+  ],
+  "metadata_panel_heading": "信息",
+  "metadata_panel_load_error": "无法加载文件详细信息。",
+  "metadata_panel_loading": "正在加载详细信息…",
+  "metadata_panel_location": "位置",
+  "metadata_panel_metadata_read_error": "某些文件元数据无法读取。",
+  "metadata_panel_modified": "修改时间",
+  "metadata_panel_multi_selected": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已选择 {countText} 个文件。选择一个以查看其详细信息。"
+      }
+    }
+  ],
+  "metadata_panel_no_text_found": "此文件中未找到文本。",
+  "metadata_panel_none": "无",
+  "metadata_panel_recognized_text_heading": "已识别文本",
+  "metadata_panel_seconds": "{seconds} 秒",
+  "metadata_panel_select_one": "选择一个文件以查看其详细信息。",
+  "metadata_panel_size": "大小",
+  "metadata_panel_size_bytes": "（{bytes} 字节）",
+  "metadata_panel_size_title": "{bytes} 字节",
+  "metadata_panel_source_changed": "此文件已更改。更新媒体库以刷新其目录详细信息。",
+  "metadata_panel_source_missing": "此文件缺失。显示已保存的目录详细信息。",
+  "metadata_panel_source_unreadable": "无法读取此文件。显示已保存的目录详细信息。",
+  "metadata_panel_tag_group_simple": "简单",
+  "metadata_panel_tag_group_subjects": "主体",
+  "metadata_panel_tag_group_vibes": "氛围",
+  "metadata_panel_tag_title": "分数 {score} · 余弦 {similarity} · {source}",
+  "metadata_panel_tag_title_rated": "分数 {score} · 余弦 {similarity} · {source} · {sensitivity}",
+  "metadata_panel_tags_disclaimer": "来自研究模型的猜测。经常出错。",
+  "metadata_panel_tags_heading": "标签",
+  "metadata_panel_tags_loading": "正在加载标签…",
+  "metadata_panel_tags_unsupported": "此搜索模型不支持标签。",
+  "metadata_panel_text_match": "文本匹配",
+  "metadata_panel_unavailable": "图库服务不可用。",
+  "metadata_panel_unavailable_value": "不可用",
+  "metadata_panel_unknown": "未知",
+  "metadata_panel_video_heading": "视频",
+  "metadata_panel_video_unavailable": "视频元数据不可用。",
+  "metadata_panel_visual_match": "视觉匹配",
+  "model_picker_default_description": "图像搜索模型。",
+  "model_picker_intro": "选择图片与示例图像和描述的比较方式。它不会更改 OCR 或相关文本搜索。",
+  "model_picker_legend": "图像搜索模型",
+  "model_picker_model_page_title": "模型页面",
+  "model_picker_recommended": "推荐",
+  "model_picker_trigger_label": "图像搜索模型：{model}",
+  "model_picker_trigger_title": "选择图像搜索模型",
+  "model_picker_unavailable": "不可用",
+  "native_copy_as_path_failed": "复制为路径失败",
+  "native_copy_failed": "复制失败",
+  "native_drag_expired": "文件拖动已过期。请重新拖动所选内容。",
+  "native_file_add_many_to_visual_search": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "将 {countText} 张图像添加到视觉搜索"
+      }
+    }
+  ],
+  "native_file_copy": "复制",
+  "native_file_copy_as_path": "复制为路径",
+  "native_file_copy_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "复制 {countText} 个项目"
+      }
+    }
+  ],
+  "native_file_copy_paths_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "复制 {countText} 个路径"
+      }
+    }
+  ],
+  "native_file_open_clicked_item_folder": "打开所点击项目的文件夹",
+  "native_file_open_containing_folder": "打开所在文件夹",
+  "native_file_open_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "在默认应用中打开 {countText} 个项目"
+      }
+    }
+  ],
+  "native_file_open_single": "在默认应用中打开",
+  "native_file_reveal_clicked_in_explorer": "在资源管理器中显示所点击项目",
+  "native_file_reveal_clicked_in_finder": "在访达中显示所点击项目",
+  "native_file_reveal_in_explorer": "在资源管理器中显示",
+  "native_file_reveal_in_finder": "在访达中显示",
+  "native_files_unavailable": "部分所选文件不再可用。请刷新媒体库后重试。",
+  "native_folder_copy_path": "复制路径",
+  "native_folder_not_in_library": "该文件夹已不属于此媒体库。",
+  "native_folder_open_in_explorer": "在资源管理器中打开",
+  "native_folder_open_in_file_manager": "在文件管理器中打开",
+  "native_folder_open_in_finder": "在访达中打开",
+  "native_folder_remove_from_library": "从媒体库中删除…",
+  "native_image_filter_name": "图像",
+  "native_open_failed": "打开失败",
+  "native_reveal_failed": "显示失败",
+  "native_visual_search_default_name": "所选图像",
+  "numeric_stepper_decrease": "减少 {label}",
+  "numeric_stepper_increase": "增加 {label}",
+  "ocr_search_bad_date_hint": "无法识别的日期",
+  "ocr_search_image_only_model": "此模型仅支持示例图像。请移除文本描述并添加示例图像。",
+  "ocr_search_names_text_label": "姓名和文本",
+  "ocr_search_names_text_message": "姓名和文本：{message}",
+  "ocr_search_no_library_selected": "未选择媒体库。",
+  "ocr_search_pending_file_names": "正在搜索文件名…",
+  "ocr_search_pending_files": "正在搜索文件…",
+  "ocr_search_pending_images": "正在搜索图像…",
+  "ocr_search_pending_names_text": "正在搜索姓名和文本…",
+  "ocr_search_pending_related_and_images": "正在搜索相关文本和图像…",
+  "ocr_search_pending_related_text": "正在搜索相关文本…",
+  "ocr_search_pending_text": "正在搜索文本…",
+  "ocr_search_related_text_message": "相关文本：{message}",
+  "ocr_search_related_text_not_set_up": "此媒体库未设置相关文本搜索。",
+  "ocr_search_result_limit_reached": "已达到结果限制；请按日期缩小搜索范围。",
+  "ocr_search_visual_results_label": "视觉结果",
+  "ocr_search_visual_results_message": "视觉结果：{message}",
+  "patch_match_backend_restarting": "后端正在重启",
+  "patch_match_failed": "无法映射匹配区域",
+  "patch_match_model_not_ready": "视觉搜索模型未就绪",
+  "patch_match_not_available": "此图像或模型不可用",
+  "platform_desktop_only_title": "仅在运行 Nicegal 的电脑上可用",
+  "reconnecting_status_label": "正在重新连接…",
+  "reconnecting_status_title": "无法连接到电脑上的 Nicegal",
+  "remote_access_allow_hint": "配对设备可在 Nicegal 打开期间浏览和搜索你的媒体库。",
+  "remote_access_allow_label": "允许此网络上的手机和其他设备",
+  "remote_access_background_heading": "背景",
+  "remote_access_close_to_tray": "关闭到托盘",
+  "remote_access_close_to_tray_hint": "改为从托盘图标退出。",
+  "remote_access_connected_in": "已在 {browser} 中连接",
+  "remote_access_fingerprint_hint": "与浏览器证书详细信息中的 SHA-256 指纹匹配。",
+  "remote_access_fingerprint_label": "证书指纹",
+  "remote_access_first_visit": "首次访问",
+  "remote_access_first_visit_hint": "浏览器会警告此连接不私密，因为没有公共机构为此电脑担保。请继续一次：在 Chrome 中，依次选择“高级”和“继续前往”；在 Safari 中，选择“显示详细信息”，然后访问此网站。",
+  "remote_access_https_hint": "将生成自签名证书。",
+  "remote_access_https_label": "使用 HTTPS",
+  "remote_access_https_recommend": "推荐。否则，此网络上的任何人都能看到你打开的图片。",
+  "remote_access_minimize_to_tray": "最小化到托盘",
+  "remote_access_minimize_to_tray_hint": "窗口隐藏时设备仍可连接。",
+  "remote_access_no_network": "无网络连接",
+  "remote_access_open_at_login": "登录时打开",
+  "remote_access_open_at_login_available": "在已安装的应用中可用。",
+  "remote_access_open_at_login_tray": "在托盘中启动。",
+  "remote_access_open_on_device": "在设备上打开",
+  "remote_access_pair_device": "配对设备",
+  "remote_access_pair_device_hint": "显示一次性代码，供设备输入。",
+  "remote_access_paired_date": "配对于 {pairedDate}",
+  "remote_access_paired_devices_heading": "已配对设备",
+  "remote_access_paired_last_used": "配对于 {pairedDate}，上次使用 {lastUsedDate} {lastUsedTime}",
+  "remote_access_pairing_code_hint": "在设备上输入。{time} 过期。",
+  "remote_access_remove_device": "移除",
+  "remote_access_wifi_hint": "将其连接到此电脑所在的同一 Wi-Fi。",
+  "remote_at_pc_change_language": "在运行 Nicegal 的电脑上更改语言。",
+  "remote_at_pc_change_update_settings": "在运行 Nicegal 的电脑上更改更新设置。",
+  "remote_at_pc_choose_folders": "在运行 Nicegal 的电脑上选择文件夹。",
+  "remote_at_pc_drag_files": "在运行 Nicegal 的电脑上拖动文件。",
+  "remote_at_pc_install_updates": "在运行 Nicegal 的电脑上安装更新。",
+  "remote_at_pc_manage_remote_access": "在运行 Nicegal 的电脑上管理远程访问。",
+  "remote_at_pc_open_license_information": "在运行 Nicegal 的电脑上打开许可信息。",
+  "remote_at_pc_save_diagnostics": "在运行 Nicegal 的电脑上保存诊断信息。",
+  "remote_browser_name_unknown": "浏览器",
+  "remote_cannot_reach_pc": "无法连接到电脑上的 Nicegal。",
+  "remote_connection_label": "{name}（{browser}）",
+  "remote_device_android_phone": "Android 手机",
+  "remote_device_android_tablet": "Android 平板电脑",
+  "remote_device_linux_pc": "Linux 电脑",
+  "remote_device_name_unknown": "浏览器",
+  "remote_device_not_paired": "此设备未配对",
+  "remote_device_unpaired": "此设备已取消配对。",
+  "remote_device_windows_pc": "Windows 电脑",
+  "remote_indicator_device_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 台设备"
+      }
+    }
+  ],
+  "remote_indicator_device_separator": "，",
+  "remote_indicator_title": "已连接：{devices}。打开远程访问设置。",
+  "remote_open_at_sign_in_unavailable": "登录时打开需要安装应用",
+  "remote_pair_connect_button": "连接",
+  "remote_pair_device_name_label": "此设备的名称",
+  "remote_pair_heading": "连接到 Nicegal",
+  "remote_pair_instructions": "在你的电脑上，打开 {settings}，然后打开 {remoteAccess}，并选择 {pairDevice}。",
+  "remote_pairing_code_mismatch": "该代码不匹配。请检查电脑上的代码。",
+  "remote_pairing_inactive": "没有活动的配对代码。请在电脑上选择 {pairDevice}。",
+  "remote_pairing_too_many_attempts": "错误代码过多。请在电脑上再次选择 {pairDevice}。",
+  "remote_pairing_wrong_origin": "配对必须来自此页面",
+  "remote_port_in_use": "端口 {port} 已被其他应用占用。",
+  "remote_turn_on_first": "请先打开远程访问",
+  "remove_folder_flyout_delete_data": "同时删除其缩略图和搜索数据",
+  "remove_folder_flyout_note": "文件仍保留在磁盘上。",
+  "remove_folder_flyout_remove": "移除",
+  "remove_folder_flyout_title": "从此媒体库中删除“{name}”？",
+  "runtime_job_started_before_switch": "作业在切换前已开始。请重试。",
+  "search_bar_all_image_only_title": "文件名、精确文本和相关文本。此图像模型仅按示例图像搜索。",
+  "search_bar_filter_after": "之后",
+  "search_bar_filter_before": "之前",
+  "search_bar_filter_during": "期间",
+  "search_bar_filter_exclude": "排除",
+  "search_bar_filter_extension": "扩展名",
+  "search_bar_filter_path": "路径",
+  "search_bar_filter_type": "类型",
+  "search_bar_filters_heading": "筛选器",
+  "search_bar_folder_chip_label": "显示所有文件夹；移除 {folder} 筛选条件",
+  "search_bar_input_label": "搜索",
+  "search_bar_like_image_only_hint": "添加示例图像以查找相似图片",
+  "search_bar_like_no_image_title": "使用示例图像查找相似图片",
+  "search_bar_mobile_scope_label": "视觉",
+  "search_bar_placeholder": "搜索文件名、文本和图像",
+  "search_bar_placeholder_no_images": "搜索文件名和文本",
+  "search_bar_preparing_visual": "正在准备视觉搜索。你可以继续浏览。",
+  "search_bar_reference_chip_label": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "视觉搜索包含 {countText} 张照片示例"
+      }
+    }
+  ],
+  "search_bar_reference_hint_less": "与 {name} 更不相似的图像",
+  "search_bar_reference_hint_many": "使用 {count} 张图像进行视觉搜索",
+  "search_bar_reference_hint_one": "与 {name} 相似的图像",
+  "search_bar_scope_all": "全部",
+  "search_bar_scope_all_summary": "文件名、精确文本、相关文本和视觉结果",
+  "search_bar_scope_button_label": "搜索范围：{scope}",
+  "search_bar_scope_like": "视觉搜索",
+  "search_bar_scope_like_summary": "使用描述或示例图像查找图像",
+  "search_bar_scope_meaning": "相关文本",
+  "search_bar_scope_meaning_summary": "图片中的文本，按含义而非拼写匹配",
+  "search_bar_scope_menu_label": "搜索范围",
+  "search_bar_scope_name": "名称",
+  "search_bar_scope_name_menu": "文件名",
+  "search_bar_scope_name_summary": "仅文件名",
+  "search_bar_scope_name_syntax_ends": "*.png（结尾为）",
+  "search_bar_scope_name_syntax_starts": "IMG_*（开头为）",
+  "search_bar_scope_ocr": "文本",
+  "search_bar_scope_ocr_menu": "精确文本",
+  "search_bar_scope_ocr_summary": "从图片中读取的精确字词。所有字词必须匹配。",
+  "search_bar_semantic_action": "查找相关文本",
+  "search_bar_semantic_prompt": "需要更广泛的结果？",
+  "search_bar_text_not_set_up": "此媒体库未设置文本搜索。",
+  "search_bar_visual_not_ready": "此媒体库的视觉搜索尚未就绪。",
+  "search_issue_model_failed_guidance": "{model} 模型无法准备。请重新扫描媒体库以重试，或在搜索设置中选择其他模型或执行提供程序。",
+  "search_issue_model_failed_label": "搜索模型失败",
+  "search_issue_model_image": "图像搜索",
+  "search_issue_model_picture": "图片描述",
+  "search_issue_model_switch_failed_guidance": "无法切换图像搜索模型。请打开搜索设置检查当前模型，然后重试。",
+  "search_issue_model_switch_failed_label": "模型切换失败",
+  "search_issue_model_text": "相关文本",
+  "search_issue_settings_problem_guidance": "无法读取或更改搜索设置。请打开搜索设置后重试。",
+  "search_issue_settings_problem_label": "搜索设置问题",
+  "search_issue_status_unavailable_guidance": "Nicegal 无法检查搜索是否就绪。请重试。",
+  "search_issue_status_unavailable_label": "搜索状态不可用",
+  "search_models_default_note": "每个模型保留自己的索引。切换会短暂重启图库服务。",
+  "search_models_service_offline": "图库服务离线时，搜索设置不可用。",
+  "search_models_show_details": "显示详细信息",
+  "search_models_switching_model": "正在切换图像模型…",
+  "search_models_text_unavailable_note": "此模型通过示例图像查找相似图片。文本描述不可用；文件名和 OCR 文本搜索仍可使用。",
+  "search_models_title": "搜索",
+  "search_ocr_example_either": "cat OR dog（任一）",
+  "search_ocr_example_phrase": "\"red dress\"（精确短语）",
+  "search_ocr_example_prefix": "dre*（开头为）",
+  "search_options_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个匹配"
+      }
+    }
+  ],
+  "search_options_count_truncated": "显示 {total} 个匹配中的前 {shown} 个",
+  "search_options_date": "日期",
+  "search_options_date_tooltip": "最新优先，按日期分组",
+  "search_options_match_quality_label": "匹配质量：",
+  "search_options_relevance": "相关性",
+  "search_options_relevance_tooltip": "最佳匹配优先",
+  "search_options_section_jump_tooltip": "跳转到 {section}",
+  "search_options_sections_aria": "搜索结果部分",
+  "search_options_slider_disabled_tooltip": "所有结果得分相同，因此没有可筛选的内容",
+  "search_options_slider_tooltip": "向右拖动以仅保留匹配度更高的结果",
+  "search_options_sort_group_aria": "排序搜索结果",
+  "search_options_sort_label": "排序：",
+  "search_options_visual_similarity_label": "视觉相似度：",
+  "search_options_visual_slider_tooltip": "向右拖动以减少视觉结果。名称和文本结果不变。",
+  "search_stopping_indexing": "正在停止索引…",
+  "settings_advanced_heading": "高级搜索设置",
+  "settings_appearance_heading": "外观",
+  "settings_execution_provider_label": "执行提供程序",
+  "settings_execution_provider_note": "除非索引失败，否则请保留此设置。",
+  "settings_execution_switching": "正在切换…",
+  "settings_getting_started": "入门",
+  "settings_hide_offensive_tags": "隐藏冒犯性标签",
+  "settings_hide_offensive_tags_note": "关闭后可查看所有标签，用于研究。",
+  "settings_language_heading": "语言",
+  "settings_language_label": "显示语言",
+  "settings_language_system": "系统默认",
+  "settings_library_search_label": "图像搜索、文本识别和视频",
+  "settings_library_search_note": "在媒体库管理器中按媒体库选择。",
+  "settings_new_to_nicegal": "初次使用 Nicegal？",
+  "settings_page_about": "关于",
+  "settings_page_general": "常规",
+  "settings_page_search": "搜索",
+  "settings_pages_nav_aria": "设置页面",
+  "settings_per_library_heading": "每个媒体库",
+  "settings_play_animated_gifs": "在网格中播放动画 GIF",
+  "settings_tags_heading": "标签",
+  "settings_theme_label": "主题",
+  "settings_update_automatic_label": "自动更新",
+  "settings_update_none_note": "此版本不检查更新。",
+  "settings_update_notify_label": "更新时通知我",
+  "settings_update_notify_note": "Nicegal 打开时检查一次。从发布页面下载更新。",
+  "settings_updates_heading": "更新",
+  "status_bar_check_button_aria": "检查新文件",
+  "status_bar_check_button_title": "检查新文件 (F5)",
+  "status_bar_dismiss_warning_title": "关闭此搜索警告",
+  "status_bar_index_progress": "已扫描 {indexed} / {total}",
+  "status_bar_index_scanned": "已扫描 {indexed}",
+  "status_bar_items": [
+    {
+      "declarations": [
+        "input total",
+        "local totalPlural = total: plural",
+        "local totalText = total: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=*": "{totalText} 个项目"
+      }
+    }
+  ],
+  "status_bar_items_filtered": [
+    {
+      "declarations": [
+        "input total",
+        "input matched",
+        "local totalPlural = total: plural",
+        "local totalText = total: number",
+        "local matchedText = matched: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=*": "{matchedText} / {totalText} 个项目"
+      }
+    }
+  ],
+  "status_bar_items_filtered_title": [
+    {
+      "declarations": [
+        "input total",
+        "input matched",
+        "local totalPlural = total: plural",
+        "local totalText = total: number",
+        "local matchedText = matched: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=*": "{totalText} 个项目中有 {matchedText} 个匹配当前搜索"
+      }
+    }
+  ],
+  "status_bar_job_rate_title": "当前阶段吞吐量",
+  "status_bar_provider_fallback_title": "正在 {provider} 上运行；{failed} 个加载失败并已自动回退",
+  "status_bar_provider_restart_title": "正在 {provider} 上运行；重启以切换到 {configured}",
+  "status_bar_provider_title": "执行提供程序：{provider}",
+  "status_bar_selected_count": "已选择 {count} 个",
+  "status_bar_service_unavailable": "服务不可用",
+  "technical_details_summary": "技术详细信息",
+  "thumbnail_failures_details_aria": "缩略图错误详细信息",
+  "thumbnail_failures_retry_button": "重试缩略图",
+  "thumbnail_failures_retry_help": "自动重试已停止。请检查文件是否可访问，然后重试。你仍可以尝试打开图像。",
+  "thumbnail_failures_summary": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个缩略图不可用"
+      }
+    }
+  ],
+  "thumbnail_generation_failed_message": "生成后无法加载缩略图。海报可能缺失或无法读取。",
+  "timeline_scrollbar_aria_by_date": "滚动到日期",
+  "timeline_scrollbar_aria_results": "滚动结果",
+  "timeline_scrollbar_year_range": "{first}–{last}",
+  "tray_open_nicegal": "打开 Nicegal",
+  "tray_quit": "退出",
+  "update_dialog_available_body": "Nicegal {version} 已可用。打开其发布页面以下载并手动安装。",
+  "update_dialog_available_body_unversioned": "Nicegal 已可用。打开其发布页面以下载并手动安装。",
+  "update_dialog_changes_aria": "更改",
+  "update_dialog_later_button": "稍后",
+  "update_dialog_open_release_page_button": "打开发布页面",
+  "update_dialog_ready_body": "Nicegal {version} 已准备好安装。立即重启，或继续工作并在退出时安装。",
+  "update_dialog_ready_body_unversioned": "Nicegal 已准备好安装。立即重启，或继续工作并在退出时安装。",
+  "update_dialog_release_notes_button": "发行说明",
+  "update_dialog_restart_button": "重启并安装",
+  "update_dialog_restarting_button": "正在重启…",
+  "update_status_available_tooltip": "Nicegal {version} 已可用。查看发布页面。",
+  "update_status_downloading": "正在下载更新…",
+  "update_status_ready": "更新已就绪",
+  "update_status_ready_tooltip": "Nicegal {version} 已准备好安装。查看更新选项。",
+  "video_player_controls_group_aria": "视频控件",
+  "video_player_exit_fullscreen": "退出全屏",
+  "video_player_fullscreen": "全屏",
+  "video_player_mute": "静音",
+  "video_player_pause": "暂停",
+  "video_player_pause_video": "暂停视频",
+  "video_player_play": "播放",
+  "video_player_play_video": "播放视频",
+  "video_player_seek_aria": "定位视频",
+  "video_player_time_aria": "时间 {current}/{duration}",
+  "video_player_unmute": "取消静音",
+  "video_player_volume_aria": "音量",
+  "view_controls_columns_label": "列",
+  "view_controls_columns_note": "0 = 自动列。调整图像大小会恢复自动列。",
+  "view_controls_columns_tooltip": "0 = 自动列",
+  "view_controls_date_headers_heading": "日期标题",
+  "view_controls_header_day": "天",
+  "view_controls_header_month": "月",
+  "view_controls_header_none": "无",
+  "view_controls_image_model_fallback": "此图像模型",
+  "view_controls_layout_grid_tooltip": "网格：等大单元格",
+  "view_controls_layout_group_aria": "图库布局",
+  "view_controls_layout_heading": "布局",
+  "view_controls_layout_justified_tooltip": "两端对齐：等高行",
+  "view_controls_layout_masonry_tooltip": "瀑布流：高度不等的列",
+  "view_controls_layout_option_aria": "{label}布局",
+  "view_controls_match_areas": "匹配区域",
+  "view_controls_match_areas_tooltip": "在缩略图上显示每个视觉搜索结果的匹配位置",
+  "view_controls_match_scores": "匹配分数",
+  "view_controls_match_scores_tooltip": "在缩略图上显示每个结果的向量匹配分数",
+  "view_controls_media_all": "全部",
+  "view_controls_media_images": "图像",
+  "view_controls_media_videos": "视频",
+  "view_controls_menu_aria": "视图选项",
+  "view_controls_organization_aria": "媒体和日期组织",
+  "view_controls_ranked_date_note": "按日期排序时应用日期选项。",
+  "view_controls_search_results_heading": "搜索结果",
+  "view_controls_show_media_heading": "显示媒体",
+  "view_controls_sort_by_heading": "排序方式",
+  "view_controls_sort_file_date": "文件日期",
+  "view_controls_sort_photo_date": "照片日期",
+  "view_controls_spacing_label": "间距",
+  "view_controls_view_button": "视图",
+  "virtual_gallery_collapse_section_aria": "折叠 {label}",
+  "virtual_gallery_expand_section_aria": "展开 {label}",
+  "virtual_gallery_gif_badge": "GIF",
+  "virtual_gallery_match_badge": "匹配 {match_time}",
+  "virtual_gallery_match_kind_text": "文本含义",
+  "virtual_gallery_match_kind_visual": "视觉",
+  "virtual_gallery_match_score_tooltip": "{kind}匹配 {score}",
+  "virtual_gallery_matched_frame_tooltip": "匹配帧位于 {match_time} · 视频长度 {duration}",
+  "virtual_gallery_mute_preview": "静音预览",
+  "virtual_gallery_thumbnail_unavailable": "缩略图不可用",
+  "virtual_gallery_thumbnail_unavailable_image_aria": "{name}：缩略图不可用。打开图像",
+  "virtual_gallery_thumbnail_unavailable_video_aria": "{name}：缩略图不可用。打开视频",
+  "virtual_gallery_unmute_preview": "取消静音预览",
+  "virtual_gallery_video_tooltip": "视频",
+  "virtual_gallery_visual_match_aria": "{name}：视觉匹配位于 {match_time}",
+  "virtual_gallery_visual_match_tooltip": "视觉匹配位于 {match_time} · 视频长度 {duration}",
+  "virtual_gallery_visual_search_example_aria": "视觉搜索示例",
+  "visual_composer_add_button": "添加",
+  "visual_composer_add_library_photos": "选中的媒体库照片",
+  "visual_composer_add_menu_aria": "添加视觉示例",
+  "visual_composer_add_selected_library": "选中的媒体库照片（{count}）",
+  "visual_composer_add_selected_tooltip": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "添加 {countText} 张选中的照片"
+      }
+    }
+  ],
+  "visual_composer_add_text_description": "文本描述",
+  "visual_composer_choose_file": "选择文件…",
+  "visual_composer_close_aria": "关闭视觉搜索编辑器",
+  "visual_composer_close_tooltip": "关闭编辑器（保留搜索）",
+  "visual_composer_default_model": "此图像模型",
+  "visual_composer_description_aria": "描述 {n}",
+  "visual_composer_description_placeholder": "描述图像",
+  "visual_composer_empty_description": "空描述",
+  "visual_composer_example_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 个示例"
+      }
+    }
+  ],
+  "visual_composer_example_name": "示例 {n}",
+  "visual_composer_head_description_or_image": "描述或图像",
+  "visual_composer_head_image": "图像",
+  "visual_composer_head_match": "匹配",
+  "visual_composer_head_weight": "权重",
+  "visual_composer_heading": "视觉搜索",
+  "visual_composer_less_like": "更不相似",
+  "visual_composer_less_like_note": "“更不相似”会改变相似度，不保证排除。",
+  "visual_composer_match_direction_aria": "{name} 的匹配方向",
+  "visual_composer_model_image_only_note": "{model} 仅支持通过示例图像搜索。要使用文本描述搜索，请在{#link}搜索设置{/link}中选择其他模型。",
+  "visual_composer_more_like": "更相似",
+  "visual_composer_reference_label": "{source}：{name}",
+  "visual_composer_reference_source_file": "所选文件",
+  "visual_composer_reference_source_library": "媒体库照片",
+  "visual_composer_remove_description_aria": "删除描述 {text}",
+  "visual_composer_remove_example_aria": "删除示例 {n}",
+  "visual_composer_remove_reference_aria": "删除 {name}",
+  "visual_composer_select_photos_first_tooltip": "请先在图库中选择照片",
+  "visual_composer_unsupported_terms_heading": "删除这些描述以使用此仅图像模型搜索：",
+  "visual_composer_weight_for_aria": "{name} 的权重",
+  "visual_file_read_cancelled": "已取消读取视觉搜索图像。",
+  "visual_file_read_failed": "无法读取图像。",
+  "visual_search_file_too_large": "{name} 大于视觉搜索的 {limit} MB 限制。"
+}

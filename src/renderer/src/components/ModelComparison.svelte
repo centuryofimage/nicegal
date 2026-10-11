@@ -143,7 +143,7 @@
   }
 </script>
 
-<section class="comparison">
+<section class="dialog-shell comparison">
   <header>
     <h2 id="model-comparison-title">Compare image search models · dev</h2>
     <button class="ui-button" disabled={busy} onclick={onclose}>Close</button>
@@ -245,12 +245,7 @@
 
 <style>
   .comparison {
-    box-sizing: border-box;
     padding: var(--space-9);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
-    color: var(--text-primary);
   }
   header,
   .actions {

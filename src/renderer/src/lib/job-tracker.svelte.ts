@@ -2,6 +2,7 @@ import { SvelteSet } from "svelte/reactivity";
 
 import type { JobListResponse, JobRequest, JobSnapshot, LibraryId } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { cleanDiagnostic, errorCode, errorMessage } from "./errors";
 import { acknowledgeJobErrors, newJobErrors } from "./job-error-history";
 import { summarizeCompletion } from "./job-format";
@@ -126,7 +127,7 @@ export class JobTracker {
     } catch (error) {
       // A failed start must leave the previous job's subscription intact.
       if (this.pendingRequests.has(requestId) && errorCode(error) !== "job_cancelled")
-        this.fail("Couldn't start the job", error);
+        this.fail(m.job_tracker_start_failed_title(), error);
       return null;
     } finally {
       this.pendingRequests.delete(requestId);
@@ -211,7 +212,8 @@ export class JobTracker {
       }
       this.applyJobList(list, pushedSnapshots);
     } catch (error) {
-      if (backendGeneration === this.backendGeneration) this.fail("Couldn't stop the job", error);
+      if (backendGeneration === this.backendGeneration)
+        this.fail(m.job_tracker_stop_failed_title(), error);
     }
   }
 
@@ -291,9 +293,8 @@ export class JobTracker {
     if (restarting) this.failure = null;
     else if (interrupted)
       this.failure = {
-        title: "Indexing stopped",
-        guidance:
-          "The gallery service stopped before this job finished. Indexing resumes when the service is running again. Finished work is kept.",
+        title: m.job_tracker_indexing_stopped_title(),
+        guidance: m.job_tracker_indexing_stopped_guidance(),
         message: "",
       };
   }
@@ -301,7 +302,7 @@ export class JobTracker {
   private fail(title: string, error: unknown): void {
     this.failure = {
       title,
-      guidance: "Try again. If it keeps failing, restart the app.",
+      guidance: m.job_tracker_failure_try_again_guidance(),
       message: errorMessage(error),
     };
   }
@@ -354,10 +355,10 @@ export class JobTracker {
         const known = snapshot.errors.length;
         this.completionMessage = [
           summarizeCompletion(snapshot),
-          known ? `${known.toLocaleString()} known file error${known === 1 ? "" : "s"}` : "",
+          known ? m.job_known_file_errors({ count: known }) : "",
         ]
           .filter(Boolean)
-          .join(" · ");
+          .join(m.common_separator());
         this.active = null;
         if (this.completionTimer) clearTimeout(this.completionTimer);
         this.completionTimer = setTimeout(() => {

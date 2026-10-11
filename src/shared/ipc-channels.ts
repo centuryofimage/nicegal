@@ -7,6 +7,11 @@ export const IPC_CHANNELS = {
     releaseNotes: "updates:release-notes",
     restartAndInstall: "updates:restart-and-install",
   },
+  language: {
+    settings: "language:settings",
+    setPreference: "language:set-preference",
+    restart: "language:restart",
+  },
   backend: {
     status: "backend:status",
     statusChanged: "backend:status-changed",

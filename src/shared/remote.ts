@@ -1,3 +1,5 @@
+import { m } from "./paraglide/messages.js";
+
 /** Drawn at random from 20000-45000, clear of Windows' services list. */
 export const DEFAULT_REMOTE_PORT = 30351;
 
@@ -18,7 +20,7 @@ export interface RemoteConnection {
 
 /** "iPhone (Safari)" */
 export function connectionLabel(connection: RemoteConnection): string {
-  return `${connection.name} (${connection.browser})`;
+  return m.remote_connection_label({ name: connection.name, browser: connection.browser });
 }
 
 export interface RemoteAccessStatus {

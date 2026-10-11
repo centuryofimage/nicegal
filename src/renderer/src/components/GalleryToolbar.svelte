@@ -8,6 +8,7 @@
   import type { LibraryViewController } from "../lib/library-view.svelte";
   import type ModelComparison from "./ModelComparison.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { errorMessage } from "../lib/errors";
   import { parseQuery, withMediaFilter, type MediaFilter } from "../lib/search-query";
@@ -84,8 +85,10 @@
     <div class="toolbar-actions">
       {#if start}<div class="toolbar-start">{@render start()}</div>{/if}
       {#if orchestrator.restartingIndex}
-        <span role="status">Switching to OpenVINO…</span>
-        <button class="ui-button" onclick={() => orchestrator.cancel()}>Stop indexing</button>
+        <span role="status">{m.gallery_toolbar_switching_provider()}</span>
+        <button class="ui-button" onclick={() => orchestrator.cancel()}
+          >{m.gallery_toolbar_stop_indexing()}</button
+        >
       {:else if jobs.active}
         <JobIndicator
           job={jobs.active}
@@ -106,25 +109,25 @@
         class="app-toolbar-button app-toolbar-text-button"
         class:active={view.activeDialog === "manageLibraries"}
         onclick={view.openManageLibraries}
-        title="Library manager"
-        aria-label="Library manager"
+        title={m.common_library_manager()}
+        aria-label={m.common_library_manager()}
         aria-haspopup="dialog"
         aria-expanded={view.activeDialog === "manageLibraries"}
       >
         <FolderOpen size={13} aria-hidden="true" />
-        <span>Library manager</span>
+        <span>{m.common_library_manager()}</span>
       </button>
       <button
         class="app-toolbar-button app-toolbar-text-button"
         class:active={view.activeDialog === "settings"}
         onclick={() => view.openSettingsDialog()}
-        title="Settings"
-        aria-label="Settings"
+        title={m.common_settings()}
+        aria-label={m.common_settings()}
         aria-haspopup="dialog"
         aria-expanded={view.activeDialog === "settings"}
       >
         <Settings size={13} aria-hidden="true" />
-        <span>Settings</span>
+        <span>{m.common_settings()}</span>
       </button>
       {#if import.meta.env.DEV}
         <button
@@ -150,7 +153,7 @@
       shownCount={view.filteredItems.length}
       matchTotal={view.searchView.matchTotal}
       truncated={false}
-      sliderLabel={ocrSearch.sliderLabel}
+      sliderKind={ocrSearch.sliderKind}
       sections={view.searchView.sections}
       {onsection}
     />

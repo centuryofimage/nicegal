@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { ParaglideMessage } from "@inlang/paraglide-js-svelte";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import Plus from "@lucide/svelte/icons/plus";
   import X from "@lucide/svelte/icons/x";
   import { tick, untrack } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import {
     formatVisualTextTerms,
@@ -50,7 +52,8 @@
   let nextId = 0;
   let addMenuOpen = $state(false);
   let addButton: HTMLButtonElement;
-  let composerEl: HTMLDivElement;
+  /** Description inputs in row order, filled by the attachment on each row. */
+  const descriptionInputs: HTMLInputElement[] = [];
   const exampleCount = $derived(
     (supportsTextQueries ? parseVisualTextTerms(expression).length : 0) + references.length,
   );
@@ -76,11 +79,15 @@
   function addText(): void {
     terms = [...terms, { id: `new-${nextId++}`, text: "", polarity: "more", strength: 1 }];
     addMenuOpen = false;
-    void tick().then(() =>
-      composerEl
-        .querySelector<HTMLInputElement>(`input[aria-label="Description ${terms.length}"]`)
-        ?.focus(),
-    );
+    void tick().then(() => descriptionInputs.at(-1)?.focus());
+  }
+
+  function trackDescription(input: HTMLInputElement): () => void {
+    descriptionInputs.push(input);
+    return () => {
+      const at = descriptionInputs.indexOf(input);
+      if (at >= 0) descriptionInputs.splice(at, 1);
+    };
   }
 
   function remove(id: string): void {
@@ -113,50 +120,56 @@
 
 <div
   class="visual-composer viewport-popup"
-  bind:this={composerEl}
   role="dialog"
-  aria-label="Compose visual search"
+  aria-label={m.common_compose_visual_search()}
   tabindex="-1"
   onkeydown={keydown}
 >
   <div class="composer-body">
     <div class="composer-heading">
-      <span>Visual search</span>
+      <span>{m.visual_composer_heading()}</span>
       <span class="composer-heading-actions">
-        <span>{exampleCount} example{exampleCount === 1 ? "" : "s"}</span>
+        <span>{m.visual_composer_example_count({ count: exampleCount })}</span>
         <button
           class="close-composer"
           type="button"
           onclick={onclose}
-          aria-label="Close visual search composer"
-          title="Close composer (keep search)"><X size={13} aria-hidden="true" /></button
+          aria-label={m.visual_composer_close_aria()}
+          title={m.visual_composer_close_tooltip()}><X size={13} aria-hidden="true" /></button
         >
       </span>
     </div>
-    <p>“Less like” changes similarity; it does not guarantee an exclusion.</p>
+    <p>{m.visual_composer_less_like_note()}</p>
     {#if !supportsTextQueries}
       <p class="model-note">
-        {modelName ?? "This image model"} searches by image example only. To search with text descriptions,
-        choose another model in
-        <a
-          href="#search-settings"
-          onclick={(event) => {
-            event.preventDefault();
-            onopensettings?.();
-          }}>Search settings</a
-        >.
+        <ParaglideMessage
+          message={m.visual_composer_model_image_only_note}
+          inputs={{ model: modelName ?? m.visual_composer_default_model() }}
+        >
+          {#snippet link({ children })}
+            <a
+              href="#search-settings"
+              onclick={(event) => {
+                event.preventDefault();
+                onopensettings?.();
+              }}>{@render children?.()}</a
+            >
+          {/snippet}
+        </ParaglideMessage>
       </p>
       {#if terms.length}
         <div class="unsupported-terms" role="alert">
-          <p>Remove these descriptions to search with this image-only model:</p>
-          {#each terms as term (term.id)}
+          <p>{m.visual_composer_unsupported_terms_heading()}</p>
+          {#each terms as term, index (term.id)}
             <div>
-              <span>{term.text || "Empty description"}</span>
+              <span>{term.text || m.visual_composer_empty_description()}</span>
               <button
                 type="button"
                 class="remove"
                 onclick={() => remove(term.id)}
-                aria-label="Remove description {term.text || 'example'}"
+                aria-label={term.text
+                  ? m.visual_composer_remove_description_aria({ text: term.text })
+                  : m.visual_composer_remove_example_aria({ n: index + 1 })}
                 ><X size={13} aria-hidden="true" /></button
               >
             </div>
@@ -166,14 +179,18 @@
     {/if}
     <div class="term-list">
       <div class="term-head" aria-hidden="true">
-        <span>Match</span><span>{supportsTextQueries ? "Description or image" : "Image"}</span><span
-          >Weight</span
-        ><span></span>
+        <span>{m.visual_composer_head_match()}</span><span
+          >{supportsTextQueries
+            ? m.visual_composer_head_description_or_image()
+            : m.visual_composer_head_image()}</span
+        ><span>{m.visual_composer_head_weight()}</span><span></span>
       </div>
       {#each supportsTextQueries ? terms : [] as term, index (term.id)}
         <div class="term-row">
           <select
-            aria-label="Match direction for {term.text || `example ${index + 1}`}"
+            aria-label={m.visual_composer_match_direction_aria({
+              name: term.text || m.visual_composer_example_name({ n: index + 1 }),
+            })}
             value={term.polarity}
             onchange={(event) =>
               update(index, {
@@ -181,19 +198,22 @@
                   .value as VisualTextTerm["polarity"],
               })}
           >
-            <option value="more">More like</option>
-            <option value="less">Less like</option>
+            <option value="more">{m.visual_composer_more_like()}</option>
+            <option value="less">{m.visual_composer_less_like()}</option>
           </select>
           <input
-            aria-label="Description {index + 1}"
+            {@attach trackDescription}
+            aria-label={m.visual_composer_description_aria({ n: index + 1 })}
             value={term.text}
-            placeholder="Describe an image"
+            placeholder={m.visual_composer_description_placeholder()}
             oninput={(event) =>
               update(index, { text: (event.currentTarget as HTMLInputElement).value })}
           />
           <NumericStepper
             value={term.polarity === "more" ? term.strength : -term.strength}
-            label="Weight for {term.text || `example ${index + 1}`}"
+            label={m.visual_composer_weight_for_aria({
+              name: term.text || m.visual_composer_example_name({ n: index + 1 }),
+            })}
             onvaluechange={(weight) =>
               update(index, {
                 polarity: weight < 0 ? "less" : "more",
@@ -204,7 +224,7 @@
             class="remove"
             type="button"
             onclick={() => remove(term.id)}
-            aria-label="Remove example {index + 1}"
+            aria-label={m.visual_composer_remove_example_aria({ n: index + 1 })}
           >
             <X size={13} aria-hidden="true" />
           </button>
@@ -213,21 +233,29 @@
       {#each references as reference, index (reference.id)}
         <div class="term-row">
           <select
-            aria-label="Match direction for {reference.displayName}"
+            aria-label={m.visual_composer_match_direction_aria({ name: reference.displayName })}
             value={reference.polarity}
             onchange={(event) =>
               updateReference(index, {
                 polarity: (event.currentTarget as HTMLSelectElement)
                   .value as VisualReferenceTerm["polarity"],
               })}
-            ><option value="more">More like</option><option value="less">Less like</option></select
+            ><option value="more">{m.visual_composer_more_like()}</option><option value="less"
+              >{m.visual_composer_less_like()}</option
+            ></select
           >
           <span class="image-reference" title={reference.displayName}
-            >{reference.source === "library" ? "Library photo" : "Chosen file"}: {reference.displayName}</span
+            >{m.visual_composer_reference_label({
+              source:
+                reference.source === "library"
+                  ? m.visual_composer_reference_source_library()
+                  : m.visual_composer_reference_source_file(),
+              name: reference.displayName,
+            })}</span
           >
           <NumericStepper
             value={reference.polarity === "more" ? reference.strength : -reference.strength}
-            label="Weight for {reference.displayName}"
+            label={m.visual_composer_weight_for_aria({ name: reference.displayName })}
             onvaluechange={(weight) =>
               updateReference(index, {
                 polarity: weight < 0 ? "less" : "more",
@@ -238,7 +266,8 @@
             class="remove"
             type="button"
             onclick={() => onreferenceschange(references.filter((_, current) => current !== index))}
-            aria-label="Remove {reference.displayName}"><X size={13} aria-hidden="true" /></button
+            aria-label={m.visual_composer_remove_reference_aria({ name: reference.displayName })}
+            ><X size={13} aria-hidden="true" /></button
           >
         </div>
       {/each}
@@ -252,28 +281,31 @@
           aria-haspopup="menu"
           aria-expanded={addMenuOpen}
           onclick={() => (addMenuOpen = !addMenuOpen)}
-          ><Plus size={13} aria-hidden="true" /> Add <ChevronDown
-            size={11}
-            aria-hidden="true"
-          /></button
+          ><Plus size={13} aria-hidden="true" />
+          {m.visual_composer_add_button()}
+          <ChevronDown size={11} aria-hidden="true" /></button
         >
         {#if addMenuOpen}
-          <div class="add-menu-popup" role="menu" aria-label="Add visual example">
+          <div class="add-menu-popup" role="menu" aria-label={m.visual_composer_add_menu_aria()}>
             {#if supportsTextQueries}
-              <button type="button" role="menuitem" onclick={addText}>Text description</button>
+              <button type="button" role="menuitem" onclick={addText}
+                >{m.visual_composer_add_text_description()}</button
+              >
             {/if}
             <button
               type="button"
               role="menuitem"
               disabled={!selectedPhotoCount}
               title={selectedPhotoCount
-                ? `Add ${selectedPhotoCount} selected photos`
-                : "Select photos in the gallery first"}
+                ? m.visual_composer_add_selected_tooltip({ count: selectedPhotoCount })
+                : m.visual_composer_select_photos_first_tooltip()}
               onclick={() => {
                 onaddlibrary();
                 addMenuOpen = false;
               }}
-              >Selected library photos{selectedPhotoCount ? ` (${selectedPhotoCount})` : ""}</button
+              >{selectedPhotoCount
+                ? m.visual_composer_add_selected_library({ count: selectedPhotoCount })
+                : m.visual_composer_add_library_photos()}</button
             >
             <button
               type="button"
@@ -281,12 +313,12 @@
               onclick={() => {
                 onchoosefile();
                 addMenuOpen = false;
-              }}>Choose file…</button
+              }}>{m.visual_composer_choose_file()}</button
             >
           </div>
         {/if}
       </div>
-      <button class="ui-button" type="button" onclick={onclear}>Clear search</button>
+      <button class="ui-button" type="button" onclick={onclear}>{m.common_clear_search()}</button>
     </div>
   </div>
 </div>

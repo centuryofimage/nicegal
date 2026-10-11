@@ -2,15 +2,18 @@
   import { onMount } from "svelte";
 
   import type { ExecutionProviderId } from "../../../shared/backend";
+  import type { LanguageSettings } from "../../../shared/locale";
   import type { UpdatePreferences } from "../../../shared/updates";
   import type { SettingsPage } from "../lib/library-view.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { jobBlocksRuntimeSwitch, runtimeSwitchJobNote } from "../lib/job-state";
   import { isRemote } from "../lib/platform";
   import { settings, settingsLimits, type GalleryTheme } from "../lib/settings.svelte";
   import AboutSettings from "./AboutSettings.svelte";
+  import LanguageRestartDialog from "./LanguageRestartDialog.svelte";
   import RemoteAccessSettings from "./RemoteAccessSettings.svelte";
   import SearchModels from "./SearchModels.svelte";
 
@@ -28,17 +31,32 @@
     page?: SettingsPage;
   } = $props();
 
+  // Theme names are the app's own labels, so they stay untranslated.
   const themes: { id: GalleryTheme; label: string }[] = [
     { id: "seven-a", label: "very" },
     { id: "seven-b", label: "Hospital" },
   ];
   const { catalog, jobs } = useApplication().services;
   const jobNote = $derived(runtimeSwitchJobNote(jobs));
+  let languageSettings = $state<LanguageSettings | null>(null);
+  let languageSaving = $state(false);
+  let languageError = $state<string | null>(null);
+  let languageRestartOpen = $state(false);
   let updatePreferences = $state<UpdatePreferences | null>(null);
   let updateSaving = $state(false);
   let updateError = $state<string | null>(null);
   onMount(() => {
     let disposed = false;
+    if (!isRemote()) {
+      void window.nicegal.language
+        .getSettings()
+        .then((value) => {
+          if (!disposed) languageSettings = value;
+        })
+        .catch((error: unknown) => {
+          if (!disposed) languageError = error instanceof Error ? error.message : String(error);
+        });
+    }
     void window.nicegal.updates
       .getPreferences()
       .then((value) => {
@@ -51,6 +69,30 @@
       disposed = true;
     };
   });
+
+  /** Each language is listed under its own name, so someone who cannot read the current UI can
+   * still find theirs. */
+  function languageName(locale: string): string {
+    return new Intl.DisplayNames([locale], { type: "language" }).of(locale) ?? locale;
+  }
+
+  async function setLanguage(event: Event & { currentTarget: HTMLSelectElement }): Promise<void> {
+    const select = event.currentTarget;
+    const preference = select.value || null;
+    languageSaving = true;
+    languageError = null;
+    try {
+      languageSettings = await window.nicegal.language.setPreference(preference);
+      // Nothing to restart for when the app already runs in the chosen language.
+      languageRestartOpen =
+        (languageSettings.preference ?? languageSettings.system) !== languageSettings.active;
+    } catch (error) {
+      languageError = error instanceof Error ? error.message : String(error);
+    } finally {
+      select.value = languageSettings?.preference ?? "";
+      languageSaving = false;
+    }
+  }
 
   async function setAutomaticUpdates(
     event: Event & { currentTarget: HTMLInputElement },
@@ -99,34 +141,51 @@
 <section class="settings-panel" aria-labelledby="settings-title">
   <header>
     <div>
-      <h1 id="settings-title">Settings</h1>
+      <h1 id="settings-title">{m.common_settings()}</h1>
     </div>
-    <button class="ui-button ui-button-compact" onclick={onclose}>Close</button>
+    <button class="ui-button ui-button-compact" onclick={onclose}>{m.common_close()}</button>
   </header>
 
-  <nav class="settings-pages" aria-label="Settings pages">
+  <nav class="settings-pages" aria-label={m.settings_pages_nav_aria()}>
     <button class="ui-button" aria-pressed={page === "gallery"} onclick={() => (page = "gallery")}
-      >General</button
+      >{m.settings_page_general()}</button
     >
     <button class="ui-button" aria-pressed={page === "search"} onclick={() => (page = "search")}
-      >Search</button
+      >{m.settings_page_search()}</button
     >
     {#if !isRemote()}
       <button class="ui-button" aria-pressed={page === "remote"} onclick={() => (page = "remote")}
-        >Remote access</button
+        >{m.common_remote_access()}</button
       >
     {/if}
     <button class="ui-button" aria-pressed={page === "about"} onclick={() => (page = "about")}
-      >About</button
+      >{m.settings_page_about()}</button
     >
   </nav>
   <div class="settings-groups themed-scrollbar">
     {#if page === "gallery"}
+      {#if !isRemote()}<section class="settings-group" aria-labelledby="language-title">
+          <h2 id="language-title">{m.settings_language_heading()}</h2>
+          <label class="row">
+            <span>{m.settings_language_label()}</span>
+            <select
+              value={languageSettings?.preference ?? ""}
+              disabled={!languageSettings || languageSaving}
+              onchange={setLanguage}
+            >
+              <option value="">{m.settings_language_system()}</option>
+              {#each languageSettings?.available ?? [] as locale (locale)}
+                <option value={locale}>{languageName(locale)}</option>
+              {/each}
+            </select>
+          </label>
+          {#if languageError}<p class="settings-error" role="alert">{languageError}</p>{/if}
+        </section>{/if}
       <section class="settings-group" aria-labelledby="appearance-title">
-        <h2 id="appearance-title">Appearance</h2>
+        <h2 id="appearance-title">{m.settings_appearance_heading()}</h2>
         <div class="row segmented-row">
-          <span>Theme</span>
-          <div class="ui-choice-group" aria-label="Theme">
+          <span>{m.settings_theme_label()}</span>
+          <div class="ui-choice-group" aria-label={m.settings_theme_label()}>
             {#each themes as theme (theme.id)}
               <button
                 class="ui-button"
@@ -137,7 +196,7 @@
           </div>
         </div>
         <label class="row"
-          ><span>Play animated GIFs in the grid</span><input
+          ><span>{m.settings_play_animated_gifs()}</span><input
             type="checkbox"
             bind:checked={$settings.playAnimatedPreviews}
           /></label
@@ -145,12 +204,12 @@
       </section>
 
       {#if !isRemote()}<section class="settings-group" aria-labelledby="updates-title">
-          <h2 id="updates-title">Updates</h2>
+          <h2 id="updates-title">{m.settings_updates_heading()}</h2>
           <label class="row">
             <span class="setting-label"
               >{updatePreferences?.mode === "notify"
-                ? "Notify me about updates"
-                : "Automatic updates"}</span
+                ? m.settings_update_notify_label()
+                : m.settings_update_automatic_label()}</span
             >
             <input
               type="checkbox"
@@ -160,11 +219,9 @@
             />
           </label>
           {#if updatePreferences?.mode === "notify"}
-            <p class="update-build-note">
-              Check once when Nicegal opens. Download updates from the release page.
-            </p>
+            <p class="update-build-note">{m.settings_update_notify_note()}</p>
           {:else if updatePreferences?.mode === "none"}
-            <p class="update-build-note">This build does not check for updates.</p>
+            <p class="update-build-note">{m.settings_update_none_note()}</p>
           {/if}
           {#if updateError}<p class="settings-error" role="alert">{updateError}</p>{/if}
         </section>{/if}
@@ -175,37 +232,39 @@
     {:else}
       <SearchModels onshowservicedetails={onclose} />
       <section class="settings-group" aria-labelledby="library-search-title">
-        <h2 id="library-search-title">Per library</h2>
+        <h2 id="library-search-title">{m.settings_per_library_heading()}</h2>
         <div class="row">
           <span class="setting-label"
-            >Image search, text recognition, and videos<small
-              >Chosen for each library in Library manager.</small
+            >{m.settings_library_search_label()}<small>{m.settings_library_search_note()}</small
             ></span
           >
-          <button class="ui-button" onclick={onmanagelibraries}>Library manager…</button>
+          <button class="ui-button" onclick={onmanagelibraries}
+            >{m.common_library_manager_ellipsis()}</button
+          >
         </div>
       </section>
       <section class="settings-group" aria-labelledby="tags-title">
-        <h2 id="tags-title">Tags</h2>
+        <h2 id="tags-title">{m.settings_tags_heading()}</h2>
         <label class="row"
           ><span class="setting-label"
-            >Hide offensive tags<small>Turn off to see every tag, for research.</small></span
+            >{m.settings_hide_offensive_tags()}<small>{m.settings_hide_offensive_tags_note()}</small
+            ></span
           ><input type="checkbox" bind:checked={$settings.hideOffensiveTags} /></label
         >
       </section>
       <section class="settings-group advanced-settings" aria-labelledby="advanced-search-title">
-        <h2 id="advanced-search-title">Advanced search settings</h2>
+        <h2 id="advanced-search-title">{m.settings_advanced_heading()}</h2>
         <div class="row segmented-row">
           <span class="setting-label"
-            >Execution provider<small
+            >{m.settings_execution_provider_label()}<small
               >{runtime.stoppingJobs && runtime.saving
-                ? "Stopping indexing…"
+                ? m.search_stopping_indexing()
                 : runtime.saving
-                  ? "Switching…"
-                  : jobNote || "Leave this unless indexing fails."}</small
+                  ? m.settings_execution_switching()
+                  : jobNote || m.settings_execution_provider_note()}</small
             ></span
           >
-          <div class="ui-choice-group" aria-label="Execution provider">
+          <div class="ui-choice-group" aria-label={m.settings_execution_provider_label()}>
             {#each availableExecutionProviders as provider (provider.id)}
               <button
                 class="ui-button"
@@ -236,10 +295,14 @@
     {/if}
   </div>
   <footer class="settings-help">
-    <span>New to Nicegal?</span>
-    <button class="ui-button" onclick={onshowintro}>Getting started</button>
+    <span>{m.settings_new_to_nicegal()}</span>
+    <button class="ui-button" onclick={onshowintro}>{m.settings_getting_started()}</button>
   </footer>
 </section>
+
+{#if languageRestartOpen}
+  <LanguageRestartDialog onclose={() => (languageRestartOpen = false)} />
+{/if}
 
 <style>
   .update-build-note {

@@ -45,6 +45,9 @@ jobs:
         with:
           cache-hit: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
 
+      - name: Install NASM for libjpeg-turbo
+        run: brew install nasm
+
       - name: Set up desktop build tools
         uses: ./.github/actions/desktop-tools
         with:

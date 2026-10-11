@@ -35,6 +35,7 @@ import type { UpdateBridge, UpdateStatus } from "../shared/updates";
 
 import { IPC_CHANNELS } from "../shared/ipc-channels";
 import { unwrapCallResult, type CallResult } from "../shared/ipc-error";
+import { LOCALE_ARG_PREFIX, type LanguageBridge } from "../shared/locale";
 
 /** Unwraps the handler's `CallResult` into a value or a thrown error, reported once here. */
 const invoke: typeof ipcRenderer.invoke = async (channel, ...args) => {
@@ -49,6 +50,9 @@ const invoke: typeof ipcRenderer.invoke = async (channel, ...args) => {
 const searchClient = crypto.randomUUID();
 let viewGeneration = 0;
 const debugFilePicker = process.argv.includes("--nicegal-debug-file-picker");
+const locale = process.argv
+  .find((arg) => arg.startsWith(LOCALE_ARG_PREFIX))
+  ?.slice(LOCALE_ARG_PREFIX.length);
 if (debugFilePicker) {
   contextBridge.executeInMainWorld({
     func: () => {
@@ -56,6 +60,12 @@ if (debugFilePicker) {
     },
   });
 }
+
+const language: LanguageBridge = {
+  getSettings: () => invoke(IPC_CHANNELS.language.settings),
+  setPreference: (locale) => invoke(IPC_CHANNELS.language.setPreference, locale),
+  restart: () => invoke(IPC_CHANNELS.language.restart),
+};
 
 const updates: UpdateBridge = {
   getPreferences: () => invoke(IPC_CHANNELS.updates.preferences),
@@ -267,7 +277,9 @@ contextBridge.exposeInMainWorld("nicegal", {
   backend,
   native,
   updates,
+  language,
   remote,
   isRemote: false,
+  locale,
   connection: { onReconnectingChanged: () => () => undefined },
 } satisfies NicegalBridge);

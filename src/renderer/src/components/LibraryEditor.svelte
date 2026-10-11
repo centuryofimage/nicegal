@@ -6,6 +6,7 @@
   import type { LibraryId } from "../../../shared/backend";
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { derivedLibraryName } from "../lib/catalog.svelte";
   import { cleanDiagnostic, errorMessage } from "../lib/errors";
@@ -15,7 +16,7 @@
     type ThumbnailBackfillOptions,
   } from "../lib/job-params";
   import { folderStatus, isWithin } from "../lib/library-status";
-  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
+  import { desktopOnlyTitle, isRemote } from "../lib/platform";
   import TechnicalDetails from "./TechnicalDetails.svelte";
   import ThumbnailFailures from "./ThumbnailFailures.svelte";
 
@@ -113,7 +114,7 @@
       error = "";
       if (include.some((path) => isWithin(path, folder) && isWithin(folder, path))) return;
       if (exclude.some((path) => isWithin(folder, path))) {
-        error = "That folder is excluded. Include it again instead.";
+        error = m.library_editor_folder_excluded();
         return;
       }
       include = [...include, folder];
@@ -138,7 +139,7 @@
       if (!folder) return;
       error = "";
       if (!include.some((path) => isWithin(folder, path) && !isWithin(path, folder))) {
-        error = "Choose a subfolder of one of this library's folders.";
+        error = m.library_editor_choose_subfolder();
         return;
       }
       if (!exclude.some((path) => isWithin(folder, path))) excludingFolder = folder;
@@ -164,12 +165,11 @@
   async function apply(): Promise<boolean> {
     if (!library || saving) return false;
     if (!include.length) {
-      error =
-        "A library needs at least one folder. To delete it, use Remove library in this dialog.";
+      error = m.library_editor_needs_folder();
       return false;
     }
     if (purgeFolders.length && jobs.running) {
-      error = "Wait for the current job to finish before deleting indexed folder data.";
+      error = m.library_editor_wait_for_job();
       return false;
     }
     saving = true;
@@ -190,7 +190,7 @@
         purgeFolders.length &&
         !(await orchestrator.purgeRemovedFolders(libraryId, purgeFolders))
       ) {
-        error = "Changes were saved, but deleting indexed data couldn't start. Try saving again.";
+        error = m.library_editor_purge_failed();
         return false;
       }
       resetDraft();
@@ -233,45 +233,47 @@
   }
 </script>
 
-<section class="library-editor" class:embedded aria-labelledby="library-editor-title">
+<section class="dialog-shell library-editor" class:embedded aria-labelledby="library-editor-title">
   <header>
-    <h1 id="library-editor-title">Edit “{library?.displayName ?? "library"}”</h1>
+    <h1 id="library-editor-title">
+      {m.library_editor_title({ name: library?.displayName ?? m.library_editor_fallback_name() })}
+    </h1>
   </header>
 
   {#if library}
-    <div class="scan-actions" aria-label="Library scan actions">
+    <div class="scan-actions" aria-label={m.library_editor_scan_actions_label()}>
       <button
         class="ui-button ui-button-compact"
         onclick={() => void scan()}
-        disabled={!ready || saving}>Rescan library</button
+        disabled={!ready || saving}>{m.common_rescan_library()}</button
       >
       <button
         class="ui-button ui-button-compact"
         onclick={() => void scan({ retryFailed: true })}
-        disabled={!ready || saving}>Retry failed files</button
+        disabled={!ready || saving}>{m.library_editor_retry_failed()}</button
       >
     </div>
   {/if}
 
   {#if !library}
-    <p class="attention">This library no longer exists.</p>
+    <p class="attention">{m.library_editor_missing()}</p>
   {:else}
     <div class="body">
       <label class="name-row">
-        <span>Name</span>
+        <span>{m.library_editor_name_label()}</span>
         <input
           type="text"
           bind:value={name}
           {placeholder}
           maxlength="200"
           disabled={readOnly}
-          title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
+          title={readOnly ? desktopOnlyTitle() : undefined}
         />
       </label>
 
-      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
-        <legend>Folders</legend>
-        <ul class="folder-list" aria-label="Included folders">
+      <fieldset disabled={readOnly} title={readOnly ? desktopOnlyTitle() : undefined}>
+        <legend>{m.library_editor_folders_legend()}</legend>
+        <ul class="folder-list" aria-label={m.library_editor_included_list_label()}>
           {#each include as path (path)}
             {@const saved = library.include.find((folder) => folder.path === path)}
             {@const status = folderStatus(saved)}
@@ -285,36 +287,42 @@
                 <button
                   class="ui-button ui-button-compact"
                   onclick={() => void scan({ pendingOnly: true })}
-                  disabled={!ready}>Retry</button
+                  disabled={!ready}>{m.library_editor_retry()}</button
                 >
               {/if}
               <button
                 class="folder-remove"
-                aria-label={`Remove ${path} from this library`}
+                aria-label={m.library_editor_remove_folder_label({ path })}
                 title={include.length === 1
-                  ? "Remove the library to remove its last folder"
-                  : "Remove folder from this library"}
+                  ? m.library_editor_remove_last_folder_title()
+                  : m.library_editor_remove_folder_title()}
                 disabled={include.length === 1}
                 onclick={() => (removingFolder = path)}><X size={14} aria-hidden="true" /></button
               >
             </li>
           {:else}
-            <li class="empty">No folders. Add one to keep this library.</li>
+            <li class="empty">{m.library_editor_no_folders()}</li>
           {/each}
         </ul>
         {#if removingFolder}
-          <div class="remove-folder-confirmation" role="group" aria-label="Remove folder">
-            <span>Remove {removingFolder} from this library?</span>
+          <div
+            class="remove-folder-confirmation"
+            role="group"
+            aria-label={m.library_editor_remove_folder_group()}
+          >
+            <span>{m.library_editor_remove_folder_confirm({ path: removingFolder })}</span>
             <button
               class="ui-button ui-button-compact"
-              onclick={() => removeFolder(removingFolder!, false)}>Keep indexed data</button
+              onclick={() => removeFolder(removingFolder!, false)}
+              >{m.library_editor_keep_indexed_data()}</button
             >
             <button
               class="ui-button ui-button-compact"
-              onclick={() => removeFolder(removingFolder!, true)}>Delete indexed data</button
+              onclick={() => removeFolder(removingFolder!, true)}
+              >{m.library_editor_delete_indexed_data()}</button
             >
             <button class="ui-button ui-button-compact" onclick={() => (removingFolder = null)}
-              >Cancel</button
+              >{m.common_cancel()}</button
             >
           </div>
         {/if}
@@ -322,31 +330,34 @@
           <button
             class="ui-button ui-button-compact"
             onclick={addFolder}
-            title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
-            disabled={readOnly}><Plus size={13} aria-hidden="true" /> Add folder…</button
+            title={readOnly ? desktopOnlyTitle() : undefined}
+            disabled={readOnly}
+            ><Plus size={13} aria-hidden="true" /> {m.library_editor_add_folder()}</button
           >
           {#if include.length === 1}
-            <span class="hint">You can add another folder to this library.</span>
+            <span class="hint">{m.library_editor_add_another_hint()}</span>
           {/if}
         </div>
       </fieldset>
 
-      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
-        <legend>Excluded folders</legend>
-        <p class="hint">Hidden from this library and skipped by future scans.</p>
+      <fieldset disabled={readOnly} title={readOnly ? desktopOnlyTitle() : undefined}>
+        <legend>{m.library_editor_excluded_legend()}</legend>
+        <p class="hint">{m.library_editor_excluded_hint()}</p>
         {#if exclude.length}
-          <ul class="folder-list" aria-label="Excluded folders">
+          <ul class="folder-list" aria-label={m.library_editor_excluded_legend()}>
             {#each exclude as path (path)}
               <li>
                 <div class="folder-value">
                   <Folder size={13} aria-hidden="true" />
                   <span class="path" title={path}>{path}</span>
-                  {#if !library.exclude.includes(path)}<span class="status">Added</span>{/if}
+                  {#if !library.exclude.includes(path)}<span class="status"
+                      >{m.library_editor_added_status()}</span
+                    >{/if}
                 </div>
                 <button
                   class="folder-remove"
-                  aria-label={`Include ${path} again`}
-                  title="Remove exclusion and include this folder again"
+                  aria-label={m.library_editor_include_again_label({ path })}
+                  title={m.library_editor_include_again_title()}
                   onclick={() => includeAgain(path)}><X size={14} aria-hidden="true" /></button
                 >
               </li>
@@ -354,18 +365,24 @@
           </ul>
         {/if}
         {#if excludingFolder}
-          <div class="remove-folder-confirmation" role="group" aria-label="Exclude folder">
-            <span>Exclude {excludingFolder} from this library?</span>
+          <div
+            class="remove-folder-confirmation"
+            role="group"
+            aria-label={m.library_editor_exclude_folder_group()}
+          >
+            <span>{m.library_editor_exclude_confirm({ path: excludingFolder })}</span>
             <button
               class="ui-button ui-button-compact"
-              onclick={() => addExclusion(excludingFolder!, false)}>Keep indexed data</button
+              onclick={() => addExclusion(excludingFolder!, false)}
+              >{m.library_editor_keep_indexed_data()}</button
             >
             <button
               class="ui-button ui-button-compact"
-              onclick={() => addExclusion(excludingFolder!, true)}>Delete indexed data</button
+              onclick={() => addExclusion(excludingFolder!, true)}
+              >{m.library_editor_delete_indexed_data()}</button
             >
             <button class="ui-button ui-button-compact" onclick={() => (excludingFolder = null)}
-              >Cancel</button
+              >{m.common_cancel()}</button
             >
           </div>
         {/if}
@@ -373,43 +390,44 @@
           <button
             class="ui-button ui-button-compact"
             onclick={excludeFolder}
-            title={readOnly ? DESKTOP_ONLY_TITLE : undefined}
+            title={readOnly ? desktopOnlyTitle() : undefined}
             disabled={!include.length || readOnly}
-            ><Plus size={13} aria-hidden="true" /> Exclude folder…</button
+            ><Plus size={13} aria-hidden="true" /> {m.library_editor_exclude_folder()}</button
           >
         </div>
       </fieldset>
 
-      <fieldset disabled={readOnly} title={readOnly ? DESKTOP_ONLY_TITLE : undefined}>
-        <legend>Search</legend>
-        <label class="check"><input type="checkbox" bind:checked={image} /> Image search</label>
+      <fieldset disabled={readOnly} title={readOnly ? desktopOnlyTitle() : undefined}>
+        <legend>{m.library_editor_search_legend()}</legend>
+        <label class="check"
+          ><input type="checkbox" bind:checked={image} /> {m.library_status_image_search()}</label
+        >
         <label class="check indent"
-          ><input type="checkbox" bind:checked={videos} disabled={!image} /> Include videos</label
+          ><input type="checkbox" bind:checked={videos} disabled={!image} />
+          {m.library_editor_include_videos()}</label
         >
         <label class="check"
-          ><input type="checkbox" bind:checked={ocr} aria-describedby={hintId} /> Text recognition</label
+          ><input type="checkbox" bind:checked={ocr} aria-describedby={hintId} />
+          {m.library_status_text_recognition()}</label
         >
         <p class="hint indent" id={hintId}>
-          About 10× slower than image search, but good for precise text searches. Models download
-          automatically; pictures stay on your computer.
+          {m.library_editor_ocr_hint()}
         </p>
         <div class="list-actions">
           <button class="ui-button ui-button-compact" onclick={onopensearchsettings}
-            >Search settings…</button
+            >{m.common_search_settings_ellipsis()}</button
           >
-          <span class="hint"
-            >Choose the image model and execution provider; applies to all libraries.</span
-          >
+          <span class="hint">{m.library_editor_search_settings_hint()}</span>
         </div>
       </fieldset>
 
       <details>
-        <summary>Advanced</summary>
+        <summary>{m.library_editor_advanced()}</summary>
         <div class="advanced">
           <section aria-labelledby="thumbnail-heading">
-            <h2 id="thumbnail-heading">Thumbnails</h2>
+            <h2 id="thumbnail-heading">{m.library_editor_thumbnails_heading()}</h2>
             <p class="hint">
-              Thumbnails are generated on demand. Pre-generate only if you need them.
+              {m.library_editor_thumbnails_hint()}
             </p>
             <div class="advanced-row">
               {#each bucketOptions as bucket (bucket)}
@@ -419,28 +437,30 @@
                     checked={selectedBuckets.includes(bucket)}
                     onchange={() => toggleBucket(bucket)}
                   />
-                  {bucket}px
+                  {m.library_editor_thumbnail_size({ size: bucket })}
                 </label>
               {/each}
               <label class="check"
-                ><input type="checkbox" bind:checked={limitToRange} /> Date range</label
+                ><input type="checkbox" bind:checked={limitToRange} />
+                {m.library_editor_date_range()}</label
               >
             </div>
             {#if limitToRange}
               <div class="advanced-row">
-                <label>From <input type="date" bind:value={fromDate} /></label>
-                <label>To <input type="date" bind:value={toDate} /></label>
+                <label>{m.library_editor_from()} <input type="date" bind:value={fromDate} /></label>
+                <label>{m.library_editor_to()} <input type="date" bind:value={toDate} /></label>
               </div>
             {/if}
             <button
               class="ui-button ui-button-compact"
               onclick={startBackfill}
-              disabled={!ready || jobs.running || selectedBuckets.length === 0}>Generate</button
+              disabled={!ready || jobs.running || selectedBuckets.length === 0}
+              >{m.library_editor_generate()}</button
             >
           </section>
           <ThumbnailFailures failures={thumbnailFailures} onretry={onretrythumbnails} />
           {#if diagnostic}
-            <TechnicalDetails text={diagnostic} summary="Scan error details" />
+            <TechnicalDetails text={diagnostic} summary={m.library_editor_scan_error_details()} />
           {/if}
         </div>
       </details>
@@ -450,8 +470,7 @@
   {#if error || changeCount}
     <footer>
       <span class={["footer-status", { attention: Boolean(error) }]} role="status">
-        {error ||
-          `${changeCount} ${changeCount === 1 ? "change" : "changes"} · saves when you leave this view`}
+        {error || m.library_editor_changes_status({ count: changeCount })}
       </span>
     </footer>
   {/if}
@@ -461,13 +480,7 @@
   .library-editor {
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
-    width: 100%;
     max-height: min(var(--dialog-max-height), 100%);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
-    color: var(--text-primary);
     font-size: var(--font-size-md);
   }
   .library-editor.embedded {

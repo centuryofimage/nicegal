@@ -1,13 +1,15 @@
 <script lang="ts">
+  import { ParaglideMessage } from "@inlang/paraglide-js-svelte";
   import { onMount } from "svelte";
 
-  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
+  import { m } from "../../../shared/paraglide/messages.js";
+  import { desktopOnlyTitle, isRemote } from "../lib/platform";
   import AppMessage from "./AppMessage.svelte";
 
   const BUG_REPORT_URL = "https://github.com/centuryofimage/nicegal/issues";
 
   let { error }: { error: string } = $props();
-  let recentLog = $state("Loading recent log lines…");
+  let recentLog = $state<string>(m.backend_failure_loading_log());
   let restarting = $state(false);
   let restartError = $state<string | null>(null);
   let collecting = $state(false);
@@ -23,7 +25,9 @@
       })
       .catch((cause: unknown) => {
         if (!disposed)
-          recentLog = `Couldn't read recent log lines: ${cause instanceof Error ? cause.message : String(cause)}`;
+          recentLog = m.backend_failure_read_log_failed({
+            reason: cause instanceof Error ? cause.message : String(cause),
+          });
       });
     return () => {
       disposed = true;
@@ -63,33 +67,42 @@
 </script>
 
 <AppMessage
-  title="Gallery service unavailable"
-  guidance="The gallery service couldn't start or stopped unexpectedly. Restart it. If it fails again, restart the app."
+  title={m.backend_failure_title()}
+  guidance={m.backend_failure_guidance()}
   message={`${error}\n\nRecent backend log lines:\n${recentLog}`}
   placement="overlay"
 >
   <div class="crash-report">
     <div class="crash-actions">
       <button class="ui-button" type="button" onclick={restartServer} disabled={restarting}>
-        {restarting ? "Restarting…" : "Restart service"}
+        {restarting ? m.backend_failure_restarting() : m.backend_failure_restart_service()}
       </button>
       <button
         class="ui-button"
         type="button"
         onclick={collectDiagnostics}
-        title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
+        title={isRemote() ? desktopOnlyTitle() : undefined}
         disabled={collecting || isRemote()}
       >
-        {collecting ? "Collecting…" : "Collect diagnostics"}
+        {collecting ? m.common_collecting_diagnostics() : m.common_collect_diagnostics()}
       </button>
     </div>
     <p>
-      To report the problem, attach the diagnostics zip to a
-      <a href={BUG_REPORT_URL} onclick={openBugReport}>bug report</a>.
+      <ParaglideMessage message={m.backend_failure_report_problem} inputs={{}}>
+        {#snippet link({ children })}
+          <a href={BUG_REPORT_URL} onclick={openBugReport}>{@render children?.()}</a>
+        {/snippet}
+      </ParaglideMessage>
     </p>
-    {#if savedPath}<p role="status">Diagnostics saved to {savedPath}</p>{/if}
-    {#if restartError}<p role="alert">Couldn't restart the service: {restartError}</p>{/if}
-    {#if collectionError}<p role="alert">Couldn't save diagnostics: {collectionError}</p>{/if}
+    {#if savedPath}<p role="status">
+        {m.backend_failure_diagnostics_saved({ path: savedPath })}
+      </p>{/if}
+    {#if restartError}<p role="alert">
+        {m.backend_failure_restart_failed({ reason: restartError })}
+      </p>{/if}
+    {#if collectionError}<p role="alert">
+        {m.backend_failure_save_diagnostics_failed({ reason: collectionError })}
+      </p>{/if}
   </div>
 </AppMessage>
 

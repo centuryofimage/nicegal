@@ -1,90 +1,114 @@
 <script lang="ts">
+  import type { Snippet } from "svelte";
+
+  import { ParaglideMessage } from "@inlang/paraglide-js-svelte";
+
+  import { m } from "../../../shared/paraglide/messages.js";
   import searchMenuGuide from "../assets/guide/search-menu.png";
   import visualSearchGuide from "../assets/guide/visual-search.png";
 
   let { onclose, onadd }: { onclose: () => void; onadd: () => void } = $props();
 </script>
 
-<div class="welcome-splash">
-  <h1 id="welcome-splash-title">Welcome to Nicegal</h1>
-  <p id="welcome-splash-description">
-    Browse photo and video folders and find files by name, text, or appearance.
-  </p>
+{#snippet b({ children }: { children?: Snippet })}<b>{@render children?.()}</b>{/snippet}
+{#snippet code({ children }: { children?: Snippet })}<code>{@render children?.()}</code>{/snippet}
+
+<div class="dialog-shell welcome-splash">
+  <h1 id="welcome-splash-title">{m.getting_started_title()}</h1>
+  <p id="welcome-splash-description">{m.getting_started_description()}</p>
   <ol class="themed-scrollbar">
     <li>
-      <strong>Add a folder</strong>
-      <span
-        >Choose <b>Add a folder</b> below, or use <b>Library manager</b>. Your files stay where they
-        are.</span
-      >
-      <span
-        >Visual search is set up automatically. The first run downloads a search model; your files
-        stay on your computer.</span
-      >
-      <span>Larger models search more accurately. Pick one in <b>Settings → Search</b>.</span>
-      <span>For words inside pictures, turn on <b>Text recognition</b> in Library manager.</span>
+      <strong>{m.getting_started_add_folder()}</strong>
+      <span>
+        <ParaglideMessage message={m.getting_started_add_folder_instructions} inputs={{}} {b} />
+      </span>
+      <span>{m.getting_started_visual_search_setup()}</span>
+      <span>
+        <ParaglideMessage message={m.getting_started_larger_models} inputs={{}} {b} />
+      </span>
+      <span>
+        <ParaglideMessage message={m.getting_started_text_recognition_tip} inputs={{}} {b} />
+      </span>
     </li>
     <li>
-      <strong>Choose what to search</strong>
+      <strong>{m.getting_started_choose_what_to_search()}</strong>
       <div class="welcome-search-menu">
         <img
           src={searchMenuGuide}
           width="216"
           height="125"
-          alt="Search menu with All, Visual search, and File name above Exact text and Related text"
+          alt={m.getting_started_search_menu_image_alt()}
         />
         <div>
-          <p>Use the search menu, or type a prefix:</p>
+          <p>{m.getting_started_search_menu_intro()}</p>
           <ul class="search-types">
             <li>
-              <b>Visual search</b> (<code>like:</code>): describe a photo or video, or use an
-              example image.
+              <ParaglideMessage
+                message={m.getting_started_search_type_visual}
+                inputs={{}}
+                {b}
+                {code}
+              />
             </li>
             <li>
-              <b>Exact text</b> (<code>ocr:</code>): words inside pictures.
+              <ParaglideMessage
+                message={m.getting_started_search_type_exact}
+                inputs={{}}
+                {b}
+                {code}
+              />
             </li>
             <li>
-              <b>Related text</b> (<code>meaning:</code>): similar wording or meaning.
+              <ParaglideMessage
+                message={m.getting_started_search_type_related}
+                inputs={{}}
+                {b}
+                {code}
+              />
             </li>
           </ul>
           <p>
-            <b>All</b> combines available searches; <b>File name</b> searches names only. Exact and related
-            text need text recognition.
+            <ParaglideMessage message={m.getting_started_search_menu_options} inputs={{}} {b} />
           </p>
           <p>
-            <b>Relevance</b> groups results; <b>Date</b> puts them on a timeline.
-            <b>Visual similarity</b> narrows visual matches. Try <code>during:2020-12</code>
-            to limit a search to a month.
+            <ParaglideMessage
+              message={m.getting_started_sort_and_filter_help}
+              inputs={{}}
+              {b}
+              {code}
+            />
           </p>
         </div>
       </div>
     </li>
     <li>
-      <strong>Build a visual search</strong>
-      <span
-        >Right-click a file: <b>Find similar images</b> starts a search;
-        <b>Add to visual search</b> adds another example.</span
-      >
+      <strong>{m.getting_started_build_visual_search()}</strong>
+      <span>
+        <ParaglideMessage message={m.getting_started_visual_search_steps} inputs={{}} {b} />
+      </span>
       <figure>
         <img
           src={visualSearchGuide}
           width="320"
           height="66"
-          alt="Visual search composer with sunset weighted 2.00 and crowds weighted −1.00"
+          alt={m.getting_started_visual_search_image_alt()}
         />
         <figcaption>
-          <b>Compose visual search</b> mixes descriptions and images. Adjust weights for more or less
-          of each. Results update as you edit.
+          <ParaglideMessage message={m.getting_started_compose_caption} inputs={{}} {b} />
         </figcaption>
       </figure>
     </li>
   </ol>
   <div class="welcome-splash-actions">
-    <span>Reopen this guide from <b>Settings → Getting started</b>.</span>
-    <button class="ui-button ui-button-compact" type="button" onclick={onclose}>Close</button>
-    <button class="ui-button ui-button-compact ui-button-primary" type="button" onclick={onadd}
-      >Add a folder</button
-    >
+    <span>
+      <ParaglideMessage message={m.getting_started_reopen_hint} inputs={{}} {b} />
+    </span>
+    <button class="ui-button ui-button-compact" type="button" onclick={onclose}>
+      {m.common_close()}
+    </button>
+    <button class="ui-button ui-button-compact ui-button-primary" type="button" onclick={onadd}>
+      {m.getting_started_add_folder()}
+    </button>
   </div>
 </div>
 
@@ -93,13 +117,8 @@
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - var(--space-16) * 2);
-    width: 100%;
-    box-sizing: border-box;
     padding: var(--space-16);
-    border: 1px solid var(--border-strong);
     border-radius: var(--radius-md);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
   }
   .welcome-splash h1 {
     margin: 0;

@@ -1,5 +1,7 @@
 import type { EnsureThumbnailsRequest, EnsureThumbnailsResponse } from "../../../../shared/backend";
 
+import { m } from "../../../../shared/paraglide/messages.js";
+
 export interface ThumbnailMiss {
   assetId: string;
   width: number;
@@ -189,12 +191,7 @@ export function createThumbnailScheduler(options: ThumbnailSchedulerOptions): Th
         return false;
       }
       if ((attempts.get(miss.assetId) ?? 0) >= options.maxAttempts) {
-        fail(
-          miss.assetId,
-          new Error(
-            "Thumbnail could not be loaded after generation. The poster may be missing or unreadable.",
-          ),
-        );
+        fail(miss.assetId, new Error(m.thumbnail_generation_failed_message()));
         return false;
       }
       pending.set(miss.assetId, miss);

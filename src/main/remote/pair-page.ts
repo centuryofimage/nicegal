@@ -1,15 +1,18 @@
+import { m } from "../../shared/paraglide/messages.js";
+import { getLocale } from "../../shared/paraglide/runtime.js";
+
 /** The only page an unpaired browser can load. Plain form post, no script. */
 export function pairPage(options: { deviceName: string; error?: string }): string {
   const error = options.error
     ? `<p class="error" role="alert">${escapeHtml(options.error)}</p>`
     : "";
   return `<!doctype html>
-<html lang="en">
+<html lang="${getLocale()}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>Connect to Nicegal</title>
+<title>${m.remote_pair_heading()}</title>
 <style>
   :root { --bg: #f0f0f0; --panel: #fff; --text: #1a1a1a; --muted: #5c5c5c; --border: #adadad;
     --accent: #0067c0; --accent-text: #fff; --error: #c42b1c; }
@@ -36,17 +39,21 @@ export function pairPage(options: { deviceName: string; error?: string }): strin
 </head>
 <body>
 <form method="post" action="/pair">
-  <h1>Connect to Nicegal</h1>
-  <p>On your PC, open Settings, then Remote access, and select Pair a device.</p>
+  <h1>${m.remote_pair_heading()}</h1>
+  <p>${m.remote_pair_instructions({
+    settings: m.common_settings(),
+    remoteAccess: m.common_remote_access(),
+    pairDevice: m.remote_access_pair_device(),
+  })}</p>
   ${error}
-  <label>Pairing code
+  <label>${m.common_pairing_code()}
     <input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}"
       maxlength="6" required autofocus>
   </label>
-  <label>Name for this device
+  <label>${m.remote_pair_device_name_label()}
     <input name="name" maxlength="60" value="${escapeHtml(options.deviceName)}" required>
   </label>
-  <button type="submit">Connect</button>
+  <button type="submit">${m.remote_pair_connect_button()}</button>
 </form>
 </body>
 </html>`;
@@ -61,7 +68,7 @@ export function guessBrowser(userAgent: string | undefined): string {
   if (/Firefox\/|FxiOS\//.test(ua)) return "Firefox";
   if (/Chrome\/|CriOS\//.test(ua)) return "Chrome";
   if (/Safari\//.test(ua)) return "Safari";
-  return "Browser";
+  return m.remote_browser_name_unknown();
 }
 
 /** A readable default name, e.g. "iPhone" or "Android phone", from the browser's user agent. */
@@ -69,11 +76,12 @@ export function guessDeviceName(userAgent: string | undefined): string {
   const ua = userAgent ?? "";
   if (/iPhone/.test(ua)) return "iPhone";
   if (/iPad/.test(ua)) return "iPad";
-  if (/Android/.test(ua)) return /Mobile/.test(ua) ? "Android phone" : "Android tablet";
+  if (/Android/.test(ua))
+    return /Mobile/.test(ua) ? m.remote_device_android_phone() : m.remote_device_android_tablet();
   if (/Macintosh/.test(ua)) return "Mac";
-  if (/Windows/.test(ua)) return "Windows PC";
-  if (/Linux/.test(ua)) return "Linux PC";
-  return "Browser";
+  if (/Windows/.test(ua)) return m.remote_device_windows_pc();
+  if (/Linux/.test(ua)) return m.remote_device_linux_pc();
+  return m.remote_device_name_unknown();
 }
 
 function escapeHtml(text: string): string {

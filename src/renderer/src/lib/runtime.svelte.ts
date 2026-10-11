@@ -5,6 +5,7 @@ import type {
   SearchModelsResponse,
 } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { errorCode, errorMessage } from "./errors";
 
 /**
@@ -206,6 +207,6 @@ export class RuntimeController {
 /** The backend refuses a switch while a job runs; that happens only if one started meanwhile. */
 function switchErrorMessage(error: unknown): string {
   return errorCode(error) === "job_busy"
-    ? "A job started before the switch. Try again."
+    ? m.runtime_job_started_before_switch()
     : errorMessage(error);
 }

@@ -8,6 +8,7 @@
 
   import type { GalleryItem } from "../lib/gallery/types";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { errorMessage } from "../lib/errors";
   import { originalUrlOf } from "../lib/gallery/types";
   import { overlayHistory } from "../lib/overlay-history";
@@ -24,6 +25,14 @@
   } = $props();
 
   const single = $derived(items.length === 1 ? items[0] : null);
+  const title = $derived(
+    single ? single.displayName : m.file_action_items_count({ count: items.length }),
+  );
+  const addLabel = $derived(
+    single
+      ? m.common_add_to_visual_search()
+      : m.file_action_add_count_to_visual_search({ count: items.length }),
+  );
 
   // Only a tap that starts on the backdrop closes the sheet. The finger that long-pressed to open
   // it lifts after it appears, and that release must not count.
@@ -41,6 +50,12 @@
 
   // Sharing the file itself needs HTTPS and a browser that shares files; elsewhere the row is
   // left out rather than failing.
+  const shareLabel = $derived.by(() => {
+    if (status.kind === "preparing") return m.file_action_preparing();
+    if (status.kind === "ready") return m.file_action_ready_tap_to_share();
+    return m.file_action_share();
+  });
+
   const canShareFiles =
     typeof navigator.canShare === "function" &&
     navigator.canShare({ files: [new File([""], "probe.jpg", { type: "image/jpeg" })] });
@@ -56,7 +71,7 @@
 
   async function fetchBlob(item: GalleryItem): Promise<Blob> {
     const response = await fetch(originalUrlOf(item), { signal: downloads.signal });
-    if (!response.ok) throw new Error(`Couldn't load the file (${response.status}).`);
+    if (!response.ok) throw new Error(m.file_action_couldnt_load_file({ status: response.status }));
     return response.blob();
   }
 
@@ -80,7 +95,7 @@
     bitmap.close();
     return new Promise((resolve, reject) =>
       canvas.toBlob(
-        (png) => (png ? resolve(png) : reject(new Error("Couldn't convert the image."))),
+        (png) => (png ? resolve(png) : reject(new Error(m.file_action_couldnt_convert_image()))),
         "image/png",
       ),
     );
@@ -95,7 +110,7 @@
         file = new File([blob], item.displayName, { type: blob.type });
       }
       if (!navigator.canShare({ files: [file] })) {
-        status = { kind: "error", message: "This browser can't share this type of file." };
+        status = { kind: "error", message: m.file_action_cant_share_file_type() };
         return;
       }
       await navigator.share({ files: [file] });
@@ -127,7 +142,7 @@
 <!-- A bottom sheet for touch: the phone's equivalent of the desktop's native file menu. -->
 <dialog
   class="file-sheet"
-  aria-label={single ? single.displayName : `${items.length} items`}
+  aria-label={title}
   {@attach present}
   oncancel={(event) => {
     event.preventDefault();
@@ -140,7 +155,7 @@
   }}
 >
   <div class="sheet">
-    <p class="sheet-title">{single ? single.displayName : `${items.length} items`}</p>
+    <p class="sheet-title">{title}</p>
     <div class="sheet-actions">
       {#if single}
         {#if canShareFiles}
@@ -149,43 +164,40 @@
             type="button"
             disabled={status.kind === "preparing"}
             onclick={() => shareItem(single)}
-            ><Share size={16} aria-hidden="true" />{status.kind === "preparing"
-              ? "Preparing…"
-              : status.kind === "ready"
-                ? "Ready. Tap to share"
-                : "Share…"}</button
+            ><Share size={16} aria-hidden="true" />{shareLabel}</button
           >
         {/if}
         {#if canCopyImages && single.mediaKind === "image"}
           <button class="sheet-row" type="button" onclick={() => copyImage(single)}
-            ><Copy size={16} aria-hidden="true" />Copy image</button
+            ><Copy size={16} aria-hidden="true" />{m.file_action_copy_image()}</button
           >
         {/if}
         <a
           class="sheet-row"
           href={originalUrlOf(single)}
           download={single.displayName}
-          onclick={onclose}><Download size={16} aria-hidden="true" />Download</a
+          onclick={onclose}><Download size={16} aria-hidden="true" />{m.file_action_download()}</a
         >
         <a
           class="sheet-row"
           href={originalUrlOf(single)}
           target="_blank"
           rel="noopener"
-          onclick={onclose}><ExternalLink size={16} aria-hidden="true" />Open in new tab</a
+          onclick={onclose}
+          ><ExternalLink size={16} aria-hidden="true" />{m.file_action_open_in_new_tab()}</a
         >
       {/if}
       <button class="sheet-row" type="button" onclick={() => act(() => onvisualsearch(true))}
-        ><ScanSearch size={16} aria-hidden="true" />Find similar images</button
+        ><ScanSearch size={16} aria-hidden="true" />{m.common_find_similar()}</button
       >
       <button class="sheet-row" type="button" onclick={() => act(() => onvisualsearch(false))}
-        ><ImagePlus size={16} aria-hidden="true" />{single
-          ? "Add to visual search"
-          : `Add ${items.length} to visual search`}</button
+        ><ImagePlus size={16} aria-hidden="true" />{addLabel}</button
       >
     </div>
     {#if status.kind === "error"}<p class="sheet-error" role="alert">{status.message}</p>{/if}
-    <button class="sheet-row sheet-cancel" type="button" onclick={onclose}>Cancel</button>
+    <button class="sheet-row sheet-cancel" type="button" onclick={onclose}
+      >{m.common_cancel()}</button
+    >
   </div>
 </dialog>
 

@@ -3,7 +3,17 @@ import eslintPluginSvelte from "eslint-plugin-svelte";
 import { defineConfig } from "eslint/config";
 
 export default defineConfig(
-  { ignores: ["**/node_modules", "**/dist", "**/out", "**/.venv/**", "nicegal-server"] },
+  {
+    ignores: [
+      "**/node_modules",
+      "**/dist",
+      "**/out",
+      "**/.venv/**",
+      "nicegal-server",
+      "src/shared/paraglide",
+      "projects",
+    ],
+  },
   tseslint.configs.recommended,
   eslintPluginSvelte.configs["flat/recommended"],
   {

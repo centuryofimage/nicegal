@@ -7,6 +7,7 @@
 
   import type { FolderEntry, LibraryId } from "../../../shared/backend";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import {
     buildFolderTree,
@@ -42,8 +43,16 @@
   } = $props();
 
   const SORT_OPTIONS: ReadonlyArray<{ value: FolderSort; label: string; title: string }> = [
-    { value: "name", label: "Name", title: "Sort folders by name" },
-    { value: "newest", label: "Newest", title: "Most recently changed folders first" },
+    {
+      value: "name",
+      label: m.libraries_pane_sort_name(),
+      title: m.libraries_pane_sort_name_title(),
+    },
+    {
+      value: "newest",
+      label: m.libraries_pane_sort_newest(),
+      title: m.libraries_pane_sort_newest_title(),
+    },
   ];
   /** The "All folders" row's place in the keyboard cursor, beside real folder paths. */
   const ALL = "";
@@ -90,7 +99,7 @@
       .catch(() => {
         if (!current) return;
         const previous = loadedFolders?.libraryId === libraryId ? loadedFolders.entries : [];
-        loadedFolders = { libraryId, entries: previous, error: "Couldn't load folders." };
+        loadedFolders = { libraryId, entries: previous, error: m.libraries_pane_folders_error() };
       });
     return () => {
       current = false;
@@ -319,7 +328,7 @@
 <aside
   id="libraries-pane"
   class="libraries-pane"
-  aria-label="Libraries"
+  aria-label={m.common_libraries()}
   {hidden}
   style:--libraries-pane-width={`${width}px`}
 >
@@ -332,11 +341,11 @@
       onclick={() => (menuOpen = !menuOpen)}
       disabled={!catalog.libraries.length}
     >
-      <span class="library-name">{selected?.displayName ?? "No library"}</span>
+      <span class="library-name">{selected?.displayName ?? m.common_no_library()}</span>
       <ChevronDown size={12} aria-hidden="true" />
     </button>
     {#if menuOpen}
-      <div class="library-menu" role="menu" aria-label="Libraries">
+      <div class="library-menu" role="menu" aria-label={m.common_libraries()}>
         {#each catalog.libraries as library (library.id)}
           <button
             role="menuitemradio"
@@ -358,11 +367,11 @@
         <div class="separator" role="separator"></div>
         <button role="menuitem" onclick={() => choose(onscan)} disabled={!ready || !selected}>
           <span class="mark" aria-hidden="true"></span>
-          <span class="label">Rescan library</span>
+          <span class="label">{m.common_rescan_library()}</span>
         </button>
         <button role="menuitem" onclick={() => choose(onmanage)}>
           <span class="mark" aria-hidden="true"></span>
-          <span class="label">Library manager</span>
+          <span class="label">{m.common_library_manager()}</span>
         </button>
       </div>
     {/if}
@@ -375,8 +384,8 @@
         bind:value={filter}
         class="folder-filter"
         type="search"
-        placeholder="Filter"
-        aria-label="Filter folders"
+        placeholder={m.libraries_pane_filter_placeholder()}
+        aria-label={m.libraries_pane_filter_label()}
         spellcheck="false"
         onkeydown={onFilterKeydown}
       />
@@ -386,7 +395,7 @@
           (folderSort) => settings.update((value) => ({ ...value, folderSort }))
         }
         options={SORT_OPTIONS}
-        label="Sort folders"
+        label={m.libraries_pane_sort_label()}
         --segment-height="var(--tree-row-height)"
       />
     </div>
@@ -396,7 +405,7 @@
     bind:this={treeElement}
     class="folders themed-scrollbar"
     role="tree"
-    aria-label="Folders"
+    aria-label={m.libraries_pane_tree_label()}
     tabindex="0"
     aria-activedescendant={selected ? rowId(cursorIndex) : undefined}
     onkeydown={onTreeKeydown}
@@ -416,7 +425,7 @@
       >
         <span class="expander"></span>
         <span class="root-icon"><Folders size={14} aria-hidden="true" /></span>
-        <span class="folder-name">All folders</span>
+        <span class="folder-name">{m.libraries_pane_all_folders()}</span>
       </div>
       {#each rows as row, index (row.node.path)}
         {@const root = selected.include.find((folder) => folder.path === row.node.path)}
@@ -467,17 +476,17 @@
         </div>
       {/each}
       {#if filtering && !rows.length}
-        <p class="folder-note" role="status">No folders match.</p>
+        <p class="folder-note" role="status">{m.libraries_pane_no_match()}</p>
       {/if}
       {#if jobs.scanState(selected.id) && folders.length <= selected.include.length}
-        <p class="folder-note" role="status">Discovering folders…</p>
+        <p class="folder-note" role="status">{m.libraries_pane_discovering()}</p>
       {/if}
       {#if folderError}<p class="folder-note" role="status">{folderError}</p>{/if}
     {:else if catalog.librariesLoaded}
       <p class="folder-note">
         {catalog.librariesError
-          ? "Couldn't load libraries."
-          : "Use Library manager to add a folder."}
+          ? m.libraries_pane_libraries_error()
+          : m.libraries_pane_add_folder_hint()}
       </p>
     {/if}
   </div>
@@ -496,12 +505,12 @@
     class={["splitter", { dragging: dragWidth !== null }]}
     role="separator"
     aria-orientation="vertical"
-    aria-label="Resize libraries pane"
+    aria-label={m.libraries_pane_splitter_label()}
     aria-valuenow={width}
     aria-valuemin={WIDTH.min}
     aria-valuemax={WIDTH.max}
     tabindex="0"
-    title="Drag to resize. Double-click to reset."
+    title={m.libraries_pane_splitter_title()}
     onpointerdown={onSplitterPointerdown}
     onpointermove={onSplitterPointermove}
     onlostpointercapture={onSplitterRelease}

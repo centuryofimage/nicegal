@@ -9,11 +9,13 @@ import type {
   NativeBridge,
   NicegalBridge,
 } from "../../../shared/backend";
+import type { LanguageBridge } from "../../../shared/locale";
 import type { RemoteAccessBridge } from "../../../shared/remote";
 import type { UpdateBridge } from "../../../shared/updates";
 
 import { IPC_CHANNELS } from "../../../shared/ipc-channels";
 import { unwrapCallResult, type CallResult } from "../../../shared/ipc-error";
+import { m } from "../../../shared/paraglide/messages.js";
 import { REMOTE_CLIENT_HEADER, type RemoteEvent } from "../../../shared/remote";
 import { visualFileBase64 } from "./visual-file";
 
@@ -67,11 +69,11 @@ export function createRemoteBridge(): NicegalBridge {
           signal: POLLED_CHANNELS.has(channel) ? AbortSignal.timeout(POLL_TIMEOUT_MS) : undefined,
         });
       } catch (cause) {
-        throw new Error("Can't reach Nicegal on your PC.", { cause });
+        throw new Error(m.remote_cannot_reach_pc(), { cause });
       }
       if (response.status === 401) {
         location.assign("/pair");
-        throw new Error("This device is no longer paired.");
+        throw new Error(m.remote_device_unpaired());
       }
       if (!response.ok)
         throw new Error((await response.text()) || `Request failed (${response.status})`);
@@ -201,15 +203,15 @@ export function createRemoteBridge(): NicegalBridge {
     },
   };
 
-  const atThePc = (action: string) => (): Promise<never> =>
-    Promise.reject(new Error(`${action} on the PC running Nicegal.`));
+  const atThePc = (message: () => string) => (): Promise<never> =>
+    Promise.reject(new Error(message()));
   const native: NativeBridge = {
     getAppInfo: () => call(IPC_CHANNELS.native.appInfo),
     recentBackendLog: () => call(IPC_CHANNELS.native.recentBackendLog),
-    collectDiagnostics: atThePc("Save diagnostics"),
-    openLicenseInformation: atThePc("Open license information"),
-    chooseDirectory: atThePc("Choose folders"),
-    prepareFileDrag: atThePc("Drag files"),
+    collectDiagnostics: atThePc(() => m.remote_at_pc_save_diagnostics()),
+    openLicenseInformation: atThePc(() => m.remote_at_pc_open_license_information()),
+    chooseDirectory: atThePc(() => m.remote_at_pc_choose_folders()),
+    prepareFileDrag: atThePc(() => m.remote_at_pc_drag_files()),
     openExternalUrl: async (url) => {
       window.open(url, "_blank", "noopener,noreferrer");
     },
@@ -222,24 +224,29 @@ export function createRemoteBridge(): NicegalBridge {
 
   const updates: UpdateBridge = {
     getPreferences: async () => ({ enabled: false, mode: "none" }),
-    setEnabled: atThePc("Change update settings"),
+    setEnabled: atThePc(() => m.remote_at_pc_change_update_settings()),
     getStatus: async () => ({ phase: "disabled", version: null, notes: [] }),
     onStatusChanged: () => () => undefined,
     openReleaseNotes: async () => undefined,
-    restartAndInstall: atThePc("Install updates"),
+    restartAndInstall: atThePc(() => m.remote_at_pc_install_updates()),
   };
 
   const remote: RemoteAccessBridge = {
-    getStatus: atThePc("Manage remote access"),
-    setEnabled: atThePc("Manage remote access"),
-    renewPairingCode: atThePc("Manage remote access"),
-    removeDevice: atThePc("Manage remote access"),
-    setBackground: atThePc("Manage remote access"),
-    setHttps: atThePc("Manage remote access"),
+    getStatus: atThePc(() => m.remote_at_pc_manage_remote_access()),
+    setEnabled: atThePc(() => m.remote_at_pc_manage_remote_access()),
+    renewPairingCode: atThePc(() => m.remote_at_pc_manage_remote_access()),
+    removeDevice: atThePc(() => m.remote_at_pc_manage_remote_access()),
+    setBackground: atThePc(() => m.remote_at_pc_manage_remote_access()),
+    setHttps: atThePc(() => m.remote_at_pc_manage_remote_access()),
     onStatusChanged: () => () => undefined,
   };
 
-  return { backend, native, updates, remote, isRemote: true, connection };
+  const language: LanguageBridge = {
+    getSettings: atThePc(() => m.remote_at_pc_change_language()),
+    setPreference: atThePc(() => m.remote_at_pc_change_language()),
+    restart: atThePc(() => m.remote_at_pc_change_language()),
+  };
+  return { backend, native, updates, language, remote, isRemote: true, connection };
 }
 
 /**
@@ -307,8 +314,7 @@ function chooseImageFile(): Promise<ExternalVisualReference | null> {
     input.addEventListener("change", () => {
       const file = input.files?.[0];
       if (!file) return resolve(null);
-      if (file.size > 16 * 1024 * 1024)
-        return reject(new Error("Choose an image smaller than 16 MB for visual search."));
+      if (file.size > 16 * 1024 * 1024) return reject(new Error(m.common_visual_image_too_large()));
       visualFileBase64(file).then(
         (bytesBase64) => resolve({ displayName: file.name, bytesBase64 }),
         reject,

@@ -8,6 +8,10 @@
  */
 import type { JobPhase, JobProgress, JobSnapshot } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
+
+type JobType = JobSnapshot["type"];
+
 /** Use the backend's phase rate; missing measurements must not look like zero throughput. */
 export function jobRateText(job: JobSnapshot): string {
   const rate = job.progress.itemsPerSecond;
@@ -30,67 +34,102 @@ export function jobRateText(job: JobSnapshot): string {
   )
     return "";
   // Image indexing counts each still image and sampled video frame, not files.
-  const unit = job.phase === "imageEmbedding" ? "images/s" : "items/s";
-  return `${rate.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
+  const unit =
+    job.phase === "imageEmbedding"
+      ? m.job_rate_unit_images_per_second()
+      : m.job_rate_unit_items_per_second();
+  return m.job_rate_format({ rate, unit });
 }
 
-const PHASE_LABELS: Record<JobPhase, string> = {
-  queued: "Queued",
-  downloadingModels: "Downloading models",
-  loadingModels: "Loading models",
-  // Distinct labels: the walk counts files found, then cataloging restarts at 0 of that count.
-  // Sharing one label made the second phase look like progress going backwards.
-  scanning: "Scanning",
-  cataloging: "Syncing",
-  thumbnails: "Thumbnails",
-  ocr: "OCR",
-  imageEmbedding: "Indexing",
-  textEmbedding: "Indexing text",
-  cleanup: "Cleaning up",
-  pruning: "Removing",
-  finished: "Done",
-};
-
-const CANCELLED_COMPLETION_LABELS: Record<JobSnapshot["type"], string> = {
-  modelPrepare: "Search model preparation",
-  ocrModelLoad: "OCR model loading",
-  libraryScan: "Library scan",
-  thumbnailGenerate: "Thumbnail generation",
-  pruneMissing: "Pruning",
-  libraryPurge: "Removing",
-};
-
 export function jobPhaseLabel(phase: JobPhase): string {
-  return PHASE_LABELS[phase];
+  switch (phase) {
+    case "queued":
+      return m.job_queued();
+    case "downloadingModels":
+      return m.job_downloading_models();
+    case "loadingModels":
+      return m.job_loading_models();
+    // Distinct labels: the walk counts files found, then cataloging restarts at 0 of that count.
+    // Sharing one label made the second phase look like progress going backwards.
+    case "scanning":
+      return m.job_scanning();
+    case "cataloging":
+      return m.job_syncing();
+    case "thumbnails":
+      return m.job_thumbnails();
+    case "ocr":
+      return m.job_ocr();
+    case "imageEmbedding":
+      return m.job_indexing();
+    case "textEmbedding":
+      return m.job_indexing_text();
+    case "cleanup":
+      return m.job_cleaning_up();
+    case "pruning":
+      return m.job_removing();
+    case "finished":
+      return m.job_done();
+  }
+}
+
+/** The subject of a cancelled summary, such as "Library scan cancelled". */
+function cancelledSubject(type: JobType): string {
+  switch (type) {
+    case "modelPrepare":
+      return m.job_cancel_label_model_prepare();
+    case "ocrModelLoad":
+      return m.job_cancel_label_ocr_model_load();
+    case "libraryScan":
+      return m.job_cancel_label_library_scan();
+    case "thumbnailGenerate":
+      return m.job_cancel_label_thumbnail_generate();
+    case "pruneMissing":
+      return m.job_cancel_label_prune();
+    case "libraryPurge":
+      return m.job_removing();
+  }
 }
 
 /** Human-facing state for a particular job, distinct from its backend implementation phase. */
 export function jobLabel(snapshot: JobSnapshot): string {
   switch (snapshot.status) {
     case "cancelled":
-      return "Cancelled";
+      return m.job_cancelled();
     case "completed":
-      return "Done";
+      return m.job_done();
     case "failed":
-      return "Failed";
+      return m.job_failed();
     case "cancelling":
-      return "Cancelling";
+      return m.common_cancelling();
   }
 
-  if (snapshot.phase === "queued") return "Queued";
-  if (snapshot.progress.download) return "Downloading models";
+  if (snapshot.phase === "queued") return m.job_queued();
+  if (snapshot.progress.download) return m.job_downloading_models();
   return jobPhaseLabel(snapshot.phase);
 }
 
+function byteUnitLabel(unit: number): string {
+  switch (unit) {
+    case 0:
+      return m.job_unit_bytes();
+    case 1:
+      return m.job_unit_kib();
+    case 2:
+      return m.job_unit_mib();
+    default:
+      return m.job_unit_gib();
+  }
+}
+
 export function formatBytes(value: number): string {
-  const units = ["B", "KiB", "MiB", "GiB"] as const;
+  const maxUnit = 3;
   let unit = 0;
   let amount = value;
-  while (amount >= 1024 && unit < units.length - 1) {
+  while (amount >= 1024 && unit < maxUnit) {
     amount /= 1024;
     unit += 1;
   }
-  return `${amount.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${units[unit]}`;
+  return m.job_bytes_format({ amount, unit: byteUnitLabel(unit) });
 }
 
 /** Display text plus a normalized 0-1 completion ratio for a phase, or `ratio: null` when the
@@ -124,7 +163,10 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
           text: `${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}`,
           ratio: Math.min(1, downloadedBytes / totalBytes),
         }
-      : { text: downloadedBytes > 0 ? formatBytes(downloadedBytes) : "Connecting…", ratio: null };
+      : {
+          text: downloadedBytes > 0 ? formatBytes(downloadedBytes) : m.job_connecting(),
+          ratio: null,
+        };
   }
   switch (snapshot.phase) {
     case "downloadingModels": {
@@ -157,10 +199,7 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
       // A video can spend a long time decoding and embedding samples before its one
       // completed item is committed. Show that the worker is active in the meantime.
       return active > 0 && progress.phaseCompleted === 0
-        ? {
-            ...result,
-            text: `${result.text} · processing ${active} ${active === 1 ? "file" : "files"}`,
-          }
+        ? { ...result, text: m.job_processing_files({ progress: result.text, count: active }) }
         : result;
     }
     case "queued":
@@ -172,88 +211,92 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
 
 export function summarizeCompletion(snapshot: JobSnapshot): string {
   if (snapshot.status === "cancelled") {
-    return `${CANCELLED_COMPLETION_LABELS[snapshot.type]} cancelled`;
+    return m.job_cancelled_summary({ label: cancelledSubject(snapshot.type) });
   }
   switch (snapshot.type) {
     case "modelPrepare":
-      return "Search models ready";
+      return m.job_search_models_ready();
     case "ocrModelLoad":
-      return "OCR models ready";
+      return m.job_ocr_models_ready();
     case "libraryScan": {
       const n = snapshot.progress.cataloged;
       const embedded = snapshot.progress.embedded;
       const unfinished =
         snapshot.folders?.filter((folder) => folder.state !== "completed").length ?? 0;
       return [
-        `Scanned ${n.toLocaleString()} file${n === 1 ? "" : "s"}`,
-        embedded ? `, indexed ${embedded.toLocaleString()}` : "",
+        embedded
+          ? m.job_scan_scanned_indexed({ count: n, indexed: embedded })
+          : m.job_scan_scanned({ count: n }),
         removedEntrySummary(snapshot.progress.deleted),
-        unfinished
-          ? ` · ${unfinished.toLocaleString()} folder${unfinished === 1 ? "" : "s"} need${unfinished === 1 ? "s" : ""} attention`
-          : "",
-      ].join("");
+        unfinished ? m.job_scan_folders_attention({ count: unfinished }) : "",
+      ]
+        .filter((part) => part !== "")
+        .join(m.common_separator());
     }
-    case "thumbnailGenerate": {
-      const n = snapshot.progress.thumbnailsGenerated;
-      return `Generated ${n.toLocaleString()} thumbnail${n === 1 ? "" : "s"}`;
-    }
+    case "thumbnailGenerate":
+      return m.job_thumbnails_generated({ count: snapshot.progress.thumbnailsGenerated });
     case "pruneMissing": {
       const n = snapshot.progress.deleted;
-      return n ? `Deleted ${n.toLocaleString()} missing ${n === 1 ? "entry" : "entries"}` : "";
+      return n ? m.job_prune_deleted({ count: n }) : "";
     }
-    case "libraryPurge": {
-      const n = snapshot.progress.deleted;
-      return `Removed ${n.toLocaleString()} item${n === 1 ? "" : "s"}`;
-    }
+    case "libraryPurge":
+      return m.job_library_purge_removed({ count: snapshot.progress.deleted });
   }
 }
 
 function removedEntrySummary(count: number): string {
-  return count
-    ? ` · ${count.toLocaleString()} deleted ${count === 1 ? "file" : "files"} removed from library`
-    : "";
+  return count ? m.job_scan_deleted_removed({ count }) : "";
 }
 
 /** The visible phase model: how a job type's backend phases collapse into a small strip of
  * user-facing steps (e.g. `scanning` + `cataloging` both show as "Sync"). */
 export type VisiblePhase = { label: string; backendPhases: readonly JobPhase[] };
 
-export const PHASES_BY_TYPE: Record<JobSnapshot["type"], readonly VisiblePhase[]> = {
-  modelPrepare: [
-    { label: "Prepare", backendPhases: ["downloadingModels", "loadingModels"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  ocrModelLoad: [
-    { label: "Download", backendPhases: ["downloadingModels"] },
-    { label: "Load", backendPhases: ["loadingModels"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  libraryScan: [
-    { label: "Sync", backendPhases: ["scanning", "cataloging", "pruning"] },
-    { label: "Images", backendPhases: ["imageEmbedding"] },
-    { label: "OCR", backendPhases: ["downloadingModels", "loadingModels", "ocr"] },
-    { label: "Text", backendPhases: ["textEmbedding"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  thumbnailGenerate: [
-    { label: "Thumbs", backendPhases: ["thumbnails"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  pruneMissing: [
-    { label: "Prune", backendPhases: ["pruning"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-  libraryPurge: [
-    { label: "Remove", backendPhases: ["pruning"] },
-    { label: "Done", backendPhases: ["finished"] },
-  ],
-};
+function phasesFor(type: JobType): readonly VisiblePhase[] {
+  switch (type) {
+    case "modelPrepare":
+      return [
+        { label: m.job_step_prepare(), backendPhases: ["downloadingModels", "loadingModels"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "ocrModelLoad":
+      return [
+        { label: m.job_step_download(), backendPhases: ["downloadingModels"] },
+        { label: m.job_step_load(), backendPhases: ["loadingModels"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "libraryScan":
+      return [
+        { label: m.job_step_sync(), backendPhases: ["scanning", "cataloging", "pruning"] },
+        { label: m.job_step_images(), backendPhases: ["imageEmbedding"] },
+        { label: m.job_ocr(), backendPhases: ["downloadingModels", "loadingModels", "ocr"] },
+        { label: m.job_step_text(), backendPhases: ["textEmbedding"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "thumbnailGenerate":
+      return [
+        { label: m.job_step_thumbs(), backendPhases: ["thumbnails"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "pruneMissing":
+      return [
+        { label: m.job_step_prune(), backendPhases: ["pruning"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "libraryPurge":
+      return [
+        { label: m.job_step_remove(), backendPhases: ["pruning"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+  }
+}
 
 /** A scan shows only the index stages its library runs; without `indexStages`, all of them. */
 export function jobPhases(job: JobSnapshot): readonly VisiblePhase[] {
+  const phases = phasesFor(job.type);
   const stages = job.indexStages;
-  if (job.type !== "libraryScan" || !stages) return PHASES_BY_TYPE[job.type];
-  return PHASES_BY_TYPE.libraryScan.filter(
+  if (job.type !== "libraryScan" || !stages) return phases;
+  return phases.filter(
     (phase) =>
       (!phase.backendPhases.includes("ocr") || stages.ocr) &&
       (!phase.backendPhases.includes("imageEmbedding") || stages.image) &&

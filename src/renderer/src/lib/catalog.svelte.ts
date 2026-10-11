@@ -11,6 +11,7 @@ import type {
   Timeline,
 } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import {
   LIBRARIES_STORAGE_KEY,
   LIBRARY_ROOT_STORAGE_KEY,
@@ -130,9 +131,11 @@ function normalizeTextEmbeddingCoverage(
 
 /** The label shown when the user has not named a library: its first folder, plus a count. */
 export function derivedLibraryName(include: readonly { path: string }[]): string {
-  if (!include.length) return "Library";
-  const first = folderName(include[0].path);
-  return include.length > 1 ? `${first} + ${include.length - 1}` : first;
+  if (!include.length) return m.library_default_name();
+  const firstFolder = folderName(include[0].path);
+  return include.length > 1
+    ? m.library_derived_name({ first_folder: firstFolder, more_count: include.length - 1 })
+    : firstFolder;
 }
 
 function normalizeViewState(value: unknown): LibraryViewState {

@@ -15,6 +15,7 @@ import type { BackendStatus } from "../shared/backend";
 
 import icon from "../../resources/icon.png?asset";
 import { IPC_CHANNELS } from "../shared/ipc-channels";
+import { m } from "../shared/paraglide/messages.js";
 import { BackendLog } from "./backend/backend-log";
 import { registerBackendIpc } from "./backend/ipc";
 import { NicegalServerClient } from "./backend/nicegal-server-client";
@@ -27,6 +28,7 @@ import {
   getSystemInfo,
   recentBackendLog,
 } from "./diagnostics";
+import { initializeLocale, localeArgument, registerLanguageIpc } from "./locale";
 import { registerNativeIpc } from "./native/ipc";
 import { installProtocolHandlers, registerCustomSchemes } from "./protocols";
 import { registerRemoteIpc } from "./remote/ipc";
@@ -69,6 +71,8 @@ let backendShutdown: Promise<void> | null = null;
 let backendRecovery: Promise<void> | null = null;
 let updates: ReturnType<typeof startUpdates> | null = null;
 let restartForUpdate = false;
+let restartForLanguage = false;
+const languagePreferencePath = join(app.getPath("userData"), "language.json");
 
 // Observe fatal exceptions without changing Node's termination behavior.
 process.on("uncaughtExceptionMonitor", (error, origin) => backendLog?.writeFatal(error, origin));
@@ -122,7 +126,7 @@ const backendContext = {
     backendStatus.restartReason = "runtime-change";
     try {
       await shutdownBackend();
-      if (shutdownStarted) throw new Error("The app is closing");
+      if (shutdownStarted) throw new Error(m.backend_app_closing());
       await initializeBackend();
     } catch (error) {
       backendStatus.error = formatBackendError(error);
@@ -134,6 +138,14 @@ const backendContext = {
 };
 registerBackendIpc(backendContext);
 registerRemoteIpc(remoteAccess, isTrustedRenderer);
+registerLanguageIpc({
+  preferencePath: languagePreferencePath,
+  isTrustedSender: isTrustedRenderer,
+  restart: () => {
+    restartForLanguage = true;
+    app.quit();
+  },
+});
 registerNativeIpc({
   isTrustedSender: isTrustedRenderer,
   get client(): NicegalServerClient | null {
@@ -200,9 +212,12 @@ function createWindow(): void {
     autoHideMenuBar: true,
     icon,
     webPreferences: {
-      additionalArguments: app.commandLine.hasSwitch("remote-debugging-port")
-        ? ["--nicegal-debug-file-picker"]
-        : [],
+      additionalArguments: [
+        localeArgument(),
+        ...(app.commandLine.hasSwitch("remote-debugging-port")
+          ? ["--nicegal-debug-file-picker"]
+          : []),
+      ],
       preload: join(__dirname, "../preload/index.js"),
       sandbox: true,
     },
@@ -233,12 +248,17 @@ async function loadRenderer(mainWindow: BrowserWindow): Promise<void> {
   else mainWindow.show();
 }
 
+/** macOS menus show no mnemonic, so the `&` that marks one on Windows and Linux is dropped there. */
+function menuLabel(label: string): string {
+  return process.platform === "darwin" ? label.replace("&", "") : label;
+}
+
 function installApplicationMenu(): void {
   const mac = process.platform === "darwin";
   const linux = process.platform === "linux";
   const viewItems: MenuItemConstructorOptions[] = [
     {
-      label: "Toggle Developer &Tools",
+      label: m.app_menu_toggle_devtools(),
       accelerator: "CommandOrControl+Shift+I",
       click: () => BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools(),
     },
@@ -250,10 +270,10 @@ function installApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [];
   if (mac) template.push({ role: "appMenu" }, { role: "editMenu" });
   template.push({
-    label: mac ? "File" : "&File",
+    label: menuLabel(m.app_menu_file()),
     submenu: [
       {
-        label: "Close Window",
+        label: m.app_menu_close_window(),
         accelerator: "CommandOrControl+W",
         click: () => BrowserWindow.getFocusedWindow()?.close(),
       },
@@ -261,7 +281,7 @@ function installApplicationMenu(): void {
         ? [
             { type: "separator" as const },
             {
-              label: "Quit",
+              label: m.app_menu_quit(),
               accelerator: "Control+Q",
               click: () => app.quit(),
             },
@@ -269,7 +289,7 @@ function installApplicationMenu(): void {
         : []),
     ],
   });
-  template.push({ label: mac ? "View" : "&View", submenu: viewItems });
+  template.push({ label: menuLabel(m.app_menu_view()), submenu: viewItems });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
@@ -343,9 +363,9 @@ async function restartAfterProviderFallback(): Promise<void> {
 
 function restartFailedBackend(): Promise<void> {
   if (backendRecovery) return backendRecovery;
-  if (shutdownStarted) return Promise.reject(new Error("The app is closing"));
+  if (shutdownStarted) return Promise.reject(new Error(m.backend_app_closing()));
   if (backendStatus.ready || !backendStatus.error)
-    return Promise.reject(new Error("The gallery service is already running or starting"));
+    return Promise.reject(new Error(m.backend_service_already_running()));
 
   backendRecovery = (async () => {
     backendStatus.error = null;
@@ -353,7 +373,7 @@ function restartFailedBackend(): Promise<void> {
     broadcastBackendStatus();
     try {
       await shutdownBackend();
-      if (shutdownStarted) throw new Error("The app is closing");
+      if (shutdownStarted) throw new Error(m.backend_app_closing());
       await initializeBackend();
     } catch (error) {
       backendStatus.error = formatBackendError(error);
@@ -444,6 +464,7 @@ if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
   app.on("second-instance", focusMainWindow);
 
   app.whenReady().then(async () => {
+    initializeLocale(languagePreferencePath);
     installContentSecurityPolicy();
     installApplicationMenu();
     // Chromium needs the handlers before the first renderer navigation. Readers become available
@@ -492,6 +513,9 @@ if (app.requestSingleInstanceLock() || process.env["NICEGAL_MULTI_INSTANCE"]) {
       })
       .finally(() => {
         shutdownComplete = true;
+        // electron-vite owns the dev process and its renderer server exits with this one, so a
+        // relaunched dev app would load nothing. Development quits; restart `pnpm run dev`.
+        if (restartForLanguage && !isDev) app.relaunch();
         app.quit();
       });
   });

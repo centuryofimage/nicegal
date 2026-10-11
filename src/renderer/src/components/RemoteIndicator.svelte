@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { connectionLabel, type RemoteConnection } from "../../../shared/remote";
 
   let { onopen }: { onopen: () => void } = $props();
@@ -31,13 +32,15 @@
 {#if connected.length}
   <button
     class="status-pane-toggle remote-indicator"
-    title={`Connected: ${connected.map(connectionLabel).join(", ")}. Open remote access settings.`}
+    title={m.remote_indicator_title({
+      devices: connected.map(connectionLabel).join(m.remote_indicator_device_separator()),
+    })}
     onclick={onopen}
   >
     <span class="dot" aria-hidden="true"></span><span
       >{connected.length === 1
         ? connectionLabel(connected[0])
-        : `${connected.length} devices`}</span
+        : m.remote_indicator_device_count({ count: connected.length })}</span
     >
   </button>
 {/if}

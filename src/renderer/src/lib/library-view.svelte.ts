@@ -11,6 +11,7 @@ import type { GalleryItem } from "./gallery/types";
 import type { SearchView } from "./ocr-search.svelte";
 import type { SearchIssue } from "./search-issue";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { errorMessage } from "./errors";
 import { GalleryScrollState } from "./gallery/scroll-state.svelte";
 import { collapseSearchSections } from "./gallery/search-sections";
@@ -236,7 +237,7 @@ export function createLibraryViewController(
       (jobs.completionMessage
         ? jobs.completionMessage
         : catalog.loading
-          ? "Loading catalog…"
+          ? m.library_view_loading_catalog()
           : ocrSearch.pending
             ? ocrSearch.pendingLabel
             : undefined),
@@ -248,7 +249,7 @@ export function createLibraryViewController(
   const detailItem = $derived(
     (detailIndex !== null ? filteredItems[detailIndex] : undefined) ?? selectedDetail,
   );
-  const libraryName = $derived(catalog.selectedLibrary?.displayName ?? "No library");
+  const libraryName = $derived(catalog.selectedLibrary?.displayName ?? m.common_no_library());
   $effect(() => {
     const libraryId = catalog.selectedId;
     const query = ocrSearch.query;
@@ -375,7 +376,7 @@ export function createLibraryViewController(
       ...filteredItemIds.filter((id) => id !== item.id && gallerySelection.ids.has(id)),
     ];
     void commands.showFileContextMenu(assetIds).catch((error: unknown) => {
-      showActionNotice(`Couldn't show file actions: ${errorMessage(error)}`);
+      showActionNotice(m.library_view_file_actions_failed({ message: errorMessage(error) }));
     });
   }
   function selectGalleryItem(index: number, modifiers: SelectionModifiers): void {
@@ -398,7 +399,8 @@ export function createLibraryViewController(
     const canStart = (): boolean =>
       isCurrent() && gallerySelection === selection && filteredItemIds === visibleIds;
     void commands.startFileDrag(assetIds, canStart).catch((error: unknown) => {
-      if (canStart()) showActionNotice(`Couldn't drag the files: ${errorMessage(error)}`);
+      if (canStart())
+        showActionNotice(m.library_view_drag_failed({ message: errorMessage(error) }));
     });
   }
   function beginGalleryMarquee(modifiers: SelectionModifiers): void {
@@ -561,8 +563,8 @@ export function createLibraryViewController(
       const message = errorMessage(error);
       if (activeDialog !== "manageLibraries")
         commands.showProblem({
-          title: "Couldn't add the folder",
-          guidance: "Check that the folder exists and can be opened, then try again.",
+          title: m.library_view_add_folder_failed_title(),
+          guidance: m.library_view_add_folder_guidance(),
           message,
         });
       return { status: "error", message };

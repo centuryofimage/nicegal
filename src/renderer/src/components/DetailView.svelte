@@ -15,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import { ParaglideMessage } from "@inlang/paraglide-js-svelte";
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import ChevronLeft from "@lucide/svelte/icons/chevron-left";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
@@ -29,6 +30,8 @@
 
   import type { ImageQuery } from "../../../shared/backend";
 
+  import { m } from "../../../shared/paraglide/messages.js";
+  import { getLocale } from "../../../shared/paraglide/runtime.js";
   import { originalUrlOf, type GalleryItem } from "../lib/gallery/types";
   import { TURBO_GRADIENT } from "../lib/patch-features/colormap";
   import { loadMatchMap, type MatchMap } from "../lib/patch-features/match-map";
@@ -133,7 +136,9 @@
   const panY = $derived(clamp(rawPanY, -maxPanY, maxPanY));
   const canPan = $derived(imageReady && (maxPanX > 0 || maxPanY > 0));
   const zoomLabel = $derived(
-    zoomMode === "fit" ? "Fit" : `${Math.round((effectiveScale / actualScale) * 100)}%`,
+    zoomMode === "fit"
+      ? m.detail_view_zoom_fit()
+      : m.detail_view_zoom_percent({ percent: Math.round((effectiveScale / actualScale) * 100) }),
   );
   $effect(() => {
     onstatuschange({
@@ -148,7 +153,9 @@
 
   const visualizeUnavailable = $derived(
     !imageModelVisualizes
-      ? `${imageModelName ?? "This image model"} does not visualize well`
+      ? m.common_visualize_unavailable({
+          model: imageModelName ?? m.detail_view_model_fallback(),
+        })
       : null,
   );
   const canShowMatchAreas = $derived(isStillImage && !failed && visualizeUnavailable === null);
@@ -415,23 +422,27 @@
   }}
 >
   <header class="detail-toolbar app-toolbar">
-    <div class="app-toolbar-group" role="toolbar" aria-label="Media navigation">
+    <div
+      class="app-toolbar-group"
+      role="toolbar"
+      aria-label={m.detail_view_media_navigation_aria()}
+    >
       <button
         class="app-toolbar-button app-toolbar-text-button app-toolbar-keep-label"
         type="button"
         onclick={onclose}
-        title="Return to gallery (Escape)"
-        aria-label="Return to gallery (Escape)"
+        title={m.detail_view_return_to_gallery()}
+        aria-label={m.detail_view_return_to_gallery()}
       >
         <ArrowLeft size={16} aria-hidden="true" />
-        <span>Gallery</span>
+        <span>{m.detail_view_gallery_label()}</span>
       </button>
       <button
         class="app-toolbar-button step-button"
         type="button"
         onclick={onprev}
-        title="Previous"
-        aria-label="Previous"
+        title={m.detail_view_previous()}
+        aria-label={m.detail_view_previous()}
         disabled={!hasPrev}
       >
         <ChevronLeft size={16} aria-hidden="true" />
@@ -440,24 +451,26 @@
         class="app-toolbar-button step-button"
         type="button"
         onclick={onnext}
-        title="Next"
-        aria-label="Next"
+        title={m.detail_view_next()}
+        aria-label={m.detail_view_next()}
         disabled={!hasNext}
       >
         <ChevronRight size={16} aria-hidden="true" />
       </button>
     </div>
     {#if isStillImage && !failed}
-      <div class="app-toolbar-group image-tools" role="toolbar" aria-label="Image viewer controls">
+      <div
+        class="app-toolbar-group image-tools"
+        role="toolbar"
+        aria-label={m.detail_view_image_controls_aria()}
+      >
         <button
           class={["app-toolbar-button", showMatchAreas && canShowMatchAreas && "active"]}
           type="button"
           onclick={toggleMatchAreas}
           title={visualizeUnavailable ??
-            (showMatchAreas
-              ? "Hide patch similarity and match areas (H)"
-              : "Show patch similarity and match areas (H)")}
-          aria-label="Visualize match areas (H)"
+            (showMatchAreas ? m.detail_view_hide_match_areas() : m.detail_view_show_match_areas())}
+          aria-label={m.detail_view_visualize_match_areas()}
           aria-pressed={showMatchAreas && canShowMatchAreas}
           disabled={!canShowMatchAreas}
         >
@@ -467,8 +480,8 @@
           class="app-toolbar-button"
           type="button"
           onclick={() => changeScale(1 / 1.25)}
-          title="Zoom out"
-          aria-label="Zoom out"
+          title={m.detail_view_zoom_out()}
+          aria-label={m.detail_view_zoom_out()}
           disabled={!imageReady}
         >
           <Minus size={16} aria-hidden="true" />
@@ -477,8 +490,8 @@
           class="app-toolbar-button"
           type="button"
           onclick={() => changeScale(1.25)}
-          title="Zoom in"
-          aria-label="Zoom in"
+          title={m.detail_view_zoom_in()}
+          aria-label={m.detail_view_zoom_in()}
           disabled={!imageReady}
         >
           <Plus size={16} aria-hidden="true" />
@@ -487,8 +500,8 @@
           class="app-toolbar-button"
           type="button"
           onclick={selectFit}
-          title="Fit to window (0)"
-          aria-label="Fit to window (0)"
+          title={m.detail_view_fit_to_window()}
+          aria-label={m.detail_view_fit_to_window()}
           disabled={!imageReady}
         >
           <Scan size={16} aria-hidden="true" />
@@ -497,8 +510,8 @@
           class="app-toolbar-button actual-size-button"
           type="button"
           onclick={selectActual}
-          title="Actual size (1)"
-          aria-label="Actual size (1)"
+          title={m.detail_view_actual_size()}
+          aria-label={m.detail_view_actual_size()}
           disabled={!imageReady}
         >
           1:1
@@ -509,8 +522,10 @@
           class="app-toolbar-button"
           type="button"
           onclick={() => void toggleFullscreen()}
-          title={fullscreen ? "Exit fullscreen (F)" : "Enter fullscreen (F)"}
-          aria-label={fullscreen ? "Exit fullscreen (F)" : "Enter fullscreen (F)"}
+          title={fullscreen ? m.detail_view_exit_fullscreen() : m.detail_view_enter_fullscreen()}
+          aria-label={fullscreen
+            ? m.detail_view_exit_fullscreen()
+            : m.detail_view_enter_fullscreen()}
         >
           {#if fullscreen}
             <Minimize size={16} aria-hidden="true" />
@@ -526,24 +541,34 @@
   {#if matchRequest}
     <div class="match-bar" role="status">
       <span class="match-bar-query" title={imageQueryLabel}>
-        {#if hoveredPatch !== null}Similar to the outlined area{:else if imageQuery}Matches for <q
-            >{imageQueryLabel}</q
-          >{:else}Hover an area to compare patches{/if}
+        {#if hoveredPatch !== null}{m.detail_view_similar_to_outlined_area()}{:else if imageQuery}<ParaglideMessage
+            message={m.detail_view_matches_for}
+            inputs={{ query: imageQueryLabel }}
+          >
+            {#snippet q({ children })}<q>{@render children?.()}</q>{/snippet}
+          </ParaglideMessage>{:else}{m.detail_view_hover_to_compare()}{/if}
       </span>
       {#if imageModelName}
         <span class="match-bar-item">{imageModelName}</span>
       {/if}
       <span class="match-bar-item match-legend">
-        Weak <span class="match-legend-ramp" style:background={TURBO_GRADIENT}></span> Strong
+        {m.detail_view_legend_weak()}
+        <span class="match-legend-ramp" style:background={TURBO_GRADIENT}></span>
+        {m.detail_view_legend_strong()}
       </span>
       {#await matchRequest}
-        <span class="match-bar-item">Mapping…</span>
+        <span class="match-bar-item">{m.common_mapping()}</span>
       {:then result}
         {#if result.status === "ready"}
           {#if result.map.pooled !== null && hoveredPatch === null}<span
               class="match-bar-item match-score"
-              title="Cosine similarity of the whole image to the search. Colors span this image's own weakest to strongest areas."
-              >Match {result.map.pooled.toFixed(4)}</span
+              title={m.detail_view_pooled_score_tooltip()}
+              >{m.detail_view_match_score({
+                score: result.map.pooled.toLocaleString(getLocale(), {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                }),
+              })}</span
             >{/if}
         {:else if result.status === "failed"}
           <span class="match-bar-item">{result.message}</span>
@@ -556,7 +581,7 @@
     {#if failed}
       <div class="detail-error">
         <CircleAlert size={28} aria-hidden="true" />
-        <p>Couldn't load the original file. It may have moved or been deleted.</p>
+        <p>{m.detail_view_original_load_failed()}</p>
       </div>
     {:else if item.mediaKind === "video"}
       <VideoPlayer

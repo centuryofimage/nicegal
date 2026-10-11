@@ -12,12 +12,6 @@ import {
 
 export const layoutModes: readonly LayoutMode[] = ["justified", "masonry", "grid"];
 
-export const layoutModeLabels: Record<LayoutMode, string> = {
-  justified: "Justified",
-  masonry: "Masonry",
-  grid: "Grid",
-};
-
 /**
  * Single entry point for every layout mode. Packing is mode-specific; everything downstream
  * (virtualization, pooling, prefetch, timeline) consumes the shared `GalleryLayout` shape.

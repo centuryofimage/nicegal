@@ -18,6 +18,7 @@ import { Readable, pipeline } from "node:stream";
 import type { NicegalServerClient } from "../backend/nicegal-server-client";
 import type { ThumbnailReader } from "../backend/thumbnail-reader";
 
+import { m } from "../../shared/paraglide/messages.js";
 import { REMOTE_CLIENT_HEADER, type RemoteDevice } from "../../shared/remote";
 import { remotableHandler, settleCall, type BridgeClient } from "../ipc";
 import { resolveProtocolAssetPath } from "../protocol-path";
@@ -172,7 +173,7 @@ ${client.browser}`,
     const device = this.deviceOf(request);
     if (!device) {
       if (method === "GET" && acceptsHtml(request)) return redirect(response, "/pair");
-      return sendText(response, 401, "This device is not paired");
+      return sendText(response, 401, m.remote_device_not_paired());
     }
 
     if (url.pathname === "/events" && method === "GET")
@@ -251,7 +252,7 @@ ${client.browser}`,
     // the pairing code's attempts.
     const origin = headerValue(request, "origin");
     if (origin !== null && origin !== this.ownOrigin(request))
-      return sendText(response, 403, "Pairing must come from this page");
+      return sendText(response, 403, m.remote_pairing_wrong_origin());
     const form = new URLSearchParams((await readBody(request, 4096)).toString("utf8"));
     const code = (form.get("code") ?? "").replace(/\D/g, "");
     const name = (form.get("name") ?? "").trim().slice(0, 60) || defaultName;
@@ -382,7 +383,7 @@ class RemoteClient implements BridgeClient {
   private closeTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private readonly closeListeners: Array<() => void> = [];
-  browser = "Browser";
+  browser: string = m.remote_browser_name_unknown();
 
   readonly id: string;
 

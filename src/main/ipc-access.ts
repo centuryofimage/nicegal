@@ -13,6 +13,11 @@ export const IPC_ACCESS = {
   [IPC_CHANNELS.updates.releaseNotes]: "window",
   [IPC_CHANNELS.updates.restartAndInstall]: "window",
 
+  // A phone follows its own browser languages; only the PC picks the desktop language.
+  [IPC_CHANNELS.language.settings]: "window",
+  [IPC_CHANNELS.language.setPreference]: "window",
+  [IPC_CHANNELS.language.restart]: "window",
+
   [IPC_CHANNELS.backend.status]: "remote",
   [IPC_CHANNELS.backend.restartServer]: "remote",
   [IPC_CHANNELS.backend.getRuntimeStatus]: "remote",

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { errorMessage } from "../lib/errors";
 
   let {
@@ -24,9 +25,9 @@
   async function copyDetails(): Promise<void> {
     try {
       await navigator.clipboard.writeText(diagnostic);
-      copyStatus = "Copied";
+      copyStatus = m.common_copied();
     } catch {
-      copyStatus = "Select the details and copy them manually.";
+      copyStatus = m.common_copy_failed();
     }
   }
 
@@ -38,20 +39,18 @@
 
 {#if failures.length}
   <details class="thumbnail-diagnostics" bind:open={showDetails}>
-    <summary
-      >{failures.length} {failures.length === 1 ? "thumbnail" : "thumbnails"} unavailable</summary
-    >
+    <summary>{m.thumbnail_failures_summary({ count: failures.length })}</summary>
     <div class="thumbnail-details">
-      <p>
-        Automatic retries stopped. Check that the files are accessible, then retry. You can still
-        try opening an image.
-      </p>
-      <textarea readonly aria-label="Thumbnail error details" value={diagnostic}></textarea>
+      <p>{m.thumbnail_failures_retry_help()}</p>
+      <textarea readonly aria-label={m.thumbnail_failures_details_aria()} value={diagnostic}
+      ></textarea>
       <span role="status">{copyStatus}</span>
       <div class="actions">
-        <button class="ui-button" type="button" onclick={copyDetails}>Copy details</button>
+        <button class="ui-button" type="button" onclick={copyDetails}
+          >{m.common_copy_details()}</button
+        >
         <button class="ui-button" type="button" onclick={retry} disabled={!failures.length}
-          >Retry thumbnails</button
+          >{m.thumbnail_failures_retry_button()}</button
         >
         <button
           class="ui-button"
@@ -59,7 +58,7 @@
           onclick={(event) => {
             showDetails = false;
             event.currentTarget.closest("details")?.querySelector("summary")?.focus();
-          }}>Dismiss</button
+          }}>{m.common_dismiss()}</button
         >
       </div>
     </div>

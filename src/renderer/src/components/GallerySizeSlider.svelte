@@ -5,6 +5,7 @@
   follows the layout (row height, column width, or cell width).
 -->
 <script lang="ts">
+  import { m } from "../../../shared/paraglide/messages.js";
   import { settings, settingsLimits } from "../lib/settings.svelte";
 
   let { menu = false }: { menu?: boolean } = $props();
@@ -28,8 +29,8 @@
   const fill = $derived(`${((value - limits.min) / (limits.max - limits.min)) * 100}%`);
   const title = $derived(
     $settings.layoutMode === "grid" && $settings.gridColumns > 0
-      ? "Image size: adjusting returns to automatic columns"
-      : `Image size: ${value} px`,
+      ? m.gallery_size_slider_title_auto_columns()
+      : m.gallery_size_slider_title({ value }),
   );
 
   function setSize(next: number): void {
@@ -45,8 +46,8 @@
   <input
     class={menu ? "ui-trackbar" : "size-slider"}
     type="range"
-    aria-label="Image size"
-    aria-valuetext={`${value} px`}
+    aria-label={m.gallery_size_slider_label()}
+    aria-valuetext={m.gallery_size_slider_value_text({ value })}
     {title}
     min={limits.min}
     max={limits.max}
@@ -58,7 +59,11 @@
 
 {#if menu}
   <div class="menu-size">
-    <div class="head"><span>Image size</span><span class="readout">{value} px</span></div>
+    <div class="head">
+      <span>{m.gallery_size_slider_label()}</span><span class="readout"
+        >{m.gallery_size_slider_value_text({ value })}</span
+      >
+    </div>
     <div class="ruler" aria-hidden="true">
       {#each marks as mark (mark.value)}
         <span

@@ -4,10 +4,11 @@
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
   import type { LibraryViewController } from "../lib/library-view.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { sameFolder } from "../lib/library-root";
   import { libraryOptionsSummary } from "../lib/library-status";
-  import { DESKTOP_ONLY_TITLE, isRemote } from "../lib/platform";
+  import { desktopOnlyTitle, isRemote } from "../lib/platform";
   import LibraryEditor from "./LibraryEditor.svelte";
 
   let {
@@ -130,7 +131,7 @@
         managingId = next?.id ?? null;
         removing = null;
       } else {
-        removeError = "Wait for the current job to stop, then try again.";
+        removeError = m.libraries_manager_wait_for_job();
       }
     } catch (error) {
       removeError = error instanceof Error ? error.message : String(error);
@@ -140,14 +141,14 @@
   }
 </script>
 
-<section class="manager" aria-labelledby="libraries-manager-title">
+<section class="dialog-shell manager" aria-labelledby="libraries-manager-title">
   <header class="manager-header">
-    <h1 id="libraries-manager-title">Libraries</h1>
-    <button class="ui-button ui-button-compact" onclick={requestClose}>Close</button>
+    <h1 id="libraries-manager-title">{m.common_libraries()}</h1>
+    <button class="ui-button ui-button-compact" onclick={requestClose}>{m.common_close()}</button>
   </header>
 
   <div class="manager-main">
-    <aside class="library-list" aria-label="Libraries to manage">
+    <aside class="library-list" aria-label={m.libraries_manager_list_aria()}>
       <div class="library-rows">
         {#each catalog.libraries as library (library.id)}
           {@const duplicate = duplicateOf(library)}
@@ -159,33 +160,36 @@
           >
             <span class="library-label">
               <strong>{library.displayName}</strong>
-              {#if duplicate}<span class="duplicate">Duplicate folder</span>{/if}
+              {#if duplicate}<span class="duplicate">{m.libraries_manager_duplicate_folder()}</span
+                >{/if}
             </span>
             <span class="library-paths"
               >{library.include.map((folder) => folder.hostPath ?? folder.path).join(" · ")}</span
             >
             <span class="library-summary">
               {status && !status.loading
-                ? `${status.cataloged.toLocaleString()} files · `
+                ? `${m.libraries_manager_file_count({ count: status.cataloged })} · `
                 : ""}{libraryOptionsSummary(library)}
             </span>
           </button>
         {:else}
-          <p class="empty">No libraries yet. Choose a folder to create one.</p>
+          <p class="empty">{m.libraries_manager_empty()}</p>
         {/each}
       </div>
       <div class="list-actions">
         <button
           class="ui-button"
           onclick={() => void add()}
-          title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
-          disabled={createBusy || !catalog.backendStatus.ready || isRemote()}>New library…</button
+          title={isRemote() ? desktopOnlyTitle() : undefined}
+          disabled={createBusy || !catalog.backendStatus.ready || isRemote()}
+          >{m.libraries_manager_new_library()}</button
         >
         <button
           class="ui-button"
           onclick={() => void prepareRemoval()}
-          title={isRemote() ? DESKTOP_ONLY_TITLE : undefined}
-          disabled={!selected || navigationBusy || isRemote()}>Remove library…</button
+          title={isRemote() ? desktopOnlyTitle() : undefined}
+          disabled={!selected || navigationBusy || isRemote()}
+          >{m.libraries_manager_remove_library()}</button
         >
         {#if createError}<p class="error" role="alert">{createError}</p>{/if}
       </div>
@@ -194,18 +198,20 @@
     <div class="manager-details">
       {#if removing}
         <section class="remove-confirmation" aria-labelledby="remove-library-title">
-          <h2 id="remove-library-title">Remove “{removing.displayName}”?</h2>
+          <h2 id="remove-library-title">
+            {m.libraries_manager_remove_title({ name: removing.displayName })}
+          </h2>
           <p>{removing.include.map((folder) => folder.hostPath ?? folder.path).join(" · ")}</p>
-          <p>Original files are never touched. Indexed data another library uses is kept.</p>
+          <p>{m.libraries_manager_remove_reassurance()}</p>
           {#if jobs.running}
-            <p role="status">A job is running. Stop it before removing this library.</p>
+            <p role="status">{m.libraries_manager_job_running()}</p>
             <button
               class="ui-button stop-job"
               onclick={() => void stopJob()}
               disabled={stoppingJob || jobs.active?.status === "cancelling"}
               >{stoppingJob || jobs.active?.status === "cancelling"
-                ? "Stopping jobs…"
-                : "Stop running and queued jobs"}</button
+                ? m.libraries_manager_stopping_jobs()
+                : m.libraries_manager_stop_jobs()}</button
             >
           {/if}
           {#if removeError}<p class="error" role="alert">{removeError}</p>{/if}
@@ -213,15 +219,16 @@
             <button
               class="ui-button"
               onclick={() => void remove(false)}
-              disabled={removeBusy || jobs.running}>Remove, keep indexed data</button
+              disabled={removeBusy || jobs.running}>{m.libraries_manager_remove_keep_data()}</button
             >
             <button
               class="ui-button"
               onclick={() => void remove(true)}
-              disabled={removeBusy || jobs.running}>Remove and delete indexed data</button
+              disabled={removeBusy || jobs.running}
+              >{m.libraries_manager_remove_delete_data()}</button
             >
             <button class="ui-button" onclick={() => (removing = null)} disabled={removeBusy}
-              >Cancel</button
+              >{m.common_cancel()}</button
             >
           </div>
         </section>
@@ -237,7 +244,7 @@
           />
         {/key}
       {:else}
-        <p class="empty details-empty">Choose a library from the list, or create one.</p>
+        <p class="empty details-empty">{m.libraries_manager_choose_or_create()}</p>
       {/if}
     </div>
   </div>
@@ -247,15 +254,9 @@
   .manager {
     position: relative;
     display: flex;
-    box-sizing: border-box;
-    width: 100%;
     height: min(700px, calc(100dvh - var(--space-16) * 2));
     flex-direction: column;
     overflow: hidden;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
-    color: var(--text-primary);
     font-size: var(--font-size-md);
   }
   .manager-header {

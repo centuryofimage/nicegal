@@ -1,8 +1,9 @@
 <script lang="ts">
   import { onMount } from "svelte";
 
-  import type { BackgroundChange, RemoteAccessStatus } from "../../../shared/remote";
+  import type { BackgroundChange, RemoteAccessStatus, RemoteDevice } from "../../../shared/remote";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { errorMessage } from "../lib/errors";
 
   let status = $state.raw<RemoteAccessStatus | null>(null);
@@ -71,15 +72,24 @@
     new Date(ms).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   const date = (ms: number): string =>
     new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  function pairedSummary(device: RemoteDevice): string {
+    const pairedDate = date(device.pairedAt);
+    return device.lastSeenAt === null
+      ? m.remote_access_paired_date({ pairedDate })
+      : m.remote_access_paired_last_used({
+          pairedDate,
+          lastUsedDate: date(device.lastSeenAt),
+          lastUsedTime: time(device.lastSeenAt),
+        });
+  }
 </script>
 
 <section class="settings-group" aria-labelledby="remote-title">
-  <h2 id="remote-title">Remote access</h2>
+  <h2 id="remote-title">{m.common_remote_access()}</h2>
   <label class="row">
     <span class="setting-label"
-      >Allow phones and other devices on this network<small
-        >Paired devices can browse and search your libraries while Nicegal is open.</small
-      ></span
+      >{m.remote_access_allow_label()}<small>{m.remote_access_allow_hint()}</small></span
     >
     <input
       type="checkbox"
@@ -90,9 +100,9 @@
   </label>
   <label class="row">
     <span class="setting-label"
-      >Use HTTPS<small>A self-signed certificate will be generated.</small
+      >{m.remote_access_https_label()}<small>{m.remote_access_https_hint()}</small
       >{#if status && !status.https}<small class="recommend"
-          >Recommended. Without it, anyone on this network can see the pictures you open.</small
+          >{m.remote_access_https_recommend()}</small
         >{/if}</span
     >
     <input
@@ -105,18 +115,13 @@
   {#if status?.https && status.running}
     <div class="row certificate-row">
       <span class="setting-label"
-        >First visit<small
-          >The browser warns that the connection isn't private, because no public authority vouches
-          for this PC. Continue once: in Chrome, Advanced, then Proceed. In Safari, Show Details,
-          then visit this website.</small
-        ></span
+        >{m.remote_access_first_visit()}<small>{m.remote_access_first_visit_hint()}</small></span
       >
     </div>
     {#if status.certificateFingerprint}
       <div class="row certificate-row">
         <span class="setting-label"
-          >Certificate fingerprint<small
-            >Matches the SHA-256 fingerprint in the browser's certificate details.</small
+          >{m.remote_access_fingerprint_label()}<small>{m.remote_access_fingerprint_hint()}</small
           ><span class="fingerprint">{status.certificateFingerprint}</span></span
         >
       </div>
@@ -128,56 +133,57 @@
   {#if status?.running}
     <div class="row address-row">
       <span class="setting-label"
-        >Open on your device<small>Connect it to the same Wi-Fi as this PC.</small></span
+        >{m.remote_access_open_on_device()}<small>{m.remote_access_wifi_hint()}</small></span
       >
       <span class="addresses">
         {#each status.urls as url, index (url)}
           <span class={["address", index > 0 && "secondary"]}>{url}</span>
         {:else}
-          <span class="secondary">No network connection</span>
+          <span class="secondary">{m.remote_access_no_network()}</span>
         {/each}
       </span>
     </div>
     <div class="row">
       {#if status.pairingCode}
         <span class="setting-label"
-          >Pairing code<small
-            >Enter it on the device. Expires at {time(status.pairingExpiresAt ?? 0)}.</small
+          >{m.common_pairing_code()}<small
+            >{m.remote_access_pairing_code_hint({
+              time: time(status.pairingExpiresAt ?? 0),
+            })}</small
           ></span
         >
         <span class="pairing-code" aria-live="polite">{status.pairingCode}</span>
       {:else}
         <span class="setting-label"
-          >Pair a device<small>Shows a one-time code for the device to enter.</small></span
+          >{m.remote_access_pair_device()}<small>{m.remote_access_pair_device_hint()}</small></span
         >
         <button
           class="ui-button"
           disabled={busy}
-          onclick={() => run(() => window.nicegal.remote.renewPairingCode())}>Pair a device</button
+          onclick={() => run(() => window.nicegal.remote.renewPairingCode())}
+          >{m.remote_access_pair_device()}</button
         >
       {/if}
     </div>
   {/if}
   {#if status?.devices.length}
-    <h3>Paired devices</h3>
+    <h3>{m.remote_access_paired_devices_heading()}</h3>
     <ul class="devices">
       {#each status.devices as device (device.id)}
         <li class="row">
           <span class="setting-label"
             ><span
               >{device.name}{#each status.connected.filter((c) => c.deviceId === device.id) as connection (connection.browser)}<span
-                  class="connected">Connected in {connection.browser}</span
+                  class="connected"
+                  >{m.remote_access_connected_in({ browser: connection.browser })}</span
                 >{/each}</span
-            ><small
-              >Paired {date(device.pairedAt)}{device.lastSeenAt
-                ? `, last used ${date(device.lastSeenAt)} ${time(device.lastSeenAt)}`
-                : ""}</small
-            ></span
+            ><small>{pairedSummary(device)}</small></span
           >
           <button
             class="ui-button"
             disabled={busy}
-            onclick={() => run(() => window.nicegal.remote.removeDevice(device.id))}>Remove</button
+            onclick={() => run(() => window.nicegal.remote.removeDevice(device.id))}
+            >{m.remote_access_remove_device()}</button
           >
         </li>
       {/each}
@@ -187,10 +193,11 @@
 </section>
 
 <section class="settings-group" aria-labelledby="background-title">
-  <h2 id="background-title">Background</h2>
+  <h2 id="background-title">{m.remote_access_background_heading()}</h2>
   <label class="row">
     <span class="setting-label"
-      >Minimize to tray<small>Devices can still connect while the window is hidden.</small></span
+      >{m.remote_access_minimize_to_tray()}<small>{m.remote_access_minimize_to_tray_hint()}</small
+      ></span
     >
     <input
       type="checkbox"
@@ -200,7 +207,9 @@
     />
   </label>
   <label class="row">
-    <span class="setting-label">Close to tray<small>Quit from the tray icon instead.</small></span>
+    <span class="setting-label"
+      >{m.remote_access_close_to_tray()}<small>{m.remote_access_close_to_tray_hint()}</small></span
+    >
     <input
       type="checkbox"
       checked={status?.background.closeToTray ?? false}
@@ -210,10 +219,10 @@
   </label>
   <label class="row">
     <span class="setting-label"
-      >Open when I sign in<small
+      >{m.remote_access_open_at_login()}<small
         >{status && !status.background.openAtLoginAvailable
-          ? "Available in the installed app."
-          : "Starts in the tray."}</small
+          ? m.remote_access_open_at_login_available()
+          : m.remote_access_open_at_login_tray()}</small
       ></span
     >
     <input

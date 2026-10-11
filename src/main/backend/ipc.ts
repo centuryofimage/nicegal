@@ -20,6 +20,7 @@ import type {
 import type { NicegalServerClient } from "./nicegal-server-client";
 
 import { IPC_CHANNELS } from "../../shared/ipc-channels";
+import { m } from "../../shared/paraglide/messages.js";
 import {
   handleRemotableIpc,
   handleTrustedIpc,
@@ -99,8 +100,8 @@ export function registerBackendIpc(context: BackendIpcContext): void {
   const changeRuntime = async (
     update: (client: NicegalServerClient) => Promise<RuntimeStatus>,
   ): Promise<RuntimeStatus> => {
-    if (changingRuntime) throw new Error("Search settings change already in progress");
-    if (startingJobs > 0) throw new Error("A job is starting; try again when it finishes");
+    if (changingRuntime) throw new Error(m.backend_search_settings_busy());
+    if (startingJobs > 0) throw new Error(m.backend_job_starting_busy());
     changingRuntime = true;
     try {
       const status = await update(requireBackend());
@@ -253,10 +254,10 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     IPC_CHANNELS.backend.startJob,
     context.isTrustedSender,
     async (client, value, requestId) => {
-      if (changingRuntime) throw new Error("Search settings change already in progress");
+      if (changingRuntime) throw new Error(m.backend_search_settings_busy());
       const request = validateJobRequest(value);
       if (client.remote && !REMOTE_JOB_TYPES.has(request.type))
-        throw new Error("This job can only be started on the PC running Nicegal");
+        throw new Error(m.backend_remote_job_not_allowed());
       startingJobs += 1;
       try {
         return await requireBackend().startJob(request, validateToken(requestId));

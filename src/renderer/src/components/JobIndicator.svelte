@@ -6,6 +6,7 @@
 
   import type { JobSnapshot } from "../../../shared/backend";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { jobLabel, jobPhaseProgress } from "../lib/job-format";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import AppMessage from "./AppMessage.svelte";
@@ -31,7 +32,7 @@
     !running
       ? ""
       : phaseProgress.ratio !== null
-        ? `${Math.floor(phaseProgress.ratio * 100)}%`
+        ? m.job_indicator_percent({ percent: Math.floor(phaseProgress.ratio * 100) })
         : job.phase === "scanning"
           ? phaseProgress.text
           : "",
@@ -47,27 +48,30 @@
         ? Math.round(phaseProgress.ratio! * 100)
         : 0,
   );
-  const issueLabel = $derived(
-    `${job.errors.length.toLocaleString()} file ${job.errors.length === 1 ? "error" : "errors"} reported`,
-  );
+  const issueLabel = $derived(m.job_indicator_issue_count({ count: job.errors.length }));
   const issueMessage = $derived(
     job.status === "completed"
-      ? "The rest of the job completed."
+      ? m.job_indicator_issue_completed()
       : running
-        ? "The job is continuing with the remaining files."
-        : "The job stopped before it could finish.",
+        ? m.job_indicator_issue_continuing()
+        : m.job_indicator_issue_stopped(),
   );
   const displayLabel = $derived(
-    needsAttention && job.status === "completed" ? "Done with issues" : label,
+    needsAttention && job.status === "completed" ? m.job_indicator_done_with_issues() : label,
   );
   const downloading = $derived(
     running && (Boolean(job.progress.download) || job.phase === "downloadingModels"),
   );
-  const compactLabel = $derived(
-    downloading
-      ? `${job.status === "cancelling" ? "Cancelling" : "Downloading"}${phaseProgress.ratio !== null ? ` ${Math.floor(phaseProgress.ratio * 100)}%` : "…"}`
-      : `${displayLabel}${count ? ` ${count}` : ""}`,
-  );
+  const compactLabel = $derived.by(() => {
+    if (downloading) {
+      const word =
+        job.status === "cancelling" ? m.common_cancelling() : m.job_indicator_compact_downloading();
+      return count
+        ? m.job_indicator_compact_label({ label: word, count })
+        : m.job_indicator_compact_pending({ label: word });
+    }
+    return count ? m.job_indicator_compact_label({ label: displayLabel, count }) : displayLabel;
+  });
   let cardPinned = $state(false);
   let hiddenAttentionJob = $state<string | null>(null);
   let reviewingErrors = $state(false);
@@ -107,7 +111,7 @@
     type="button"
     aria-controls="job-progress-card"
     aria-expanded={cardOpen}
-    aria-label="Show {displayLabel.toLowerCase()} progress"
+    aria-label={m.job_indicator_show_progress_aria({ label: displayLabel })}
     onclick={toggleCard}
     onkeydown={onIndicatorKeydown}
   >
@@ -128,7 +132,7 @@
         class:indeterminate={!hasMeaningfulTotal}
         class="mini-track"
         role="progressbar"
-        aria-label={`${label} progress`}
+        aria-label={m.job_indicator_progress_aria({ label })}
         aria-valuemin="0"
         aria-valuemax={hasMeaningfulTotal ? 100 : undefined}
         aria-valuenow={hasMeaningfulTotal ? percent : undefined}
@@ -145,8 +149,8 @@
     <button
       class="job-cancel"
       onclick={oncancel}
-      title="Cancel"
-      aria-label="Cancel {label.toLowerCase()}"
+      title={m.common_cancel()}
+      aria-label={m.job_indicator_cancel_aria({ label })}
     >
       <X size={11} aria-hidden="true" />
     </button>
@@ -158,9 +162,9 @@
     {/key}
     {#if job.error}
       <AppMessage
-        title="Job failed"
+        title={m.job_indicator_job_failed_title()}
         message={job.error}
-        actionLabel={!running && !hasFileErrors ? "Dismiss" : undefined}
+        actionLabel={!running && !hasFileErrors ? m.common_dismiss() : undefined}
         onaction={ondismiss}
       />
     {/if}
@@ -169,14 +173,18 @@
         <strong>{issueLabel}</strong>
         <p>{issueMessage}</p>
         <div class="job-actions">
-          <button class="ui-button" onclick={() => (reviewingErrors = true)}>Review errors…</button>
-          {#if !running}<button class="ui-button" onclick={ondismiss}>Dismiss job</button>{/if}
+          <button class="ui-button" onclick={() => (reviewingErrors = true)}
+            >{m.job_indicator_review_errors()}</button
+          >
+          {#if !running}<button class="ui-button" onclick={ondismiss}
+              >{m.job_indicator_dismiss_job()}</button
+            >{/if}
         </div>
       </section>
     {:else if job.status === "failed"}
       <AppMessage
-        message="This job did not complete. Dismiss it to continue."
-        actionLabel="Dismiss"
+        message={m.job_indicator_job_did_not_complete()}
+        actionLabel={m.common_dismiss()}
         onaction={ondismiss}
       />
     {/if}

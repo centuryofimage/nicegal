@@ -10,6 +10,7 @@
   import type { DividerGranularity, LayoutMode } from "../lib/gallery/types";
   import type { MediaFilter } from "../lib/search-query";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import { settings, settingsLimits } from "../lib/settings.svelte";
@@ -34,39 +35,40 @@
   } = $props();
   type LayoutOption = {
     value: LayoutMode;
-    label: string;
-    title: string;
+    label: () => string;
+    title: () => string;
     icon: typeof Rows3;
   };
   const layoutOptions: readonly LayoutOption[] = [
     {
       value: "justified",
-      label: "Justified",
-      title: "Justified: rows of equal height",
+      label: () => m.layout_mode_justified(),
+      title: () => m.view_controls_layout_justified_tooltip(),
       icon: Rows3,
     },
     {
       value: "masonry",
-      label: "Masonry",
-      title: "Masonry: columns of varying height",
+      label: () => m.layout_mode_masonry(),
+      title: () => m.view_controls_layout_masonry_tooltip(),
       icon: LayoutDashboard,
     },
     {
       value: "grid",
-      label: "Grid",
-      title: "Grid: cells of equal size",
+      label: () => m.layout_mode_grid(),
+      title: () => m.view_controls_layout_grid_tooltip(),
       icon: Grid3X3,
     },
   ];
-  const headerOptions: readonly { value: DividerGranularity; label: string }[] = [
-    { value: "none", label: "None" },
-    { value: "day", label: "Day" },
-    { value: "month", label: "Month" },
+  type ChoiceOption<T> = { value: T; label: () => string };
+  const headerOptions: readonly ChoiceOption<DividerGranularity>[] = [
+    { value: "none", label: () => m.view_controls_header_none() },
+    { value: "day", label: () => m.view_controls_header_day() },
+    { value: "month", label: () => m.view_controls_header_month() },
   ];
-  const mediaOptions: readonly { value: MediaFilter | null; label: string }[] = [
-    { value: null, label: "All" },
-    { value: "image", label: "Images" },
-    { value: "video", label: "Videos" },
+  const mediaOptions: readonly ChoiceOption<MediaFilter | null>[] = [
+    { value: null, label: () => m.view_controls_media_all() },
+    { value: "image", label: () => m.view_controls_media_images() },
+    { value: "video", label: () => m.view_controls_media_videos() },
   ];
   let openMenu = $state(false);
   const matchAreasAvailable = $derived(runtime.imageModelVisualizes);
@@ -82,46 +84,54 @@
 </script>
 
 {#snippet layoutChoices()}
-  <div class="menu-choices" role="radiogroup" aria-label="Gallery layout">
+  <div class="menu-choices" role="radiogroup" aria-label={m.view_controls_layout_group_aria()}>
     {#each layoutOptions as option (option.value)}
       <button
         class:selected={layoutMode === option.value}
         type="button"
         role="radio"
         aria-checked={layoutMode === option.value}
-        aria-label={`${option.label} layout`}
-        title={option.title}
+        aria-label={m.view_controls_layout_option_aria({ label: option.label() })}
+        title={option.title()}
         onclick={() => chooseLayout(option.value)}
       >
         <option.icon size={13} strokeWidth={1.75} aria-hidden="true" />
-        <span>{option.label}</span>
+        <span>{option.label()}</span>
       </button>
     {/each}
   </div>
 {/snippet}
 {#snippet organizationChoices()}
-  <div class="organization-menu" aria-label="Media and date organization">
-    <div class="organization-group" role="radiogroup" aria-label="Show media">
-      <h3>Show media</h3>
+  <div class="organization-menu" aria-label={m.view_controls_organization_aria()}>
+    <div
+      class="organization-group"
+      role="radiogroup"
+      aria-label={m.view_controls_show_media_heading()}
+    >
+      <h3>{m.view_controls_show_media_heading()}</h3>
       <div class="choice-row">
-        {#each mediaOptions as option (option.label)}
+        {#each mediaOptions as option (option.value)}
           <button
             type="button"
             role="radio"
-            aria-label={option.label}
+            aria-label={option.label()}
             aria-checked={mediaFilter === option.value}
             onclick={() => onmediachange(option.value)}
           >
             <span class="choice-mark" aria-hidden="true"
               >{#if mediaFilter === option.value}<Check size={12} />{/if}</span
-            >{option.label}
+            >{option.label()}
           </button>
         {/each}
       </div>
     </div>
-    {#if ranked}<p>Date options apply when sorting by Date.</p>{/if}
-    <div class="organization-group" role="radiogroup" aria-label="Sort by">
-      <h3>Sort by</h3>
+    {#if ranked}<p>{m.view_controls_ranked_date_note()}</p>{/if}
+    <div
+      class="organization-group"
+      role="radiogroup"
+      aria-label={m.view_controls_sort_by_heading()}
+    >
+      <h3>{m.view_controls_sort_by_heading()}</h3>
       <div class="choice-row">
         <button
           type="button"
@@ -132,7 +142,7 @@
         >
           <span class="choice-mark" aria-hidden="true"
             >{#if sortField === "modified"}<Check size={12} />{/if}</span
-          >File date
+          >{m.view_controls_sort_file_date()}
         </button>
         <button
           type="button"
@@ -143,12 +153,16 @@
         >
           <span class="choice-mark" aria-hidden="true"
             >{#if sortField === "capture"}<Check size={12} />{/if}</span
-          >Photo date
+          >{m.view_controls_sort_photo_date()}
         </button>
       </div>
     </div>
-    <div class="organization-group" role="radiogroup" aria-label="Date headers">
-      <h3>Date headers</h3>
+    <div
+      class="organization-group"
+      role="radiogroup"
+      aria-label={m.view_controls_date_headers_heading()}
+    >
+      <h3>{m.view_controls_date_headers_heading()}</h3>
       <div class="choice-row">
         {#each headerOptions as option (option.value)}
           <button
@@ -160,24 +174,24 @@
           >
             <span class="choice-mark" aria-hidden="true"
               >{#if dateHeaders === option.value}<Check size={12} />{/if}</span
-            >{option.label}
+            >{option.label()}
           </button>
         {/each}
       </div>
     </div>
     <div class="organization-group">
-      <h3>Search results</h3>
+      <h3>{m.view_controls_search_results_heading()}</h3>
       <div class="choice-row">
         <button
           type="button"
           role="checkbox"
           aria-checked={$settings.matchScores}
-          title="Show each result's vector match score on its tile"
+          title={m.view_controls_match_scores_tooltip()}
           onclick={() => ($settings.matchScores = !$settings.matchScores)}
         >
           <span class="choice-mark" aria-hidden="true"
             >{#if $settings.matchScores}<Check size={12} />{/if}</span
-          >Match scores
+          >{m.view_controls_match_scores()}
         </button>
         <button
           class="match-areas-option"
@@ -185,14 +199,16 @@
           role="checkbox"
           aria-checked={$settings.matchAreas && matchAreasAvailable}
           title={matchAreasAvailable
-            ? "Show where each visual search result matches, on its tile"
-            : `${runtime.imageModelName ?? "This image model"} does not visualize well`}
+            ? m.view_controls_match_areas_tooltip()
+            : m.common_visualize_unavailable({
+                model: runtime.imageModelName ?? m.view_controls_image_model_fallback(),
+              })}
           disabled={!matchAreasAvailable}
           onclick={() => ($settings.matchAreas = !$settings.matchAreas)}
         >
           <span class="choice-mark" aria-hidden="true"
             >{#if $settings.matchAreas && matchAreasAvailable}<Check size={12} />{/if}</span
-          >Match areas
+          >{m.view_controls_match_areas()}
         </button>
       </div>
     </div>
@@ -210,30 +226,32 @@
     aria-haspopup="dialog"
     aria-expanded={openMenu}
     onclick={() => (openMenu = !openMenu)}
-    ><SlidersHorizontal size={13} aria-hidden="true" /><span>View</span>
+    ><SlidersHorizontal size={13} aria-hidden="true" /><span>{m.view_controls_view_button()}</span>
     <ChevronDown size={13} aria-hidden="true" /></button
   >
   {#if openMenu}
-    <div class="view-menu viewport-popup" role="dialog" aria-label="View options">
+    <div class="view-menu viewport-popup" role="dialog" aria-label={m.view_controls_menu_aria()}>
       <section>
-        <h2>Layout</h2>
+        <h2>{m.view_controls_layout_heading()}</h2>
         {@render layoutChoices()}
       </section>
       <div class="numeric-options">
         <GallerySizeSlider menu />
         <label
-          >Spacing <input type="number" bind:value={$settings.gap} {...settingsLimits.gap} /></label
+          >{m.view_controls_spacing_label()}
+          <input type="number" bind:value={$settings.gap} {...settingsLimits.gap} /></label
         >
         {#if layoutMode === "grid"}
           <label
-            >Columns <input
+            >{m.view_controls_columns_label()}
+            <input
               type="number"
-              title="0 = automatic columns"
+              title={m.view_controls_columns_tooltip()}
               bind:value={$settings.gridColumns}
               {...settingsLimits.gridColumns}
             /></label
           >
-          <p>0 = automatic columns. Adjusting image size restores automatic columns.</p>
+          <p>{m.view_controls_columns_note()}</p>
         {/if}
       </div>
       <div class="menu-rule" role="separator"></div>

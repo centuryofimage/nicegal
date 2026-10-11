@@ -3,24 +3,26 @@
 
   import type { UpdateStatus } from "../../../shared/updates";
 
+  import { m } from "../../../shared/paraglide/messages.js";
+
   let { status, onopen }: { status: UpdateStatus; onopen: () => void } = $props();
 </script>
 
 {#if status.phase === "downloading"}
   <span class="update-status update-download" role="status" aria-live="polite">
-    <CircleArrowUp size={13} aria-hidden="true" />Downloading update…
+    <CircleArrowUp size={13} aria-hidden="true" />{m.update_status_downloading()}
   </span>
 {:else if status.phase === "ready" || status.phase === "available"}
   <span class="update-status" role="status">
     <button
       onclick={onopen}
       title={status.phase === "ready"
-        ? `Nicegal ${status.version} is ready to install. View update options.`
-        : `Nicegal ${status.version} is available. View the release page.`}
+        ? m.update_status_ready_tooltip({ version: status.version })
+        : m.update_status_available_tooltip({ version: status.version })}
     >
       <CircleArrowUp size={13} aria-hidden="true" />{status.phase === "ready"
-        ? "Update ready"
-        : "Update available"}
+        ? m.update_status_ready()
+        : m.common_update_available()}
     </button>
   </span>
 {/if}

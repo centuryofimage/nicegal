@@ -16,11 +16,12 @@
   import X from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { folderName } from "../lib/library-root";
   import { popoverDismiss } from "../lib/popover-dismiss";
   import {
-    OCR_SYNTAX_NOTES,
+    ocrSyntaxNotes,
     parseQuery,
     textWithoutFolder,
     textWithoutScope,
@@ -94,44 +95,44 @@
   const scopeOptions: ScopeOption[] = [
     {
       scope: "all",
-      label: "All",
-      menuLabel: "All",
+      label: m.search_bar_scope_all(),
+      menuLabel: m.search_bar_scope_all(),
       prefix: "",
-      summary: "File names, exact text, related text, and visual results",
+      summary: m.search_bar_scope_all_summary(),
       icon: Search,
     },
     {
       scope: "like",
-      label: "Visual search",
-      menuLabel: "Visual search",
+      label: m.search_bar_scope_like(),
+      menuLabel: m.search_bar_scope_like(),
       prefix: "like:",
-      summary: "Find images using descriptions or example images",
+      summary: m.search_bar_scope_like_summary(),
       icon: ScanEye,
     },
     {
       scope: "name",
-      label: "Name",
-      menuLabel: "File name",
+      label: m.search_bar_scope_name(),
+      menuLabel: m.search_bar_scope_name_menu(),
       prefix: "name:",
-      summary: "File names only",
-      syntax: ["IMG_* (starts with)", "*.png (ends with)"],
+      summary: m.search_bar_scope_name_summary(),
+      syntax: [m.search_bar_scope_name_syntax_starts(), m.search_bar_scope_name_syntax_ends()],
       icon: FileText,
     },
     {
       scope: "ocr",
-      label: "Text",
-      menuLabel: "Exact text",
+      label: m.search_bar_scope_ocr(),
+      menuLabel: m.search_bar_scope_ocr_menu(),
       prefix: "ocr:",
-      summary: "Exact words read from the picture. All words must match.",
-      syntax: [...OCR_SYNTAX_NOTES],
+      summary: m.search_bar_scope_ocr_summary(),
+      syntax: ocrSyntaxNotes(),
       icon: ScanText,
     },
     {
       scope: "meaning",
-      label: "Related text",
-      menuLabel: "Related text",
+      label: m.search_bar_scope_meaning(),
+      menuLabel: m.search_bar_scope_meaning(),
       prefix: "meaning:",
-      summary: "Text found in pictures, matched by meaning instead of spelling",
+      summary: m.search_bar_scope_meaning_summary(),
       icon: TextSearch,
     },
   ];
@@ -144,28 +145,38 @@
 
   let exampleDate = $state(localIsoDate(new Date()));
   const filterExamples = $derived([
-    { label: "Path", token: 'path:"Trips"', prefix: 'path:"Trips"', icon: FolderSearch },
-    { label: "Extension", token: "ext:jpg,png", prefix: "ext:jpg,png", icon: FileType },
-    { label: "Exclude", token: "!ext:gif", prefix: "!ext:gif", icon: Ban },
     {
-      label: "Before",
+      label: m.search_bar_filter_path(),
+      token: 'path:"Trips"',
+      prefix: 'path:"Trips"',
+      icon: FolderSearch,
+    },
+    {
+      label: m.search_bar_filter_extension(),
+      token: "ext:jpg,png",
+      prefix: "ext:jpg,png",
+      icon: FileType,
+    },
+    { label: m.search_bar_filter_exclude(), token: "!ext:gif", prefix: "!ext:gif", icon: Ban },
+    {
+      label: m.search_bar_filter_before(),
       token: `before:${exampleDate}`,
       prefix: `before:${exampleDate}`,
       icon: CalendarDays,
     },
     {
-      label: "After",
+      label: m.search_bar_filter_after(),
       token: `after:${exampleDate}`,
       prefix: `after:${exampleDate}`,
       icon: CalendarDays,
     },
     {
-      label: "During",
+      label: m.search_bar_filter_during(),
       token: `during:${exampleDate}`,
       prefix: `during:${exampleDate}`,
       icon: CalendarDays,
     },
-    { label: "Type", token: "type:video", prefix: "type:video", icon: Images },
+    { label: m.search_bar_filter_type(), token: "type:video", prefix: "type:video", icon: Images },
   ] as const);
 
   /** Wide enough that inline syntax notes read as separate items without a bullet between them.
@@ -175,9 +186,9 @@
   /** Tooltip: summary first, then one syntax note per line. */
   function scopeTitle(option: ScopeOption): string {
     if (!runtime.supportsImageTextQueries && option.scope === "like")
-      return "Find similar images using image examples";
+      return m.search_bar_like_no_image_title();
     if (!runtime.supportsImageTextQueries && option.scope === "all")
-      return "File names, exact text, and related text. This image model searches by image example only.";
+      return m.search_bar_all_image_only_title();
     return [option.summary, ...(option.syntax ?? [])].join("\n");
   }
 
@@ -188,7 +199,7 @@
    */
   function scopeHintText(option: ScopeOption): string {
     if (!runtime.supportsImageTextQueries && option.scope === "like")
-      return "Add an image example to find similar pictures";
+      return m.search_bar_like_image_only_hint();
     return option.syntax?.length ? option.syntax.join(SYNTAX_GAP) : option.summary;
   }
 
@@ -227,8 +238,8 @@
       (parsed.body.trim() || visualReferences.length) &&
       (catalog.selectedStatus?.imageCoverage?.indexed ?? 0) === 0
       ? preparingImages
-        ? "Preparing visual search. You can keep browsing."
-        : "Visual search isn't ready for this library yet."
+        ? m.search_bar_preparing_visual()
+        : m.search_bar_visual_not_ready()
       : "",
   );
   const exampleCount = $derived(parseVisualTextTerms(parsed.body).length + visualReferences.length);
@@ -249,7 +260,7 @@
       parsed.body.trim() &&
       noOcr &&
       (parsed.scope === "ocr" || parsed.scope === "meaning")
-      ? "Text search isn't set up for this library."
+      ? m.search_bar_text_not_set_up()
       : "",
   );
   /** Coverage known before searching wins over what a finished search reported. */
@@ -265,22 +276,24 @@
     const text =
       parsed.scope === "like" && reference
         ? visualReferences.length === 1
-          ? `Images ${reference.polarity === "less" ? "less " : ""}like ${reference.displayName}`
-          : `Visual search with ${visualReferences.length} images`
+          ? reference.polarity === "less"
+            ? m.search_bar_reference_hint_less({ name: reference.displayName })
+            : m.search_bar_reference_hint_one({ name: reference.displayName })
+          : m.search_bar_reference_hint_many({ count: visualReferences.length })
         : scopeHintText(selectedScope);
     return text;
   });
   /** Syntax reminder under a rejected query — the same line the empty box shows as ghost text,
    * repeated where the user actually is when they get it wrong. */
   const messageHint = $derived(
-    message && querySyntaxError ? OCR_SYNTAX_NOTES.join(SYNTAX_GAP) : "",
+    message && querySyntaxError ? ocrSyntaxNotes().join(SYNTAX_GAP) : "",
   );
   // Scoped searches use the syntax hint instead.
   // An image-only model returns no visual results for typed words.
   const placeholder = $derived(
     runtime.supportsImageTextQueries
-      ? "Search file names, text, and images"
-      : "Search file names and text",
+      ? m.search_bar_placeholder()
+      : m.search_bar_placeholder_no_images(),
   );
 
   function selectScope(scope: SearchScope): void {
@@ -422,21 +435,27 @@
       <button
         class="scope-button"
         type="button"
-        aria-label="Search scope: {selectedScope.label}"
+        aria-label={m.search_bar_scope_button_label({ scope: selectedScope.label })}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onclick={toggleMenu}
       >
         <ScopeIcon size={12} aria-hidden="true" />
         <span class="scope-label">{selectedScope.label}</span>
-        {#if parsed.scope === "like"}<span class="mobile-scope-label">Visual</span>{/if}
+        {#if parsed.scope === "like"}<span class="mobile-scope-label"
+            >{m.search_bar_mobile_scope_label()}</span
+          >{/if}
         <ChevronDown size={11} aria-hidden="true" />
       </button>
 
       {#if menuOpen || semanticSuggestion}
         <div class="scope-popovers">
           {#if menuOpen}
-            <div class="scope-menu viewport-popup" role="menu" aria-label="Search scope">
+            <div
+              class="scope-menu viewport-popup"
+              role="menu"
+              aria-label={m.search_bar_scope_menu_label()}
+            >
               {#each scopeOptions as option (option.scope)}
                 <button
                   type="button"
@@ -454,7 +473,7 @@
                 </button>
               {/each}
               <div class="scope-menu-separator" role="separator"></div>
-              <div class="scope-menu-heading">Filters</div>
+              <div class="scope-menu-heading">{m.search_bar_filters_heading()}</div>
               {#each filterExamples as filter (filter.label)}
                 <button type="button" role="menuitem" onclick={() => insertFilter(filter.token)}>
                   <span class="scope-menu-mark" aria-hidden="true"></span>
@@ -468,8 +487,10 @@
           {#if semanticSuggestion}
             <div class="semantic-suggestion" role="status">
               <TextSearch size={11} aria-hidden="true" />
-              <span>Want broader results?</span>
-              <a href="#meaning-search" onclick={activateSemanticSearch}>Find related text</a>
+              <span>{m.search_bar_semantic_prompt()}</span>
+              <a href="#meaning-search" onclick={activateSemanticSearch}
+                >{m.search_bar_semantic_action()}</a
+              >
             </div>
           {/if}
         </div>
@@ -510,7 +531,7 @@
         placeholder={parsed.scope === "all" ? placeholder : ""}
         spellcheck="false"
         autocomplete="off"
-        aria-label="Search"
+        aria-label={m.search_bar_input_label()}
         aria-describedby={scopeHint ? hintId : undefined}
       />
       <span id={hintId} class="search-hint-accessible">{scopeHint.trim()}</span>
@@ -521,7 +542,7 @@
         class="folder-focus-chip"
         type="button"
         title={parsed.folder}
-        aria-label={`Show all folders; remove ${parsed.folder} filter`}
+        aria-label={m.search_bar_folder_chip_label({ folder: parsed.folder })}
         onclick={() => (value = withFolder(value, null))}
       >
         <FolderSearch size={12} aria-hidden="true" /><span>{folderName(parsed.folder)}</span><X
@@ -535,7 +556,7 @@
       <button
         class="scope-button photo-reference-chip"
         type="button"
-        aria-label={`Visual search includes ${visualReferences.length} photo examples`}
+        aria-label={m.search_bar_reference_chip_label({ count: visualReferences.length })}
         aria-expanded={composerOpen}
         aria-haspopup="dialog"
         onclick={toggleComposer}
@@ -550,8 +571,8 @@
         class="clear-button"
         type="button"
         onclick={clear}
-        title="Clear search"
-        aria-label="Clear search"
+        title={m.common_clear_search()}
+        aria-label={m.common_clear_search()}
       >
         <X size={11} aria-hidden="true" />
       </button>
@@ -563,7 +584,7 @@
         class="compose-chip"
         type="button"
         title={visualReferences.length
-          ? `Visual search includes ${visualReferences.length} photo examples`
+          ? m.search_bar_reference_chip_label({ count: visualReferences.length })
           : undefined}
         aria-expanded={composerOpen}
         aria-haspopup="dialog"
@@ -573,9 +594,9 @@
           <span class="mobile-photo-indicator"><Images size={12} aria-hidden="true" /></span>
         {/if}
         <span
-          >Compose visual search{exampleCount
-            ? ` · ${exampleCount} example${exampleCount === 1 ? "" : "s"}`
-            : ""}</span
+          >{m.common_compose_visual_search()}{#if exampleCount}{m.common_separator()}{m.visual_composer_example_count(
+              { count: exampleCount },
+            )}{/if}</span
         >
         <ChevronDown size={11} aria-hidden="true" />
       </button>
@@ -614,7 +635,7 @@
       <span>{setupText}</span>
       {#if !(imageNotice && preparingImages)}
         <button class="ui-button" type="button" onclick={onopenlibrarymanager}
-          >Library manager…</button
+          >{m.common_library_manager_ellipsis()}</button
         >
       {/if}
     </div>

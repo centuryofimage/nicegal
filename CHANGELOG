@@ -1,4 +1,2 @@
-- add a refresh button
-- add an auto refresh when you reopen the window if you use the tray icon
-- fix auto updater to do partial downloads instead of 300mb ones -_-
-- add changelog to update modal
+- add localization
+- switch to libjpeg-turbo for faster image indexing

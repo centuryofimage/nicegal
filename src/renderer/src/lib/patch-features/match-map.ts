@@ -1,5 +1,6 @@
 import type { ImageQuery } from "../../../../shared/backend";
 
+import { m } from "../../../../shared/paraglide/messages.js";
 import { apiUrl } from "../platform";
 import { readSafetensors, type F32Tensor } from "./safetensors";
 import { colorizeScores } from "./similar";
@@ -42,7 +43,7 @@ export async function loadMatchMap(
       signal,
     });
     if (response.status === 502 || response.status === 503) {
-      return { status: "failed", message: "Backend is restarting" };
+      return { status: "failed", message: m.patch_match_backend_restarting() };
     }
     if (!response.ok) {
       const code = await errorCode(response);
@@ -111,7 +112,7 @@ async function errorCode(response: Response): Promise<string | null> {
 }
 
 function failureMessage(code: string | null): string {
-  if (code === "invalid_request") return "Not available for this image or model";
-  if (code === "models_not_ready") return "Visual search model isn't ready";
-  return "Couldn't map match areas";
+  if (code === "invalid_request") return m.patch_match_not_available();
+  if (code === "models_not_ready") return m.patch_match_model_not_ready();
+  return m.patch_match_failed();
 }

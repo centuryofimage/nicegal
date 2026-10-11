@@ -1,3 +1,5 @@
+import { m } from "../../../shared/paraglide/messages.js";
+
 /**
  * Where the renderer's media and API requests go. The desktop window uses privileged custom
  * schemes; a browser connected over remote access uses same-origin paths on the LAN server.
@@ -7,7 +9,9 @@ export function isRemote(): boolean {
 }
 
 /** Tooltip for controls a remote browser shows greyed out, such as native folder pickers. */
-export const DESKTOP_ONLY_TITLE = "Available on the PC running Nicegal";
+export function desktopOnlyTitle(): string {
+  return m.platform_desktop_only_title();
+}
 
 /** `path` is `asset/<id>?<query>`. */
 export function thumbnailUrl(path: string): string {

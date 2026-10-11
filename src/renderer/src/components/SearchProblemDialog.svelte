@@ -6,6 +6,7 @@
 <script lang="ts">
   import type { SearchIssue } from "../lib/search-issue";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import Modal from "./Modal.svelte";
   import TechnicalDetails from "./TechnicalDetails.svelte";
 
@@ -33,52 +34,31 @@
   {onclose}
   --modal-width="480px"
 >
-  <section class="search-problem">
+  <section class="dialog-panel">
     <h1 id="search-problem-title">{issue.label}</h1>
     <p id="search-problem-guidance">{issue.guidance}</p>
     {#if issue.detail}<TechnicalDetails text={issue.detail} copyHeading={issue.label} />{/if}
-    <footer>
+    <footer class="dialog-footer">
       {#if issue.action === "rescan"}
-        <button class="ui-button" onclick={onrescan} disabled={!canRescan}>Rescan library</button>
-        <button class="ui-button" onclick={onsettings}>Search settings…</button>
+        <button class="ui-button" onclick={onrescan} disabled={!canRescan}
+          >{m.common_rescan_library()}</button
+        >
+        <button class="ui-button" onclick={onsettings}>{m.common_search_settings_ellipsis()}</button
+        >
       {:else if issue.action === "retry"}
-        <button class="ui-button" onclick={onretry}>Try again</button>
+        <button class="ui-button" onclick={onretry}>{m.common_try_again()}</button>
       {:else}
-        <button class="ui-button" onclick={onsettings}>Search settings…</button>
+        <button class="ui-button" onclick={onsettings}>{m.common_search_settings_ellipsis()}</button
+        >
       {/if}
-      <button class="ui-button" onclick={onclose}>Close</button>
+      <button class="ui-button" onclick={onclose}>{m.common_close()}</button>
     </footer>
   </section>
 </Modal>
 
 <style>
-  .search-problem {
-    display: grid;
-    gap: var(--space-8);
-    box-sizing: border-box;
-    width: 100%;
-    padding: var(--space-12);
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
-    color: var(--text-primary);
-    font-size: var(--font-size-md);
-  }
-  h1,
-  p {
-    margin: 0;
-  }
-  h1 {
-    font-size: var(--dialog-title-size);
-  }
   p {
     color: var(--text-secondary);
     overflow-wrap: anywhere;
-  }
-  footer {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: var(--space-6);
   }
 </style>

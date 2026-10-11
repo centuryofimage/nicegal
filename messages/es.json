@@ -1,0 +1,1222 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "about_settings_backend_commit_label": "Confirmación del backend",
+  "about_settings_backend_source_link": "Código fuente del backend",
+  "about_settings_copyright": "Copyright 2026 bep",
+  "about_settings_description": "Una galería de escritorio con OCR local, búsqueda de texto e imágenes.",
+  "about_settings_diagnostics_saved": "Diagnósticos guardados.",
+  "about_settings_diagnostics_warning": "Los diagnósticos pueden contener nombres de archivos y detalles de errores.",
+  "about_settings_frontend_commit_label": "Confirmación del frontend",
+  "about_settings_frontend_source_link": "Código fuente del frontend",
+  "about_settings_license_information": "Información de licencia",
+  "about_settings_license_summary": "Frontend: {#mit}MIT{/mit}. Backend: {#agpl}AGPL-3.0-only{/agpl}.",
+  "app_folder_already_in_library": "Esa carpeta ya está en «{library_name}». Selecciona esa biblioteca o agrega una carpeta diferente.",
+  "app_folder_purge_failed": "Se quitó la carpeta, pero no se pudo iniciar la eliminación de sus datos indexados.",
+  "app_libraries_check_failed": "No se pudieron comprobar las bibliotecas existentes: {error}",
+  "app_menu_close_window": "Cerrar ventana",
+  "app_menu_file": "&Archivo",
+  "app_menu_quit": "Salir",
+  "app_menu_toggle_devtools": "Alternar &herramientas para desarrolladores",
+  "app_menu_view": "&Ver",
+  "app_message_default_title": "Error",
+  "app_open_failed_guidance": "Nicegal no pudo conectarse a su servicio de la galería. Inténtalo de nuevo o reinicia la aplicación.",
+  "app_open_failed_title": "No se pudo abrir la galería",
+  "app_reconnect_failed_guidance": "Inténtalo de nuevo para actualizar la biblioteca y reanudar la indexación.",
+  "app_reconnect_failed_title": "No se pudo volver a conectar a la galería",
+  "app_remove_folder_wait_for_job": "Espera a que finalice el trabajo actual antes de eliminar los datos indexados.",
+  "app_remove_last_folder": "Una biblioteca necesita al menos una carpeta. Quita la biblioteca en su lugar.",
+  "app_runtime_switch_timeout": "La indexación no se detuvo a tiempo. Inténtalo de nuevo.",
+  "backend_app_closing": "La aplicación se está cerrando",
+  "backend_failure_diagnostics_saved": "Diagnósticos guardados en {path}",
+  "backend_failure_guidance": "El servicio de la galería no pudo iniciarse o se detuvo inesperadamente. Reinícialo. Si vuelve a fallar, reinicia la aplicación.",
+  "backend_failure_loading_log": "Cargando líneas recientes del registro…",
+  "backend_failure_read_log_failed": "No se pudieron leer las líneas recientes del registro: {reason}",
+  "backend_failure_report_problem": "Para informar del problema, adjunta el archivo ZIP de diagnósticos a un {#link}informe de error{/link}.",
+  "backend_failure_restart_failed": "No se pudo reiniciar el servicio: {reason}",
+  "backend_failure_restart_service": "Reiniciar servicio",
+  "backend_failure_restarting": "Reiniciando…",
+  "backend_failure_save_diagnostics_failed": "No se pudieron guardar los diagnósticos: {reason}",
+  "backend_failure_title": "Servicio de la galería no disponible",
+  "backend_job_starting_busy": "Se está iniciando un trabajo; inténtalo de nuevo cuando termine",
+  "backend_remote_job_not_allowed": "Este trabajo solo se puede iniciar en el PC que ejecuta Nicegal",
+  "backend_search_settings_busy": "Ya hay un cambio de configuración de búsqueda en curso",
+  "backend_service_already_running": "El servicio de la galería ya se está ejecutando o iniciando",
+  "common_add_to_visual_search": "Agregar a la búsqueda visual",
+  "common_cancel": "Cancelar",
+  "common_cancelling": "Cancelando",
+  "common_clear_search": "Borrar búsqueda",
+  "common_close": "Cerrar",
+  "common_collect_diagnostics": "Recopilar diagnósticos",
+  "common_collecting_diagnostics": "Recopilando…",
+  "common_compose_visual_search": "Componer búsqueda visual",
+  "common_copied": "Copiado",
+  "common_copy_details": "Copiar detalles",
+  "common_copy_failed": "Selecciona los detalles y cópialos manualmente.",
+  "common_dismiss": "Descartar",
+  "common_find_similar": "Buscar imágenes similares",
+  "common_libraries": "Bibliotecas",
+  "common_library_manager": "Administrador de bibliotecas",
+  "common_library_manager_ellipsis": "Administrador de bibliotecas…",
+  "common_library_missing": "Esa biblioteca ya no existe.",
+  "common_loading": "Cargando…",
+  "common_mapping": "Asignando…",
+  "common_no_library": "Sin biblioteca",
+  "common_pairing_code": "Código de emparejamiento",
+  "common_remote_access": "Acceso remoto",
+  "common_rescan_library": "Volver a examinar la biblioteca",
+  "common_save_diagnostics": "Guardar diagnósticos",
+  "common_search_settings_ellipsis": "Configuración de búsqueda…",
+  "common_searching": "Buscando…",
+  "common_separator": " · ",
+  "common_settings": "Configuración",
+  "common_switch_after_job": "Cambiar después de que finalice el trabajo actual.",
+  "common_try_again": "Reintentar",
+  "common_update_available": "Actualización disponible",
+  "common_visual_image_too_large": "Elige una imagen de menos de 16 MB para la búsqueda visual.",
+  "common_visualize_unavailable": "{model} no se visualiza bien",
+  "detail_view_actual_size": "Tamaño real (1)",
+  "detail_view_enter_fullscreen": "Entrar en pantalla completa (F)",
+  "detail_view_exit_fullscreen": "Salir de pantalla completa (F)",
+  "detail_view_fit_to_window": "Ajustar a la ventana (0)",
+  "detail_view_gallery_label": "Galería",
+  "detail_view_hide_match_areas": "Ocultar similitud por zonas y zonas coincidentes (H)",
+  "detail_view_hover_to_compare": "Pasa el cursor sobre un área para comparar zonas",
+  "detail_view_image_controls_aria": "Controles del visor de imágenes",
+  "detail_view_legend_strong": "Fuerte",
+  "detail_view_legend_weak": "Débil",
+  "detail_view_match_score": "Coincidencia {score}",
+  "detail_view_matches_for": "Coincidencias para {#q}{query}{/q}",
+  "detail_view_media_navigation_aria": "Navegación multimedia",
+  "detail_view_model_fallback": "Este modelo de imagen",
+  "detail_view_next": "Siguiente",
+  "detail_view_original_load_failed": "No se pudo cargar el archivo original. Es posible que se haya movido o eliminado.",
+  "detail_view_pooled_score_tooltip": "Similitud de coseno de toda la imagen con la búsqueda. Los colores abarcan desde las zonas más débiles hasta las más fuertes de esta imagen.",
+  "detail_view_previous": "Anterior",
+  "detail_view_return_to_gallery": "Volver a la galería (Escape)",
+  "detail_view_show_match_areas": "Mostrar similitud por zonas y zonas coincidentes (H)",
+  "detail_view_similar_to_outlined_area": "Similar al área marcada",
+  "detail_view_visualize_match_areas": "Visualizar zonas coincidentes (H)",
+  "detail_view_zoom_fit": "Ajustar",
+  "detail_view_zoom_in": "Acercar",
+  "detail_view_zoom_out": "Alejar",
+  "detail_view_zoom_percent": "{percent}%",
+  "diagnostics_zip_filter_name": "Archivo ZIP",
+  "file_action_add_count_to_visual_search": "Agregar {count} a la búsqueda visual",
+  "file_action_cant_share_file_type": "Este navegador no puede compartir este tipo de archivo.",
+  "file_action_copy_image": "Copiar imagen",
+  "file_action_couldnt_convert_image": "No se pudo convertir la imagen.",
+  "file_action_couldnt_load_file": "No se pudo cargar el archivo ({status}).",
+  "file_action_download": "Descargar",
+  "file_action_items_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} elemento",
+        "countPlural=*": "{countText} elementos"
+      }
+    }
+  ],
+  "file_action_open_in_new_tab": "Abrir en una pestaña nueva",
+  "file_action_preparing": "Preparando…",
+  "file_action_ready_tap_to_share": "Listo. Toca para compartir",
+  "file_action_share": "Compartir…",
+  "gallery_choose_media_folder_button": "Elegir carpeta de medios…",
+  "gallery_edit_library_button": "Editar biblioteca…",
+  "gallery_empty_library_message": "No se encontraron fotos ni videos en las carpetas de esta biblioteca. Agrega una carpeta o comprueba sus exclusiones.",
+  "gallery_empty_library_scanning": "Examinando las carpetas de esta biblioteca…",
+  "gallery_empty_library_title": "No hay fotos ni videos",
+  "gallery_folders_offline_guidance": "Conecta la unidad o restaura la carpeta y vuelve a intentarlo.",
+  "gallery_folders_offline_title": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Carpeta no conectada",
+        "countPlural=*": "Carpetas no conectadas"
+      }
+    }
+  ],
+  "gallery_info_toggle_label": "Información",
+  "gallery_info_toggle_tooltip": "Mostrar u ocultar información del archivo (I / Ctrl+I / Cmd+I)",
+  "gallery_libraries_toggle_tooltip": "Mostrar u ocultar bibliotecas",
+  "gallery_load_error_guidance": "Comprueba que su unidad esté conectada y vuelve a intentarlo.",
+  "gallery_load_error_title": "No se pudo leer la biblioteca",
+  "gallery_no_library_message": "Elige una carpeta de fotos o videos para empezar.",
+  "gallery_no_library_remote_message": "Agrega una carpeta de fotos o videos en el PC que ejecuta Nicegal.",
+  "gallery_no_library_title": "Aún no hay biblioteca",
+  "gallery_panes_group_label": "Paneles",
+  "gallery_progress_interrupted_guidance": "Es posible que el trabajo aún se esté ejecutando. Volviendo a conectar…",
+  "gallery_progress_interrupted_title": "Actualizaciones de progreso interrumpidas",
+  "gallery_size_slider_label": "Tamaño de imagen",
+  "gallery_size_slider_title": "Tamaño de imagen: {value} px",
+  "gallery_size_slider_title_auto_columns": "Tamaño de imagen: al ajustar se vuelve a las columnas automáticas",
+  "gallery_size_slider_value_text": "{value} px",
+  "gallery_starting_message": "Abriendo el catálogo local.",
+  "gallery_starting_title": "Iniciando galería…",
+  "gallery_toolbar_stop_indexing": "Detener indexación",
+  "gallery_toolbar_switching_provider": "Cambiando a OpenVINO…",
+  "gallery_viewer_load_failed_status": "Error de carga",
+  "getting_started_add_folder": "Agregar una carpeta",
+  "getting_started_add_folder_instructions": "Elige {#b}Agregar una carpeta{/b} a continuación, o usa el {#b}Administrador de bibliotecas{/b}. Tus archivos permanecen donde están.",
+  "getting_started_build_visual_search": "Crear una búsqueda visual",
+  "getting_started_choose_what_to_search": "Elige qué buscar",
+  "getting_started_compose_caption": "{#b}Componer búsqueda visual{/b} combina descripciones e imágenes. Ajusta los pesos para más o menos de cada uno. Los resultados se actualizan mientras editas.",
+  "getting_started_description": "Examina carpetas de fotos y videos y encuentra archivos por nombre, texto o apariencia.",
+  "getting_started_larger_models": "Los modelos más grandes buscan con mayor precisión. Elige uno en {#b}Configuración → Búsqueda{/b}.",
+  "getting_started_reopen_hint": "Vuelve a abrir esta guía desde {#b}Configuración → Introducción{/b}.",
+  "getting_started_search_menu_image_alt": "Menú de búsqueda con Todo, Búsqueda visual y Nombre de archivo sobre Texto exacto y Texto relacionado",
+  "getting_started_search_menu_intro": "Usa el menú de búsqueda o escribe un prefijo:",
+  "getting_started_search_menu_options": "{#b}Todo{/b} combina las búsquedas disponibles; {#b}Nombre de archivo{/b} busca solo nombres. Texto exacto y relacionado necesitan reconocimiento de texto.",
+  "getting_started_search_type_exact": "{#b}Texto exacto{/b} ({#code}ocr:{/code}): palabras dentro de las imágenes.",
+  "getting_started_search_type_related": "{#b}Texto relacionado{/b} ({#code}meaning:{/code}): palabras o significado similares.",
+  "getting_started_search_type_visual": "{#b}Búsqueda visual{/b} ({#code}like:{/code}): describe una foto o un video, o usa una imagen de ejemplo.",
+  "getting_started_sort_and_filter_help": "{#b}Relevancia{/b} agrupa los resultados; {#b}Fecha{/b} los coloca en una línea de tiempo. {#b}Similitud visual{/b} reduce las coincidencias visuales. Prueba {#code}during:2020-12{/code} para limitar una búsqueda a un mes.",
+  "getting_started_text_recognition_tip": "Para palabras dentro de las imágenes, activa {#b}Reconocimiento de texto{/b} en el Administrador de bibliotecas.",
+  "getting_started_title": "Te damos la bienvenida a Nicegal",
+  "getting_started_visual_search_image_alt": "Editor de búsqueda visual con atardecer ponderado 2,00 y multitudes ponderado −1,00",
+  "getting_started_visual_search_setup": "La búsqueda visual se configura automáticamente. La primera ejecución descarga un modelo de búsqueda; tus archivos permanecen en tu equipo.",
+  "getting_started_visual_search_steps": "Haz clic con el botón derecho en un archivo: {#b}Buscar imágenes similares{/b} inicia una búsqueda; {#b}Agregar a búsqueda visual{/b} agrega otro ejemplo.",
+  "image_model_danbooru_siglip_compact": "Entrenado en Danbooru para anime y arte; menos útil en otros casos. Indexación muy lenta.",
+  "image_model_danbooru_siglip_description": "Modelo especializado entrenado con etiquetas de Danbooru. Bueno para anime y arte, menos útil en otros casos. Indexación muy lenta, más lenta que MetaCLIP2 L/14.",
+  "image_model_dinov3_compact": "Imágenes de ejemplo rápidas con Visualizar. Sin descripciones de texto.",
+  "image_model_dinov3_description": "Búsqueda de imágenes rápida. Prueba Visualizar para ver qué zonas coinciden con tu ejemplo. No busca a partir de descripciones.",
+  "image_model_license_apache": "Apache 2.0",
+  "image_model_license_cc_by_nc": "CC BY-NC 4.0",
+  "image_model_license_dinov3": "Licencia de DINOv3",
+  "image_model_metaclip2_b16_compact": "Mejor para texto pequeño que B/32; velocidad similar en una GPU.",
+  "image_model_metaclip2_b16_description": "Lee texto pequeño en una foto de forma más fiable que B/32. Casi igual de rápido con una GPU dedicada, así que es una actualización fácil si tienes una. Mucho más lento con gráficos integrados.",
+  "image_model_metaclip2_b32_compact": "Búsqueda general rápida; puede omitir texto pequeño.",
+  "image_model_metaclip2_b32_description": "Rápido y bueno para la mayoría de las búsquedas. Puede omitir texto pequeño en una foto. La mejor opción para gráficos integrados.",
+  "image_model_metaclip2_l14_compact": "El mejor MetaCLIP2 para texto pequeño. Indexación muy lenta; 3 GB.",
+  "image_model_metaclip2_l14_description": "El modelo MetaCLIP2 más fiable para leer texto pequeño en una foto. Indexación muy lenta. Descarga de 3 GB.",
+  "image_model_pe_b16_compact": "Encuentra coincidencias distintas a MetaCLIP2. Necesita una GPU dedicada. 1,7 GB.",
+  "image_model_pe_b16_description": "Una familia de modelos distinta de MetaCLIP2 que encuentra coincidencias diferentes. Pruébala cuando una búsqueda no dé resultados. Casi tan rápida como B/32 con una GPU dedicada; mucho más lenta con gráficos integrados. Descarga de 1,7 GB.",
+  "image_model_pe_l14_compact": "PE B/16 más grande, también distinto de MetaCLIP2. Indexación muy lenta; 2,5 GB.",
+  "image_model_pe_l14_description": "Versión más grande de PE B/16, por lo que también encuentra coincidencias distintas a MetaCLIP2. Indexación muy lenta, más lenta que MetaCLIP2 L/14 pero más rápida que el modelo Danbooru. Descarga de 2,5 GB.",
+  "image_model_siglip2_compact": "Escenas y poses; más débil con texto pequeño. Tamaño similar a MetaCLIP2 B/16.",
+  "image_model_siglip2_description": "Bueno para escenas y poses. Puede omitir texto pequeño en una foto que MetaCLIP2 sí encuentra. Tamaño similar a MetaCLIP2 B/16.",
+  "image_model_tier_balanced_description": "Rápido en GPU potentes",
+  "image_model_tier_balanced_label": "Equilibrado",
+  "image_model_tier_fast_description": "La mejor opción para GPU más lentas",
+  "image_model_tier_fast_label": "Rápido",
+  "image_model_tier_large_description": "Indexación mucho más lenta",
+  "image_model_tier_large_label": "Grande",
+  "job_bytes_format": [
+    {
+      "declarations": [
+        "input amount",
+        "input unit",
+        "local amountText = amount: number maximumFractionDigits=1"
+      ],
+      "selectors": ["amountText"],
+      "match": {
+        "amountText=*": "{amountText} {unit}"
+      }
+    }
+  ],
+  "job_cancel_label_library_scan": "Examen de la biblioteca",
+  "job_cancel_label_model_prepare": "Preparación del modelo de búsqueda",
+  "job_cancel_label_ocr_model_load": "Carga del modelo de OCR",
+  "job_cancel_label_prune": "Depuración",
+  "job_cancel_label_thumbnail_generate": "Generación de miniaturas",
+  "job_cancelled": "Cancelado",
+  "job_cancelled_summary": "{label} cancelado",
+  "job_cleaning_up": "Limpiando",
+  "job_connecting": "Conectando…",
+  "job_done": "Listo",
+  "job_downloading_models": "Descargando modelos",
+  "job_errors_details_heading": "Detalles del error",
+  "job_errors_fallback_file_name": "Error del trabajo",
+  "job_errors_intro": "Selecciona un archivo para ver el error completo. Al cerrar esta ventana se conserva el resumen del trabajo.",
+  "job_errors_list_aria": "Errores notificados",
+  "job_errors_selected_aria": "Error seleccionado",
+  "job_errors_title": [
+    {
+      "declarations": ["input count", "local countText = count: number"],
+      "selectors": ["countText"],
+      "match": {
+        "countText=*": "Errores notificados ({countText})"
+      }
+    }
+  ],
+  "job_failed": "Fallido",
+  "job_indexing": "Indexando",
+  "job_indexing_text": "Indexando texto",
+  "job_indicator_cancel_aria": "Cancelar {label}",
+  "job_indicator_compact_downloading": "Descargando",
+  "job_indicator_compact_label": "{label} {count}",
+  "job_indicator_compact_pending": "{label}…",
+  "job_indicator_dismiss_job": "Descartar trabajo",
+  "job_indicator_done_with_issues": "Listo con problemas",
+  "job_indicator_issue_completed": "El resto del trabajo se completó.",
+  "job_indicator_issue_continuing": "El trabajo continúa con los archivos restantes.",
+  "job_indicator_issue_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} error de archivo notificado",
+        "countPlural=*": "{countText} errores de archivo notificados"
+      }
+    }
+  ],
+  "job_indicator_issue_stopped": "El trabajo se detuvo antes de poder finalizar.",
+  "job_indicator_job_did_not_complete": "Este trabajo no se completó. Descártalo para continuar.",
+  "job_indicator_job_failed_title": "El trabajo falló",
+  "job_indicator_percent": "{percent}%",
+  "job_indicator_progress_aria": "Progreso de {label}",
+  "job_indicator_review_errors": "Revisar errores…",
+  "job_indicator_show_progress_aria": "Mostrar progreso de {label}",
+  "job_known_file_errors": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} error de archivo conocido",
+        "countPlural=*": "{countText} errores de archivo conocidos"
+      }
+    }
+  ],
+  "job_library_purge_removed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se quitó {countText} elemento",
+        "countPlural=*": "Se quitaron {countText} elementos"
+      }
+    }
+  ],
+  "job_loading_models": "Cargando modelos",
+  "job_ocr": "OCR",
+  "job_ocr_models_ready": "Modelos de OCR listos",
+  "job_processing_files": [
+    {
+      "declarations": [
+        "input count",
+        "input progress",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{progress} · procesando {countText} archivo",
+        "countPlural=*": "{progress} · procesando {countText} archivos"
+      }
+    }
+  ],
+  "job_progress_files_aria": "Archivos en proceso",
+  "job_progress_metric_candidates": "Candidatos",
+  "job_progress_metric_deleted": "Eliminados",
+  "job_progress_metric_failed": "Fallidos",
+  "job_progress_metric_model_data": "Datos del modelo",
+  "job_progress_metric_skipped": "Omitidos",
+  "job_progress_phase_complete_aria": "{phase}, completado",
+  "job_progress_phase_current_aria": "{phase}, fase actual",
+  "job_progress_phases_aria": "Fases del trabajo",
+  "job_progress_processing": "Procesando",
+  "job_progress_processing_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Procesando · {countText} archivo",
+        "countPlural=*": "Procesando · {countText} archivos"
+      }
+    }
+  ],
+  "job_progress_total_unknown_text": "{progress} completado; total desconocido",
+  "job_progress_waiting_next_file": "Esperando el siguiente archivo…",
+  "job_progress_within_phase_aria": "Progreso de {label}",
+  "job_prune_deleted": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se eliminó {countText} entrada faltante",
+        "countPlural=*": "Se eliminaron {countText} entradas faltantes"
+      }
+    }
+  ],
+  "job_queued": "En cola",
+  "job_rate_format": [
+    {
+      "declarations": [
+        "input rate",
+        "input unit",
+        "local rateText = rate: number maximumFractionDigits=1"
+      ],
+      "selectors": ["rateText"],
+      "match": {
+        "rateText=*": "{rateText} {unit}"
+      }
+    }
+  ],
+  "job_rate_unit_images_per_second": "imágenes/s",
+  "job_rate_unit_items_per_second": "elementos/s",
+  "job_removing": "Quitando",
+  "job_scan_deleted_removed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se quitó {countText} archivo eliminado de la biblioteca",
+        "countPlural=*": "Se quitaron {countText} archivos eliminados de la biblioteca"
+      }
+    }
+  ],
+  "job_scan_folders_attention": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} carpeta necesita atención",
+        "countPlural=*": "{countText} carpetas necesitan atención"
+      }
+    }
+  ],
+  "job_scan_scanned": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se examinó {countText} archivo",
+        "countPlural=*": "Se examinaron {countText} archivos"
+      }
+    }
+  ],
+  "job_scan_scanned_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "input indexed",
+        "local countPlural = count: plural",
+        "local indexedText = indexed: number",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se examinó {countText} archivo; indexados: {indexedText}",
+        "countPlural=*": "Se examinaron {countText} archivos; indexados: {indexedText}"
+      }
+    }
+  ],
+  "job_scanning": "Examinando",
+  "job_search_models_ready": "Modelos de búsqueda listos",
+  "job_step_download": "Descargar",
+  "job_step_images": "Imágenes",
+  "job_step_load": "Cargar",
+  "job_step_prepare": "Preparar",
+  "job_step_prune": "Depurar",
+  "job_step_remove": "Quitar",
+  "job_step_sync": "Sincronizar",
+  "job_step_text": "Texto",
+  "job_step_thumbs": "Miniaturas",
+  "job_switch_stops_indexing": "Cambiar detiene la indexación. Se reanuda después de cerrar Configuración.",
+  "job_syncing": "Sincronizando",
+  "job_thumbnails": "Miniaturas",
+  "job_thumbnails_generated": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se generó {countText} miniatura",
+        "countPlural=*": "Se generaron {countText} miniaturas"
+      }
+    }
+  ],
+  "job_tracker_failure_try_again_guidance": "Inténtalo de nuevo. Si sigue fallando, reinicia la aplicación.",
+  "job_tracker_indexing_stopped_guidance": "El servicio de la galería se detuvo antes de que finalizara este trabajo. La indexación se reanuda cuando el servicio vuelva a estar en ejecución. El trabajo finalizado se conserva.",
+  "job_tracker_indexing_stopped_title": "La indexación se detuvo",
+  "job_tracker_start_failed_title": "No se pudo iniciar el trabajo",
+  "job_tracker_stop_failed_title": "No se pudo detener el trabajo",
+  "job_unit_bytes": "B",
+  "job_unit_gib": "GiB",
+  "job_unit_kib": "KiB",
+  "job_unit_mib": "MiB",
+  "language_restart_body": "Nicegal muestra el nuevo idioma después de reiniciarse.",
+  "language_restart_later": "Más tarde",
+  "language_restart_now": "Reiniciar ahora",
+  "language_restart_title": "Reiniciar para cambiar el idioma",
+  "language_restarting": "Reiniciando…",
+  "layout_mode_grid": "Cuadrícula",
+  "layout_mode_justified": "Justificado",
+  "layout_mode_masonry": "Mosaico",
+  "libraries_manager_choose_or_create": "Elige una biblioteca de la lista o crea una.",
+  "libraries_manager_duplicate_folder": "Carpeta duplicada",
+  "libraries_manager_empty": "Aún no hay bibliotecas. Elige una carpeta para crear una.",
+  "libraries_manager_file_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} archivo",
+        "countPlural=*": "{countText} archivos"
+      }
+    }
+  ],
+  "libraries_manager_job_running": "Hay un trabajo en ejecución. Detenlo antes de quitar esta biblioteca.",
+  "libraries_manager_list_aria": "Bibliotecas para administrar",
+  "libraries_manager_new_library": "Nueva biblioteca…",
+  "libraries_manager_remove_delete_data": "Quitar y eliminar los datos indexados",
+  "libraries_manager_remove_keep_data": "Quitar y conservar los datos indexados",
+  "libraries_manager_remove_library": "Quitar biblioteca…",
+  "libraries_manager_remove_reassurance": "Los archivos originales nunca se modifican. Los datos indexados que usa otra biblioteca se conservan.",
+  "libraries_manager_remove_title": "¿Quitar «{name}»?",
+  "libraries_manager_stop_jobs": "Detener los trabajos en ejecución y en cola",
+  "libraries_manager_stopping_jobs": "Deteniendo trabajos…",
+  "libraries_manager_wait_for_job": "Espera a que se detenga el trabajo actual y vuelve a intentarlo.",
+  "libraries_pane_add_folder_hint": "Usa el Administrador de bibliotecas para agregar una carpeta.",
+  "libraries_pane_all_folders": "Todas las carpetas",
+  "libraries_pane_discovering": "Detectando carpetas…",
+  "libraries_pane_filter_label": "Filtrar carpetas",
+  "libraries_pane_filter_placeholder": "Filtrar",
+  "libraries_pane_folders_error": "No se pudieron cargar las carpetas.",
+  "libraries_pane_libraries_error": "No se pudieron cargar las bibliotecas.",
+  "libraries_pane_no_match": "Ninguna carpeta coincide.",
+  "libraries_pane_sort_label": "Ordenar carpetas",
+  "libraries_pane_sort_name": "Nombre",
+  "libraries_pane_sort_name_title": "Ordenar carpetas por nombre",
+  "libraries_pane_sort_newest": "Más recientes",
+  "libraries_pane_sort_newest_title": "Primero las carpetas modificadas más recientemente",
+  "libraries_pane_splitter_label": "Cambiar el tamaño del panel de bibliotecas",
+  "libraries_pane_splitter_title": "Arrastra para cambiar el tamaño. Haz doble clic para restablecer.",
+  "libraries_pane_tree_label": "Carpetas",
+  "library_default_name": "Biblioteca",
+  "library_derived_name": "{first_folder} + {more_count}",
+  "library_editor_add_another_hint": "Puedes agregar otra carpeta a esta biblioteca.",
+  "library_editor_add_folder": "Agregar carpeta…",
+  "library_editor_added_status": "Agregada",
+  "library_editor_advanced": "Avanzado",
+  "library_editor_changes_status": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} cambio · se guarda al salir de esta vista",
+        "countPlural=*": "{countText} cambios · se guardan al salir de esta vista"
+      }
+    }
+  ],
+  "library_editor_choose_subfolder": "Elige una subcarpeta de una de las carpetas de esta biblioteca.",
+  "library_editor_date_range": "Intervalo de fechas",
+  "library_editor_delete_indexed_data": "Eliminar los datos indexados",
+  "library_editor_exclude_confirm": "¿Excluir {path} de esta biblioteca?",
+  "library_editor_exclude_folder": "Excluir carpeta…",
+  "library_editor_exclude_folder_group": "Excluir carpeta",
+  "library_editor_excluded_hint": "Se oculta de esta biblioteca y se omite en futuros análisis.",
+  "library_editor_excluded_legend": "Carpetas excluidas",
+  "library_editor_fallback_name": "biblioteca",
+  "library_editor_folder_excluded": "Esa carpeta está excluida. Inclúyela de nuevo en su lugar.",
+  "library_editor_folders_legend": "Carpetas",
+  "library_editor_from": "Desde",
+  "library_editor_generate": "Generar",
+  "library_editor_include_again_label": "Incluir {path} de nuevo",
+  "library_editor_include_again_title": "Quitar la exclusión e incluir esta carpeta de nuevo",
+  "library_editor_include_videos": "Incluir vídeos",
+  "library_editor_included_list_label": "Carpetas incluidas",
+  "library_editor_keep_indexed_data": "Conservar los datos indexados",
+  "library_editor_missing": "Esta biblioteca ya no existe.",
+  "library_editor_name_label": "Nombre",
+  "library_editor_needs_folder": "Una biblioteca necesita al menos una carpeta. Para eliminarla, usa Quitar biblioteca en este cuadro de diálogo.",
+  "library_editor_no_folders": "No hay carpetas. Agrega una para conservar esta biblioteca.",
+  "library_editor_ocr_hint": "Es unas 10 veces más lento que la búsqueda de imágenes, pero es útil para búsquedas de texto precisas. Los modelos se descargan automáticamente; las imágenes permanecen en tu equipo.",
+  "library_editor_purge_failed": "Los cambios se guardaron, pero no se pudo iniciar la eliminación de los datos indexados. Intenta guardar de nuevo.",
+  "library_editor_remove_folder_confirm": "¿Quitar {path} de esta biblioteca?",
+  "library_editor_remove_folder_group": "Quitar carpeta",
+  "library_editor_remove_folder_label": "Quitar {path} de esta biblioteca",
+  "library_editor_remove_folder_title": "Quitar carpeta de esta biblioteca",
+  "library_editor_remove_last_folder_title": "Quita la biblioteca para quitar su última carpeta",
+  "library_editor_retry": "Reintentar",
+  "library_editor_retry_failed": "Reintentar los archivos con error",
+  "library_editor_scan_actions_label": "Acciones de análisis de la biblioteca",
+  "library_editor_scan_error_details": "Detalles del error de análisis",
+  "library_editor_search_legend": "Búsqueda",
+  "library_editor_search_settings_hint": "Elige el modelo de imágenes y el proveedor de ejecución; se aplica a todas las bibliotecas.",
+  "library_editor_thumbnail_size": "{size}px",
+  "library_editor_thumbnails_heading": "Miniaturas",
+  "library_editor_thumbnails_hint": "Las miniaturas se generan a petición. Generar previamente solo si las necesitas.",
+  "library_editor_title": "Editar «{name}»",
+  "library_editor_to": "Hasta",
+  "library_editor_wait_for_job": "Espera a que termine el trabajo actual antes de eliminar los datos indexados de la carpeta.",
+  "library_status_added": "Agregada",
+  "library_status_added_detail": "Se analiza después de guardar este cambio",
+  "library_status_image_search": "Búsqueda de imágenes",
+  "library_status_last_scanned": "Último análisis: {time}",
+  "library_status_offline": "Sin conexión",
+  "library_status_options_summary": "{search} · {count} excluidas",
+  "library_status_paused": "En pausa",
+  "library_status_search_off": "Búsqueda desactivada",
+  "library_status_text_recognition": "Reconocimiento de texto",
+  "library_view_add_folder_failed_title": "No se pudo agregar la carpeta",
+  "library_view_add_folder_guidance": "Comprueba que la carpeta existe y se puede abrir, y vuelve a intentarlo.",
+  "library_view_drag_failed": "No se pudieron arrastrar los archivos: {message}",
+  "library_view_file_actions_failed": "No se pudieron mostrar las acciones del archivo: {message}",
+  "library_view_loading_catalog": "Cargando catálogo…",
+  "metadata_panel_animation": "Animación",
+  "metadata_panel_attributes": "Atributos",
+  "metadata_panel_captured": "Capturado",
+  "metadata_panel_close_label": "Cerrar información",
+  "metadata_panel_created": "Creado",
+  "metadata_panel_current_search_heading": "Búsqueda actual",
+  "metadata_panel_decode_failed": "El archivo no se pudo descodificar durante la indexación. Usa Administrador de bibliotecas → Reintentar los archivos con error después de comprobar el archivo.",
+  "metadata_panel_dimensions": "Dimensiones",
+  "metadata_panel_dimensions_value": "{width} × {height}",
+  "metadata_panel_duration": "Duración",
+  "metadata_panel_enable_text_recognition": "Activa el reconocimiento de texto en el Administrador de bibliotecas para leer las palabras de este archivo.",
+  "metadata_panel_exif_heading": "Cámara / EXIF",
+  "metadata_panel_format": "Formato",
+  "metadata_panel_frames": [
+    {
+      "declarations": [
+        "input frames",
+        "local framesPlural = frames: plural",
+        "local framesText = frames: number"
+      ],
+      "selectors": ["framesPlural"],
+      "match": {
+        "framesPlural=one": "{framesText} fotograma",
+        "framesPlural=*": "{framesText} fotogramas"
+      }
+    }
+  ],
+  "metadata_panel_heading": "Información",
+  "metadata_panel_load_error": "No se pudieron cargar los detalles del archivo.",
+  "metadata_panel_loading": "Cargando detalles…",
+  "metadata_panel_location": "Ubicación",
+  "metadata_panel_metadata_read_error": "No se pudieron leer algunos metadatos del archivo.",
+  "metadata_panel_modified": "Modificado",
+  "metadata_panel_multi_selected": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} archivo seleccionado. Selecciona uno para ver sus detalles.",
+        "countPlural=*": "{countText} archivos seleccionados. Selecciona uno para ver sus detalles."
+      }
+    }
+  ],
+  "metadata_panel_no_text_found": "No se encontró texto en este archivo.",
+  "metadata_panel_none": "Ninguno",
+  "metadata_panel_recognized_text_heading": "Texto reconocido",
+  "metadata_panel_seconds": "{seconds} s",
+  "metadata_panel_select_one": "Selecciona un archivo para ver sus detalles.",
+  "metadata_panel_size": "Tamaño",
+  "metadata_panel_size_bytes": "({bytes} bytes)",
+  "metadata_panel_size_title": "{bytes} bytes",
+  "metadata_panel_source_changed": "Este archivo ha cambiado. Actualiza la biblioteca para refrescar los detalles del catálogo.",
+  "metadata_panel_source_missing": "Este archivo no se encuentra. Se muestran los detalles guardados del catálogo.",
+  "metadata_panel_source_unreadable": "No se pudo leer este archivo. Se muestran los detalles guardados del catálogo.",
+  "metadata_panel_tag_group_simple": "Simple",
+  "metadata_panel_tag_group_subjects": "Temas",
+  "metadata_panel_tag_group_vibes": "Sensaciones",
+  "metadata_panel_tag_title": "Puntuación {score} · coseno {similarity} · {source}",
+  "metadata_panel_tag_title_rated": "Puntuación {score} · coseno {similarity} · {source} · {sensitivity}",
+  "metadata_panel_tags_disclaimer": "Estimaciones de un modelo de investigación. A menudo incorrectas.",
+  "metadata_panel_tags_heading": "Etiquetas",
+  "metadata_panel_tags_loading": "Cargando etiquetas…",
+  "metadata_panel_tags_unsupported": "Las etiquetas no están disponibles para este modelo de búsqueda.",
+  "metadata_panel_text_match": "Coincidencia de texto",
+  "metadata_panel_unavailable": "El servicio de la galería no está disponible.",
+  "metadata_panel_unavailable_value": "No disponible",
+  "metadata_panel_unknown": "Desconocido",
+  "metadata_panel_video_heading": "Vídeo",
+  "metadata_panel_video_unavailable": "Metadatos de vídeo no disponibles.",
+  "metadata_panel_visual_match": "Coincidencia visual",
+  "model_picker_default_description": "Modelo de búsqueda de imágenes.",
+  "model_picker_intro": "Determina cómo se comparan las imágenes con las imágenes de ejemplo y las descripciones. No cambia OCR ni la búsqueda de texto relacionado.",
+  "model_picker_legend": "Modelo de búsqueda de imágenes",
+  "model_picker_model_page_title": "Página del modelo",
+  "model_picker_recommended": "Recomendado",
+  "model_picker_trigger_label": "Modelo de búsqueda de imágenes: {model}",
+  "model_picker_trigger_title": "Elegir modelo de búsqueda de imágenes",
+  "model_picker_unavailable": "No disponible",
+  "native_copy_as_path_failed": "No se pudo copiar como ruta",
+  "native_copy_failed": "No se pudo copiar",
+  "native_drag_expired": "La operación de arrastre expiró. Vuelve a arrastrar la selección.",
+  "native_file_add_many_to_visual_search": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Agregar {countText} imagen a la búsqueda visual",
+        "countPlural=*": "Agregar {countText} imágenes a la búsqueda visual"
+      }
+    }
+  ],
+  "native_file_copy": "Copiar",
+  "native_file_copy_as_path": "Copiar como ruta",
+  "native_file_copy_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Copiar {countText} elemento",
+        "countPlural=*": "Copiar {countText} elementos"
+      }
+    }
+  ],
+  "native_file_copy_paths_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Copiar {countText} ruta",
+        "countPlural=*": "Copiar {countText} rutas"
+      }
+    }
+  ],
+  "native_file_open_clicked_item_folder": "Abrir la carpeta del elemento en el que se hizo clic",
+  "native_file_open_containing_folder": "Abrir carpeta contenedora",
+  "native_file_open_many": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Abrir {countText} elemento en las aplicaciones predeterminadas",
+        "countPlural=*": "Abrir {countText} elementos en las aplicaciones predeterminadas"
+      }
+    }
+  ],
+  "native_file_open_single": "Abrir en la aplicación predeterminada",
+  "native_file_reveal_clicked_in_explorer": "Mostrar el elemento en el que se hizo clic en el Explorador",
+  "native_file_reveal_clicked_in_finder": "Mostrar el elemento en el que se hizo clic en Finder",
+  "native_file_reveal_in_explorer": "Mostrar en el Explorador",
+  "native_file_reveal_in_finder": "Mostrar en Finder",
+  "native_files_unavailable": "Algunos archivos seleccionados ya no están disponibles. Actualiza la biblioteca e inténtalo de nuevo.",
+  "native_folder_copy_path": "Copiar ruta",
+  "native_folder_not_in_library": "Esa carpeta ya no forma parte de esta biblioteca.",
+  "native_folder_open_in_explorer": "Abrir en el Explorador",
+  "native_folder_open_in_file_manager": "Abrir en el administrador de archivos",
+  "native_folder_open_in_finder": "Abrir en Finder",
+  "native_folder_remove_from_library": "Quitar de la biblioteca…",
+  "native_image_filter_name": "Imágenes",
+  "native_open_failed": "No se pudo abrir",
+  "native_reveal_failed": "No se pudo mostrar",
+  "native_visual_search_default_name": "Imagen seleccionada",
+  "numeric_stepper_decrease": "Disminuir {label}",
+  "numeric_stepper_increase": "Aumentar {label}",
+  "ocr_search_bad_date_hint": "Fecha no reconocida",
+  "ocr_search_image_only_model": "Este modelo solo admite imágenes de ejemplo. Quita las descripciones de texto y agrega una imagen de ejemplo.",
+  "ocr_search_names_text_label": "Nombres y texto",
+  "ocr_search_names_text_message": "Nombres y texto: {message}",
+  "ocr_search_no_library_selected": "No hay ninguna biblioteca seleccionada.",
+  "ocr_search_pending_file_names": "Buscando nombres de archivo…",
+  "ocr_search_pending_files": "Buscando archivos…",
+  "ocr_search_pending_images": "Buscando imágenes…",
+  "ocr_search_pending_names_text": "Buscando nombres y texto…",
+  "ocr_search_pending_related_and_images": "Buscando texto relacionado e imágenes…",
+  "ocr_search_pending_related_text": "Buscando texto relacionado…",
+  "ocr_search_pending_text": "Buscando texto…",
+  "ocr_search_related_text_message": "Texto relacionado: {message}",
+  "ocr_search_related_text_not_set_up": "La búsqueda de texto relacionado no está configurada para esta biblioteca.",
+  "ocr_search_result_limit_reached": "Se alcanzó el límite de resultados; restringe la búsqueda por fecha.",
+  "ocr_search_visual_results_label": "Resultados visuales",
+  "ocr_search_visual_results_message": "Resultados visuales: {message}",
+  "patch_match_backend_restarting": "El backend se está reiniciando",
+  "patch_match_failed": "No se pudieron asignar las zonas coincidentes",
+  "patch_match_model_not_ready": "El modelo de búsqueda visual no está listo",
+  "patch_match_not_available": "No disponible para esta imagen o modelo",
+  "platform_desktop_only_title": "Disponible en el PC que ejecuta Nicegal",
+  "reconnecting_status_label": "Reconectando…",
+  "reconnecting_status_title": "No se puede acceder a Nicegal en tu PC",
+  "remote_access_allow_hint": "Los dispositivos emparejados pueden explorar y buscar en tus bibliotecas mientras Nicegal está abierto.",
+  "remote_access_allow_label": "Permitir teléfonos y otros dispositivos en esta red",
+  "remote_access_background_heading": "En segundo plano",
+  "remote_access_close_to_tray": "Cerrar en la bandeja del sistema",
+  "remote_access_close_to_tray_hint": "En su lugar, sal desde el icono de la bandeja.",
+  "remote_access_connected_in": "Conectado en {browser}",
+  "remote_access_fingerprint_hint": "Coincide con la huella digital SHA-256 en los detalles del certificado del navegador.",
+  "remote_access_fingerprint_label": "Huella digital del certificado",
+  "remote_access_first_visit": "Primera visita",
+  "remote_access_first_visit_hint": "El navegador advierte que la conexión no es privada porque ninguna autoridad pública avala este PC. Continúa una vez: en Chrome, Avanzado y, después, Continuar. En Safari, Mostrar detalles y, después, visitar este sitio web.",
+  "remote_access_https_hint": "Se generará un certificado autofirmado.",
+  "remote_access_https_label": "Usar HTTPS",
+  "remote_access_https_recommend": "Recomendado. Sin esto, cualquiera en esta red puede ver las imágenes que abras.",
+  "remote_access_minimize_to_tray": "Minimizar en la bandeja del sistema",
+  "remote_access_minimize_to_tray_hint": "Los dispositivos aún pueden conectarse mientras la ventana está oculta.",
+  "remote_access_no_network": "No hay conexión de red",
+  "remote_access_open_at_login": "Abrir cuando inicie sesión",
+  "remote_access_open_at_login_available": "Disponible en la aplicación instalada.",
+  "remote_access_open_at_login_tray": "Se inicia en la bandeja del sistema.",
+  "remote_access_open_on_device": "Abrir en tu dispositivo",
+  "remote_access_pair_device": "Emparejar un dispositivo",
+  "remote_access_pair_device_hint": "Muestra un código de un solo uso para escribir en el dispositivo.",
+  "remote_access_paired_date": "Emparejado el {pairedDate}",
+  "remote_access_paired_devices_heading": "Dispositivos emparejados",
+  "remote_access_paired_last_used": "Emparejado el {pairedDate}, último uso: {lastUsedDate} {lastUsedTime}",
+  "remote_access_pairing_code_hint": "Escríbelo en el dispositivo. Caduca a las {time}.",
+  "remote_access_remove_device": "Quitar",
+  "remote_access_wifi_hint": "Conéctalo a la misma red Wi-Fi que este PC.",
+  "remote_at_pc_change_language": "Cambia el idioma en el PC que ejecuta Nicegal.",
+  "remote_at_pc_change_update_settings": "Cambia la configuración de actualizaciones en el PC que ejecuta Nicegal.",
+  "remote_at_pc_choose_folders": "Elige carpetas en el PC que ejecuta Nicegal.",
+  "remote_at_pc_drag_files": "Arrastra archivos en el PC que ejecuta Nicegal.",
+  "remote_at_pc_install_updates": "Instala actualizaciones en el PC que ejecuta Nicegal.",
+  "remote_at_pc_manage_remote_access": "Administra el acceso remoto en el PC que ejecuta Nicegal.",
+  "remote_at_pc_open_license_information": "Abre la información de licencia en el PC que ejecuta Nicegal.",
+  "remote_at_pc_save_diagnostics": "Guarda los diagnósticos en el PC que ejecuta Nicegal.",
+  "remote_browser_name_unknown": "Navegador",
+  "remote_cannot_reach_pc": "No se puede acceder a Nicegal en tu PC.",
+  "remote_connection_label": "{name} ({browser})",
+  "remote_device_android_phone": "Teléfono Android",
+  "remote_device_android_tablet": "Tableta Android",
+  "remote_device_linux_pc": "PC Linux",
+  "remote_device_name_unknown": "Navegador",
+  "remote_device_not_paired": "Este dispositivo no está emparejado",
+  "remote_device_unpaired": "Este dispositivo ya no está emparejado.",
+  "remote_device_windows_pc": "PC Windows",
+  "remote_indicator_device_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} dispositivo",
+        "countPlural=*": "{countText} dispositivos"
+      }
+    }
+  ],
+  "remote_indicator_device_separator": ", ",
+  "remote_indicator_title": "Conectado: {devices}. Abrir la configuración de acceso remoto.",
+  "remote_open_at_sign_in_unavailable": "Abrir al iniciar sesión requiere la aplicación instalada",
+  "remote_pair_connect_button": "Conectar",
+  "remote_pair_device_name_label": "Nombre para este dispositivo",
+  "remote_pair_heading": "Conectar a Nicegal",
+  "remote_pair_instructions": "En tu PC, abre {settings}, luego {remoteAccess} y selecciona {pairDevice}.",
+  "remote_pairing_code_mismatch": "Ese código no coincide. Comprueba el código en tu PC.",
+  "remote_pairing_inactive": "No hay ningún código de emparejamiento activo. Selecciona {pairDevice} en tu PC.",
+  "remote_pairing_too_many_attempts": "Demasiados códigos incorrectos. Selecciona {pairDevice} en tu PC de nuevo.",
+  "remote_pairing_wrong_origin": "El emparejamiento debe realizarse desde esta página",
+  "remote_port_in_use": "El puerto {port} está en uso por otra aplicación.",
+  "remote_turn_on_first": "Activa primero el acceso remoto",
+  "remove_folder_flyout_delete_data": "Eliminar también sus miniaturas y datos de búsqueda",
+  "remove_folder_flyout_note": "Los archivos permanecen en el disco.",
+  "remove_folder_flyout_remove": "Quitar",
+  "remove_folder_flyout_title": "¿Quitar «{name}» de esta biblioteca?",
+  "runtime_job_started_before_switch": "Se inició un trabajo antes del cambio. Inténtalo de nuevo.",
+  "search_bar_all_image_only_title": "Nombres de archivo, texto exacto y texto relacionado. Este modelo de imagen solo busca por imagen de ejemplo.",
+  "search_bar_filter_after": "Después",
+  "search_bar_filter_before": "Antes",
+  "search_bar_filter_during": "Durante",
+  "search_bar_filter_exclude": "Excluir",
+  "search_bar_filter_extension": "Extensión",
+  "search_bar_filter_path": "Ruta",
+  "search_bar_filter_type": "Tipo",
+  "search_bar_filters_heading": "Filtros",
+  "search_bar_folder_chip_label": "Mostrar todas las carpetas; quitar filtro de {folder}",
+  "search_bar_input_label": "Buscar",
+  "search_bar_like_image_only_hint": "Agrega una imagen de ejemplo para encontrar imágenes similares",
+  "search_bar_like_no_image_title": "Encontrar imágenes similares con imágenes de ejemplo",
+  "search_bar_mobile_scope_label": "Visual",
+  "search_bar_placeholder": "Buscar nombres de archivo, texto e imágenes",
+  "search_bar_placeholder_no_images": "Buscar nombres de archivo y texto",
+  "search_bar_preparing_visual": "Preparando la búsqueda visual. Puedes seguir explorando.",
+  "search_bar_reference_chip_label": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "La búsqueda visual incluye {countText} foto de ejemplo",
+        "countPlural=*": "La búsqueda visual incluye {countText} fotos de ejemplo"
+      }
+    }
+  ],
+  "search_bar_reference_hint_less": "Imágenes menos parecidas a {name}",
+  "search_bar_reference_hint_many": "Búsqueda visual con {count} imágenes",
+  "search_bar_reference_hint_one": "Imágenes parecidas a {name}",
+  "search_bar_scope_all": "Todo",
+  "search_bar_scope_all_summary": "Nombres de archivo, texto exacto, texto relacionado y resultados visuales",
+  "search_bar_scope_button_label": "Ámbito de búsqueda: {scope}",
+  "search_bar_scope_like": "Búsqueda visual",
+  "search_bar_scope_like_summary": "Encontrar imágenes con descripciones o imágenes de ejemplo",
+  "search_bar_scope_meaning": "Texto relacionado",
+  "search_bar_scope_meaning_summary": "Texto encontrado en las imágenes, coincidente por significado en lugar de por ortografía",
+  "search_bar_scope_menu_label": "Ámbito de búsqueda",
+  "search_bar_scope_name": "Nombre",
+  "search_bar_scope_name_menu": "Nombre de archivo",
+  "search_bar_scope_name_summary": "Solo nombres de archivo",
+  "search_bar_scope_name_syntax_ends": "*.png (termina con)",
+  "search_bar_scope_name_syntax_starts": "IMG_* (empieza con)",
+  "search_bar_scope_ocr": "Texto",
+  "search_bar_scope_ocr_menu": "Texto exacto",
+  "search_bar_scope_ocr_summary": "Palabras exactas leídas de la imagen. Deben coincidir todas.",
+  "search_bar_semantic_action": "Buscar texto relacionado",
+  "search_bar_semantic_prompt": "¿Quieres resultados más amplios?",
+  "search_bar_text_not_set_up": "La búsqueda de texto no está configurada para esta biblioteca.",
+  "search_bar_visual_not_ready": "La búsqueda visual aún no está lista para esta biblioteca.",
+  "search_issue_model_failed_guidance": "No se pudo preparar el modelo {model}. Vuelve a examinar la biblioteca para intentarlo de nuevo o elige otro modelo o proveedor de ejecución en Configuración de búsqueda.",
+  "search_issue_model_failed_label": "Error del modelo de búsqueda",
+  "search_issue_model_image": "búsqueda de imágenes",
+  "search_issue_model_picture": "descripción de imagen",
+  "search_issue_model_switch_failed_guidance": "No se pudo cambiar el modelo de búsqueda de imágenes. Abre Configuración de búsqueda para comprobar el modelo activo e inténtalo de nuevo.",
+  "search_issue_model_switch_failed_label": "Error al cambiar el modelo",
+  "search_issue_model_text": "texto relacionado",
+  "search_issue_settings_problem_guidance": "No se pudo leer o cambiar la configuración de búsqueda. Abre Configuración de búsqueda e inténtalo de nuevo.",
+  "search_issue_settings_problem_label": "Problema de configuración de búsqueda",
+  "search_issue_status_unavailable_guidance": "Nicegal no pudo comprobar si la búsqueda está lista. Inténtalo de nuevo.",
+  "search_issue_status_unavailable_label": "Estado de búsqueda no disponible",
+  "search_models_default_note": "Cada modelo mantiene su propio índice. Al cambiar, se reinicia brevemente el servicio de la galería.",
+  "search_models_service_offline": "La configuración de búsqueda no está disponible mientras el servicio de la galería está sin conexión.",
+  "search_models_show_details": "Mostrar detalles",
+  "search_models_switching_model": "Cambiando el modelo de imagen…",
+  "search_models_text_unavailable_note": "Este modelo encuentra imágenes similares a partir de imágenes de ejemplo. Las descripciones de texto no están disponibles; las búsquedas por nombre de archivo y por texto OCR siguen funcionando.",
+  "search_models_title": "Búsqueda",
+  "search_ocr_example_either": "gato OR perro (cualquiera)",
+  "search_ocr_example_phrase": "\"vestido rojo\" (frase exacta)",
+  "search_ocr_example_prefix": "dre* (empieza con)",
+  "search_options_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} coincidencia",
+        "countPlural=*": "{countText} coincidencias"
+      }
+    }
+  ],
+  "search_options_count_truncated": "Primeras {shown} de {total} coincidencias",
+  "search_options_date": "Fecha",
+  "search_options_date_tooltip": "Más recientes primero, agrupadas por fecha",
+  "search_options_match_quality_label": "Calidad de coincidencia:",
+  "search_options_relevance": "Relevancia",
+  "search_options_relevance_tooltip": "Mejor coincidencia primero",
+  "search_options_section_jump_tooltip": "Ir a {section}",
+  "search_options_sections_aria": "Secciones de resultados de búsqueda",
+  "search_options_slider_disabled_tooltip": "Todos los resultados obtuvieron la misma puntuación, así que no hay nada que recortar",
+  "search_options_slider_tooltip": "Arrastra a la derecha para conservar solo las coincidencias más fuertes",
+  "search_options_sort_group_aria": "Ordenar resultados de búsqueda",
+  "search_options_sort_label": "Ordenar:",
+  "search_options_visual_similarity_label": "Similitud visual:",
+  "search_options_visual_slider_tooltip": "Arrastra a la derecha para conservar menos resultados visuales. Los resultados de nombres y texto no cambian.",
+  "search_stopping_indexing": "Deteniendo la indexación…",
+  "settings_advanced_heading": "Configuración de búsqueda avanzada",
+  "settings_appearance_heading": "Apariencia",
+  "settings_execution_provider_label": "Proveedor de ejecución",
+  "settings_execution_provider_note": "Déjalo así a menos que falle la indexación.",
+  "settings_execution_switching": "Cambiando…",
+  "settings_getting_started": "Primeros pasos",
+  "settings_hide_offensive_tags": "Ocultar etiquetas ofensivas",
+  "settings_hide_offensive_tags_note": "Desactívalo para ver todas las etiquetas, para investigación.",
+  "settings_language_heading": "Idioma",
+  "settings_language_label": "Idioma de visualización",
+  "settings_language_system": "Predeterminado del sistema",
+  "settings_library_search_label": "Búsqueda de imágenes, reconocimiento de texto y vídeos",
+  "settings_library_search_note": "Se elige para cada biblioteca en el Administrador de bibliotecas.",
+  "settings_new_to_nicegal": "¿No conoces Nicegal?",
+  "settings_page_about": "Acerca de",
+  "settings_page_general": "General",
+  "settings_page_search": "Búsqueda",
+  "settings_pages_nav_aria": "Páginas de configuración",
+  "settings_per_library_heading": "Por biblioteca",
+  "settings_play_animated_gifs": "Reproducir GIF animados en la cuadrícula",
+  "settings_tags_heading": "Etiquetas",
+  "settings_theme_label": "Tema",
+  "settings_update_automatic_label": "Actualizaciones automáticas",
+  "settings_update_none_note": "Esta compilación no busca actualizaciones.",
+  "settings_update_notify_label": "Notificarme sobre actualizaciones",
+  "settings_update_notify_note": "Buscar una vez cuando se abre Nicegal. Descarga las actualizaciones desde la página de la versión.",
+  "settings_updates_heading": "Actualizaciones",
+  "status_bar_check_button_aria": "Buscar archivos nuevos",
+  "status_bar_check_button_title": "Buscar archivos nuevos (F5)",
+  "status_bar_dismiss_warning_title": "Descartar esta advertencia de búsqueda",
+  "status_bar_index_progress": "{indexed} / {total} examinados",
+  "status_bar_index_scanned": "{indexed} examinados",
+  "status_bar_items": [
+    {
+      "declarations": [
+        "input total",
+        "local totalPlural = total: plural",
+        "local totalText = total: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{totalText} elemento",
+        "totalPlural=*": "{totalText} elementos"
+      }
+    }
+  ],
+  "status_bar_items_filtered": [
+    {
+      "declarations": [
+        "input total",
+        "input matched",
+        "local totalPlural = total: plural",
+        "local totalText = total: number",
+        "local matchedText = matched: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{matchedText} / {totalText} elemento",
+        "totalPlural=*": "{matchedText} / {totalText} elementos"
+      }
+    }
+  ],
+  "status_bar_items_filtered_title": [
+    {
+      "declarations": [
+        "input total",
+        "input matched",
+        "local totalPlural = total: plural",
+        "local totalText = total: number",
+        "local matchedText = matched: number"
+      ],
+      "selectors": ["totalPlural"],
+      "match": {
+        "totalPlural=one": "{matchedText} de {totalText} elemento coincide con la búsqueda actual",
+        "totalPlural=*": "{matchedText} de {totalText} elementos coinciden con la búsqueda actual"
+      }
+    }
+  ],
+  "status_bar_job_rate_title": "Rendimiento de la fase actual",
+  "status_bar_provider_fallback_title": "Se ejecuta en {provider}; {failed} no se pudieron cargar y se recurrió a un respaldo automáticamente",
+  "status_bar_provider_restart_title": "Se ejecuta en {provider}; reinicia para cambiar a {configured}",
+  "status_bar_provider_title": "Proveedor de ejecución: {provider}",
+  "status_bar_selected_count": "{count} seleccionados",
+  "status_bar_service_unavailable": "Servicio no disponible",
+  "technical_details_summary": "Detalles técnicos",
+  "thumbnail_failures_details_aria": "Detalles del error de miniaturas",
+  "thumbnail_failures_retry_button": "Reintentar miniaturas",
+  "thumbnail_failures_retry_help": "Se detuvieron los reintentos automáticos. Comprueba que se pueda acceder a los archivos y vuelve a intentarlo. Aún puedes intentar abrir una imagen.",
+  "thumbnail_failures_summary": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} miniatura no disponible",
+        "countPlural=*": "{countText} miniaturas no disponibles"
+      }
+    }
+  ],
+  "thumbnail_generation_failed_message": "No se pudo cargar la miniatura después de generarla. Puede que el póster falte o no se pueda leer.",
+  "timeline_scrollbar_aria_by_date": "Desplazarse a la fecha",
+  "timeline_scrollbar_aria_results": "Desplazarse por los resultados",
+  "timeline_scrollbar_year_range": "{first}–{last}",
+  "tray_open_nicegal": "Abrir Nicegal",
+  "tray_quit": "Salir",
+  "update_dialog_available_body": "Nicegal {version} está disponible. Abre su página de la versión para descargarla e instalarla manualmente.",
+  "update_dialog_available_body_unversioned": "Nicegal está disponible. Abre su página de la versión para descargarla e instalarla manualmente.",
+  "update_dialog_changes_aria": "Cambios",
+  "update_dialog_later_button": "Más tarde",
+  "update_dialog_open_release_page_button": "Abrir página de la versión",
+  "update_dialog_ready_body": "Nicegal {version} está listo para instalarse. Reinicia ahora o sigue trabajando e instálalo al salir.",
+  "update_dialog_ready_body_unversioned": "Nicegal está listo para instalarse. Reinicia ahora o sigue trabajando e instálalo al salir.",
+  "update_dialog_release_notes_button": "Notas de la versión",
+  "update_dialog_restart_button": "Reiniciar e instalar",
+  "update_dialog_restarting_button": "Reiniciando…",
+  "update_status_available_tooltip": "Nicegal {version} está disponible. Ver la página de la versión.",
+  "update_status_downloading": "Descargando actualización…",
+  "update_status_ready": "Actualización lista",
+  "update_status_ready_tooltip": "Nicegal {version} está listo para instalarse. Ver las opciones de actualización.",
+  "video_player_controls_group_aria": "Controles de vídeo",
+  "video_player_exit_fullscreen": "Salir de pantalla completa",
+  "video_player_fullscreen": "Pantalla completa",
+  "video_player_mute": "Silenciar",
+  "video_player_pause": "Pausar",
+  "video_player_pause_video": "Pausar vídeo",
+  "video_player_play": "Reproducir",
+  "video_player_play_video": "Reproducir vídeo",
+  "video_player_seek_aria": "Buscar en el vídeo",
+  "video_player_time_aria": "Tiempo {current} de {duration}",
+  "video_player_unmute": "Activar sonido",
+  "video_player_volume_aria": "Volumen",
+  "view_controls_columns_label": "Columnas",
+  "view_controls_columns_note": "0 = columnas automáticas. Ajustar el tamaño de la imagen restaura las columnas automáticas.",
+  "view_controls_columns_tooltip": "0 = columnas automáticas",
+  "view_controls_date_headers_heading": "Encabezados de fecha",
+  "view_controls_header_day": "Día",
+  "view_controls_header_month": "Mes",
+  "view_controls_header_none": "Ninguno",
+  "view_controls_image_model_fallback": "Este modelo de imagen",
+  "view_controls_layout_grid_tooltip": "Cuadrícula: celdas del mismo tamaño",
+  "view_controls_layout_group_aria": "Diseño de la galería",
+  "view_controls_layout_heading": "Diseño",
+  "view_controls_layout_justified_tooltip": "Justificado: filas de la misma altura",
+  "view_controls_layout_masonry_tooltip": "Mosaico: columnas de altura variable",
+  "view_controls_layout_option_aria": "Diseño de {label}",
+  "view_controls_match_areas": "Zonas coincidentes",
+  "view_controls_match_areas_tooltip": "Muestra dónde coincide cada resultado de la búsqueda visual, en su mosaico",
+  "view_controls_match_scores": "Puntuaciones de coincidencia",
+  "view_controls_match_scores_tooltip": "Muestra la puntuación de coincidencia vectorial de cada resultado en su mosaico",
+  "view_controls_media_all": "Todo",
+  "view_controls_media_images": "Imágenes",
+  "view_controls_media_videos": "Vídeos",
+  "view_controls_menu_aria": "Opciones de vista",
+  "view_controls_organization_aria": "Organización de medios y fechas",
+  "view_controls_ranked_date_note": "Las opciones de fecha se aplican al ordenar por fecha.",
+  "view_controls_search_results_heading": "Resultados de búsqueda",
+  "view_controls_show_media_heading": "Mostrar medios",
+  "view_controls_sort_by_heading": "Ordenar por",
+  "view_controls_sort_file_date": "Fecha del archivo",
+  "view_controls_sort_photo_date": "Fecha de la foto",
+  "view_controls_spacing_label": "Espaciado",
+  "view_controls_view_button": "Ver",
+  "virtual_gallery_collapse_section_aria": "Contraer {label}",
+  "virtual_gallery_expand_section_aria": "Expandir {label}",
+  "virtual_gallery_gif_badge": "GIF",
+  "virtual_gallery_match_badge": "Coincidencia {match_time}",
+  "virtual_gallery_match_kind_text": "Significado del texto",
+  "virtual_gallery_match_kind_visual": "Visual",
+  "virtual_gallery_match_score_tooltip": "Coincidencia {kind}: {score}",
+  "virtual_gallery_matched_frame_tooltip": "Fotograma coincidente en {match_time} · duración del vídeo {duration}",
+  "virtual_gallery_mute_preview": "Silenciar vista previa",
+  "virtual_gallery_thumbnail_unavailable": "Miniatura no disponible",
+  "virtual_gallery_thumbnail_unavailable_image_aria": "{name}: miniatura no disponible. Abrir imagen",
+  "virtual_gallery_thumbnail_unavailable_video_aria": "{name}: miniatura no disponible. Abrir vídeo",
+  "virtual_gallery_unmute_preview": "Activar sonido de la vista previa",
+  "virtual_gallery_video_tooltip": "Vídeo",
+  "virtual_gallery_visual_match_aria": "{name}: coincidencia visual en {match_time}",
+  "virtual_gallery_visual_match_tooltip": "Coincidencia visual en {match_time} · duración del vídeo {duration}",
+  "virtual_gallery_visual_search_example_aria": "Ejemplo de búsqueda visual",
+  "visual_composer_add_button": "Agregar",
+  "visual_composer_add_library_photos": "Fotos seleccionadas de la biblioteca",
+  "visual_composer_add_menu_aria": "Agregar ejemplo visual",
+  "visual_composer_add_selected_library": "Fotos seleccionadas de la biblioteca ({count})",
+  "visual_composer_add_selected_tooltip": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Agregar {countText} foto seleccionada",
+        "countPlural=*": "Agregar {countText} fotos seleccionadas"
+      }
+    }
+  ],
+  "visual_composer_add_text_description": "Descripción de texto",
+  "visual_composer_choose_file": "Elegir archivo…",
+  "visual_composer_close_aria": "Cerrar editor de búsqueda visual",
+  "visual_composer_close_tooltip": "Cerrar editor (mantener búsqueda)",
+  "visual_composer_default_model": "Este modelo de imagen",
+  "visual_composer_description_aria": "Descripción {n}",
+  "visual_composer_description_placeholder": "Describe una imagen",
+  "visual_composer_empty_description": "Descripción vacía",
+  "visual_composer_example_count": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{countText} ejemplo",
+        "countPlural=*": "{countText} ejemplos"
+      }
+    }
+  ],
+  "visual_composer_example_name": "Ejemplo {n}",
+  "visual_composer_head_description_or_image": "Descripción o imagen",
+  "visual_composer_head_image": "Imagen",
+  "visual_composer_head_match": "Coincidencia",
+  "visual_composer_head_weight": "Peso",
+  "visual_composer_heading": "Búsqueda visual",
+  "visual_composer_less_like": "Menos parecido a",
+  "visual_composer_less_like_note": "«Menos parecido a» cambia la similitud; no garantiza una exclusión.",
+  "visual_composer_match_direction_aria": "Dirección de coincidencia para {name}",
+  "visual_composer_model_image_only_note": "{model} solo busca por imagen de ejemplo. Para buscar con descripciones de texto, elige otro modelo en {#link}Configuración de búsqueda{/link}.",
+  "visual_composer_more_like": "Más parecido a",
+  "visual_composer_reference_label": "{source}: {name}",
+  "visual_composer_reference_source_file": "Archivo elegido",
+  "visual_composer_reference_source_library": "Foto de la biblioteca",
+  "visual_composer_remove_description_aria": "Quitar descripción {text}",
+  "visual_composer_remove_example_aria": "Quitar ejemplo {n}",
+  "visual_composer_remove_reference_aria": "Quitar {name}",
+  "visual_composer_select_photos_first_tooltip": "Primero selecciona fotos en la galería",
+  "visual_composer_unsupported_terms_heading": "Quita estas descripciones para buscar con este modelo solo de imágenes:",
+  "visual_composer_weight_for_aria": "Peso para {name}",
+  "visual_file_read_cancelled": "Se canceló la lectura de la imagen de búsqueda visual.",
+  "visual_file_read_failed": "No se pudo leer la imagen.",
+  "visual_search_file_too_large": "{name} supera el límite de {limit} MB de la búsqueda visual."
+}

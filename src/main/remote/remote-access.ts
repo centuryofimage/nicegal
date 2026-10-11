@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 
 import type { BackgroundChange, RemoteAccessStatus, RemoteConnection } from "../../shared/remote";
 
+import { m } from "../../shared/paraglide/messages.js";
 import { loadCertificate } from "./remote-certificate";
 import { RemoteServer, type RemoteServerHost, type TlsIdentity } from "./remote-server";
 import { RemoteStore } from "./remote-store";
@@ -91,7 +92,7 @@ export class RemoteAccess {
   setBackground(change: BackgroundChange): RemoteAccessStatus {
     const { openAtLogin, ...tray } = change;
     if (openAtLogin !== undefined) {
-      if (!this.loginItem.available) throw new Error("Open at sign-in needs the installed app");
+      if (!this.loginItem.available) throw new Error(m.remote_open_at_sign_in_unavailable());
       this.loginItem.set(openAtLogin);
     }
     this.store.setTray(tray);
@@ -134,7 +135,7 @@ export class RemoteAccess {
   }
 
   renewPairingCode(): RemoteAccessStatus {
-    if (!this.server) throw new Error("Turn on remote access first");
+    if (!this.server) throw new Error(m.remote_turn_on_first());
     this.pairing = {
       code: String(randomInt(0, 1_000_000)).padStart(6, "0"),
       expiresAt: Date.now() + PAIRING_CODE_MS,
@@ -163,8 +164,10 @@ export class RemoteAccess {
   private pair(code: string, name: string, address: string): { token: string } | { error: string } {
     const pairing = this.pairing;
     if (!pairing || pairing.expiresAt <= Date.now())
-      return { error: "No pairing code is active. Select Pair a device on your PC." };
-    const tooMany = { error: "Too many wrong codes. Select Pair a device on your PC again." };
+      return { error: m.remote_pairing_inactive({ pairDevice: m.remote_access_pair_device() }) };
+    const tooMany = {
+      error: m.remote_pairing_too_many_attempts({ pairDevice: m.remote_access_pair_device() }),
+    };
     const addressFailures = pairing.failuresByAddress.get(address) ?? 0;
     if (addressFailures >= MAX_FAILURES_PER_ADDRESS) return tooMany;
     if (code !== pairing.code) {
@@ -176,7 +179,7 @@ export class RemoteAccess {
       }
       return addressFailures + 1 >= MAX_FAILURES_PER_ADDRESS
         ? tooMany
-        : { error: "That code doesn't match. Check the code on your PC." };
+        : { error: m.remote_pairing_code_mismatch() };
     }
     const { token } = this.store.addDevice(name);
     // One code, one device.
@@ -209,7 +212,7 @@ export class RemoteAccess {
       const code = (error as NodeJS.ErrnoException).code;
       this.error =
         code === "EADDRINUSE"
-          ? `Port ${this.store.port} is in use by another app.`
+          ? m.remote_port_in_use({ port: this.store.port })
           : error instanceof Error
             ? error.message
             : String(error);

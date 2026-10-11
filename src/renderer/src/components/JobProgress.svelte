@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { JobSnapshot } from "../../../shared/backend";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { formatBytes, jobLabel, jobPhaseProgress, jobPhases } from "../lib/job-format";
   import { isTerminalJobStatus } from "../lib/job-state";
   import JobMetric from "./JobMetric.svelte";
@@ -31,30 +32,51 @@
     const metrics: ContextMetric[] = [];
 
     if (job.progress.failed > 0) {
-      metrics.push({ label: "Failed", value: job.progress.failed.toLocaleString() });
+      metrics.push({
+        label: m.job_progress_metric_failed(),
+        value: job.progress.failed.toLocaleString(),
+      });
     }
     if (job.progress.skipped > 0) {
-      metrics.push({ label: "Skipped", value: job.progress.skipped.toLocaleString() });
+      metrics.push({
+        label: m.job_progress_metric_skipped(),
+        value: job.progress.skipped.toLocaleString(),
+      });
     }
     if (job.type === "ocrModelLoad" && job.progress.downloadedBytes > 0) {
-      metrics.push({ label: "Model data", value: formatBytes(job.progress.downloadedBytes) });
+      metrics.push({
+        label: m.job_progress_metric_model_data(),
+        value: formatBytes(job.progress.downloadedBytes),
+      });
     }
     if (job.type === "pruneMissing") {
       if (job.progress.pruneCandidates > 0) {
-        metrics.push({ label: "Candidates", value: job.progress.pruneCandidates.toLocaleString() });
+        metrics.push({
+          label: m.job_progress_metric_candidates(),
+          value: job.progress.pruneCandidates.toLocaleString(),
+        });
       }
       if (job.progress.deleted > 0) {
-        metrics.push({ label: "Deleted", value: job.progress.deleted.toLocaleString() });
+        metrics.push({
+          label: m.job_progress_metric_deleted(),
+          value: job.progress.deleted.toLocaleString(),
+        });
       }
     }
     if (job.type === "libraryPurge" && job.progress.deleted > 0) {
-      metrics.push({ label: "Deleted", value: job.progress.deleted.toLocaleString() });
+      metrics.push({
+        label: m.job_progress_metric_deleted(),
+        value: job.progress.deleted.toLocaleString(),
+      });
     }
     if (
       job.type === "libraryScan" &&
       (job.progress.pruneCandidates > 0 || job.progress.deleted > 0)
     ) {
-      metrics.push({ label: "Deleted", value: job.progress.deleted.toLocaleString() });
+      metrics.push({
+        label: m.job_progress_metric_deleted(),
+        value: job.progress.deleted.toLocaleString(),
+      });
     }
 
     return metrics.slice(0, 3);
@@ -62,7 +84,7 @@
 </script>
 
 <div class="job-progress">
-  <section class="phase-progress" aria-label="Job phases">
+  <section class="phase-progress" aria-label={m.job_progress_phases_aria()}>
     <div class="phase-track" style:--phase-count={phases.length}>
       {#each phases as phase, index (phase.label)}
         {@const isCurrent = !isTerminalJobStatus(job.status) && index === currentPhaseIndex}
@@ -70,7 +92,11 @@
         <span
           class:complete={isComplete}
           class:current={isCurrent}
-          aria-label={`${phase.label}${isCurrent ? ", current phase" : isComplete ? ", complete" : ""}`}
+          aria-label={isCurrent
+            ? m.job_progress_phase_current_aria({ phase: phase.label })
+            : isComplete
+              ? m.job_progress_phase_complete_aria({ phase: phase.label })
+              : phase.label}
         ></span>
       {/each}
     </div>
@@ -95,13 +121,13 @@
         class:indeterminate={!hasMeaningfulTotal}
         class="progress-track"
         role="progressbar"
-        aria-label={`${currentLabel} progress`}
+        aria-label={m.job_progress_within_phase_aria({ label: currentLabel })}
         aria-valuemin="0"
         aria-valuemax={hasMeaningfulTotal ? 100 : undefined}
         aria-valuenow={hasMeaningfulTotal ? phasePercent : undefined}
         aria-valuetext={hasMeaningfulTotal
           ? phaseProgress.text
-          : `${phaseProgress.text || "0"} completed; total unknown`}
+          : m.job_progress_total_unknown_text({ progress: phaseProgress.text || "0" })}
       >
         {#if hasMeaningfulTotal}
           <span class="progress-fill" style:width={`${phasePercent}%`}></span>
@@ -113,16 +139,18 @@
   {/if}
 
   {#if activeAssetPaths.length || (hasShownActiveAssets && !isTerminalJobStatus(job.status))}
-    <section class="active-assets" aria-label="Files being processed">
+    <section class="active-assets" aria-label={m.job_progress_files_aria()}>
       <span class="active-assets-label"
-        >Processing{activeAssetPaths.length > 1 ? ` · ${activeAssetPaths.length} files` : ""}</span
+        >{activeAssetPaths.length > 1
+          ? m.job_progress_processing_count({ count: activeAssetPaths.length })
+          : m.job_progress_processing()}</span
       >
       <ul>
         {#each activeAssetPaths as path (path)}
           <li title={path}>{path.split(/[\\/]/).pop() || path}</li>
         {/each}
         {#if activeAssetPaths.length === 0}
-          <li class="active-assets-idle">Waiting for the next file…</li>
+          <li class="active-assets-idle">{m.job_progress_waiting_next_file()}</li>
         {/if}
       </ul>
     </section>

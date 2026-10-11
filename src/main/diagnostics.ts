@@ -9,6 +9,8 @@ import { stripVTControlCharacters } from "node:util";
 import type { BackendStatus } from "../shared/backend";
 import type { AppInfo } from "../shared/diagnostics";
 
+import { m } from "../shared/paraglide/messages.js";
+
 declare const __NICEGAL_FRONTEND_COMMIT__: string;
 declare const __NICEGAL_BACKEND_COMMIT__: string;
 
@@ -79,9 +81,9 @@ export async function collectDiagnostics(
   options: CollectionOptions,
 ): Promise<string | null> {
   const result = await dialog.showSaveDialog(owner, {
-    title: "Save diagnostics",
+    title: m.common_save_diagnostics(),
     defaultPath: join(app.getPath("documents"), diagnosticArchiveName()),
-    filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+    filters: [{ name: m.diagnostics_zip_filter_name(), extensions: ["zip"] }],
   });
   if (result.canceled || !result.filePath) return null;
 

@@ -1,5 +1,7 @@
 import type { JobSnapshot } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
+
 export function isTerminalJobStatus(status: JobSnapshot["status"]): boolean {
   return status === "completed" || status === "cancelled" || status === "failed";
 }
@@ -27,7 +29,5 @@ export function jobBlocksRuntimeSwitch(jobs: RunningJobs): boolean {
 /** Settings copy for a model or provider switch while a job runs; empty when none runs. */
 export function runtimeSwitchJobNote(jobs: RunningJobs): string {
   if (!jobs.running) return "";
-  return jobBlocksRuntimeSwitch(jobs)
-    ? "Switch after the current job finishes."
-    : "Switching stops indexing. It continues after you close Settings.";
+  return jobBlocksRuntimeSwitch(jobs) ? m.common_switch_after_job() : m.job_switch_stops_indexing();
 }

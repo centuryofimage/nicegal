@@ -2,6 +2,8 @@ import { isAbsolute, posix, win32 } from "node:path";
 
 import type { Library, NativeFolderMenuRequest } from "../../shared/backend";
 
+import { m } from "../../shared/paraglide/messages.js";
+
 export interface ResolvedFolderTarget {
   /** The backend's spelling, usable by this process. */
   path: string;
@@ -39,7 +41,7 @@ export function resolveFolderTarget(
   if (typeof canRemove !== "boolean") throw new TypeError("Folder request needs canRemove");
 
   const library = libraries.find((candidate) => candidate.id === libraryId);
-  if (!library) throw new Error("That library no longer exists.");
+  if (!library) throw new Error(m.common_library_missing());
   for (const root of library.include) {
     const relative = relativeInside(path, root.path);
     if (relative === null) continue;
@@ -51,11 +53,11 @@ export function resolveFolderTarget(
       : path;
     return { libraryId, path, externalPath, canRemove };
   }
-  throw new Error("That folder is no longer part of this library.");
+  throw new Error(m.native_folder_not_in_library());
 }
 
 export function openFolderLabel(platform: NodeJS.Platform = process.platform): string {
-  if (platform === "win32") return "Open in Explorer";
-  if (platform === "darwin") return "Open in Finder";
-  return "Open in file manager";
+  if (platform === "win32") return m.native_folder_open_in_explorer();
+  if (platform === "darwin") return m.native_folder_open_in_finder();
+  return m.native_folder_open_in_file_manager();
 }

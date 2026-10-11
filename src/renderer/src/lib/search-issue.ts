@@ -1,5 +1,7 @@
 import type { SearchModelsResponse } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
+
 /**
  * A search setup failure worth a persistent status-bar warning. The status bar shows `label`; the
  * search problem dialog shows `guidance`, `detail` and the recovery `action`.
@@ -15,10 +17,10 @@ export interface SearchIssue {
   action: "rescan" | "settings" | "retry";
 }
 
-const modelNames: Record<keyof SearchModelsResponse, string> = {
-  text: "Related text",
-  clipImage: "Image search",
-  clipText: "Picture description",
+const modelNames: Record<keyof SearchModelsResponse, () => string> = {
+  text: () => m.search_issue_model_text(),
+  clipImage: () => m.search_issue_model_image(),
+  clipText: () => m.search_issue_model_picture(),
 };
 
 export function searchIssue(runtime: {
@@ -30,25 +32,24 @@ export function searchIssue(runtime: {
   if (runtime.imageModelError)
     return {
       key: `model-switch:${runtime.imageModelError}`,
-      label: "Model switch failed",
-      guidance:
-        "The image search model couldn't be switched. Open Search settings to check the active model and try again.",
+      label: m.search_issue_model_switch_failed_label(),
+      guidance: m.search_issue_model_switch_failed_guidance(),
       detail: runtime.imageModelError,
       action: "settings",
     };
   if (runtime.error)
     return {
       key: `runtime:${runtime.error}`,
-      label: "Search settings problem",
-      guidance: "Search settings couldn't be read or changed. Open Search settings and try again.",
+      label: m.search_issue_settings_problem_label(),
+      guidance: m.search_issue_settings_problem_guidance(),
       detail: runtime.error,
       action: "settings",
     };
   if (runtime.modelError)
     return {
       key: `models:${runtime.modelError}`,
-      label: "Search status unavailable",
-      guidance: "Nicegal couldn't check whether search is ready. Try again.",
+      label: m.search_issue_status_unavailable_label(),
+      guidance: m.search_issue_status_unavailable_guidance(),
       detail: runtime.modelError,
       action: "retry",
     };
@@ -61,8 +62,8 @@ export function searchIssue(runtime: {
   const error = runtime.models![failed].error ?? "";
   return {
     key: `model:${failed}:${error}`,
-    label: "Search model failed",
-    guidance: `The ${modelNames[failed].toLowerCase()} model couldn't be prepared. Rescan the library to try again, or choose another model or execution provider in Search settings.`,
+    label: m.search_issue_model_failed_label(),
+    guidance: m.search_issue_model_failed_guidance({ model: modelNames[failed]() }),
     detail: error,
     action: "rescan",
   };

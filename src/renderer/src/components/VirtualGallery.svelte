@@ -35,6 +35,7 @@
   import type { ThumbnailFailure } from "../lib/gallery/thumbnail-scheduler";
   import type { VectorMatch } from "../lib/ocr-search.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { formatDuration } from "../lib/duration";
   import { createGalleryInput } from "../lib/gallery/input";
   import { buildLayout } from "../lib/gallery/layout";
@@ -668,10 +669,19 @@
       tile.snippet && tile.snippet !== tile.alt ? tile.snippet : "",
       tile.matchTimestampMs === undefined
         ? ""
-        : `Visual match at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`,
+        : m.virtual_gallery_visual_match_tooltip({
+            match_time: matchTime(tile.matchTimestampMs),
+            duration: videoDuration(tile.durationMs),
+          }),
     ]
       .filter(Boolean)
       .join("\n");
+  }
+
+  function unavailableThumbnailLabel(tile: PoolTile): string {
+    return tile.mediaKind === "video"
+      ? m.virtual_gallery_thumbnail_unavailable_video_aria({ name: tile.alt })
+      : m.virtual_gallery_thumbnail_unavailable_image_aria({ name: tile.alt });
   }
 
   /** Screen reader label: the name, why it shows no thumbnail or where a video matched, and
@@ -679,11 +689,14 @@
   function tileLabel(tile: PoolTile): string {
     return [
       thumbnailFailures.has(tile.itemId)
-        ? `${tile.alt}: thumbnail unavailable. Open ${tile.mediaKind}`
+        ? unavailableThumbnailLabel(tile)
         : tile.matchTimestampMs === undefined
           ? tile.alt
-          : `${tile.alt}: visual match at ${matchTime(tile.matchTimestampMs)}`,
-      referenceIds.has(tile.itemId) ? "Visual search example" : "",
+          : m.virtual_gallery_visual_match_aria({
+              name: tile.alt,
+              match_time: matchTime(tile.matchTimestampMs),
+            }),
+      referenceIds.has(tile.itemId) ? m.virtual_gallery_visual_search_example_aria() : "",
     ]
       .filter(Boolean)
       .join(". ");
@@ -803,8 +816,13 @@
 {#snippet matchScore(match: VectorMatch)}
   <span
     class="match-score"
-    title={`${match.kind === "visual" ? "Visual" : "Text meaning"} match ${match.similarity}`}
-    >{match.similarity.toFixed(3)}</span
+    title={m.virtual_gallery_match_score_tooltip({
+      kind:
+        match.kind === "visual"
+          ? m.virtual_gallery_match_kind_visual()
+          : m.virtual_gallery_match_kind_text(),
+      score: match.similarity,
+    })}>{match.similarity.toFixed(3)}</span
   >
 {/snippet}
 
@@ -902,8 +920,12 @@
             <button
               class="preview-audio"
               type="button"
-              title={previewMuted ? "Unmute preview" : "Mute preview"}
-              aria-label={previewMuted ? "Unmute preview" : "Mute preview"}
+              title={previewMuted
+                ? m.virtual_gallery_unmute_preview()
+                : m.virtual_gallery_mute_preview()}
+              aria-label={previewMuted
+                ? m.virtual_gallery_unmute_preview()
+                : m.virtual_gallery_mute_preview()}
               onclick={(event) => {
                 event.stopPropagation();
                 previewMuted = !previewMuted;
@@ -921,11 +943,18 @@
               class="media-badge"
               class:has-match={matchingFrameAvailable}
               title={matchingFrameAvailable
-                ? `Matched frame at ${matchTime(tile.matchTimestampMs)} · video length ${videoDuration(tile.durationMs)}`
-                : "Video"}
+                ? m.virtual_gallery_matched_frame_tooltip({
+                    match_time: matchTime(tile.matchTimestampMs),
+                    duration: videoDuration(tile.durationMs),
+                  })
+                : m.virtual_gallery_video_tooltip()}
             >
               {#if matchingFrameAvailable}
-                <span class="media-badge-match">Match {matchTime(tile.matchTimestampMs)}</span>
+                <span class="media-badge-match"
+                  >{m.virtual_gallery_match_badge({
+                    match_time: matchTime(tile.matchTimestampMs),
+                  })}</span
+                >
                 <span class="media-badge-length"
                   ><Video size={10} aria-hidden="true" />{videoDuration(tile.durationMs)}</span
                 >
@@ -935,10 +964,10 @@
             </span>
           {/if}
         {:else if tile.animated && !promoted}
-          <span class="media-badge">GIF</span>
+          <span class="media-badge">{m.virtual_gallery_gif_badge()}</span>
         {/if}
         {#if thumbnailFailures.has(tile.itemId)}
-          <span class="thumbnail-failed">Thumbnail unavailable</span>
+          <span class="thumbnail-failed">{m.virtual_gallery_thumbnail_unavailable()}</span>
         {/if}
         {#if matchScores?.has(tile.itemId)}
           {@render matchScore(matchScores.get(tile.itemId)!)}
@@ -971,7 +1000,9 @@
             class="section-toggle"
             type="button"
             aria-expanded={!divider.collapsed}
-            aria-label={`${divider.collapsed ? "Expand" : "Collapse"} ${divider.label}`}
+            aria-label={divider.collapsed
+              ? m.virtual_gallery_expand_section_aria({ label: divider.label })
+              : m.virtual_gallery_collapse_section_aria({ label: divider.label })}
             onpointerdown={(event) => event.stopPropagation()}
             onpointerup={(event) => event.stopPropagation()}
             onclick={() => {

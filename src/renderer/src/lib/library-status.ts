@@ -5,6 +5,7 @@
  */
 import type { Library, LibraryFolder, ScanOutcome } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { rootKey } from "./library-root";
 
 export type StatusTone = "normal" | "attention";
@@ -18,22 +19,27 @@ export interface StatusText {
 
 /** Compact description of the search features enabled for one library. */
 export function searchTypesSummary(library: Pick<Library, "image" | "ocr">): string {
-  const types = [library.image ? "Image search" : "", library.ocr ? "Text recognition" : ""].filter(
-    Boolean,
-  );
-  return types.length ? types.join(" + ") : "Search off";
+  const types = [
+    library.image ? m.library_status_image_search() : "",
+    library.ocr ? m.library_status_text_recognition() : "",
+  ].filter(Boolean);
+  return types.length ? types.join(" + ") : m.library_status_search_off();
 }
 
 /** Search choices and exclusions shown in both library lists. */
 export function libraryOptionsSummary(library: Pick<Library, "image" | "ocr" | "exclude">): string {
   const search = searchTypesSummary(library);
-  return library.exclude.length ? `${search} · ${library.exclude.length} excluded` : search;
+  return library.exclude.length
+    ? m.library_status_options_summary({ search, count: library.exclude.length })
+    : search;
 }
 
-const OUTCOMES: Partial<Record<ScanOutcome, StatusText>> = {
-  unavailable: { text: "Offline", tone: "attention" },
-  cancelled: { text: "Paused", tone: "normal" },
-};
+function outcomes(): Partial<Record<ScanOutcome, StatusText>> {
+  return {
+    unavailable: { text: m.library_status_offline(), tone: "attention" },
+    cancelled: { text: m.library_status_paused(), tone: "normal" },
+  };
+}
 
 export function formatScanTime(ns: string | null): string {
   if (!ns) return "";
@@ -46,11 +52,19 @@ export function formatScanTime(ns: string | null): string {
  */
 export function folderStatus(folder: LibraryFolder | undefined): StatusText {
   if (!folder)
-    return { text: "Added", tone: "normal", detail: "Scanned after this change is saved" };
-  const outcome = folder.scanOutcome ? OUTCOMES[folder.scanOutcome] : undefined;
+    return {
+      text: m.library_status_added(),
+      tone: "normal",
+      detail: m.library_status_added_detail(),
+    };
+  const outcome = folder.scanOutcome ? outcomes()[folder.scanOutcome] : undefined;
   if (outcome) return { ...outcome, detail: folder.scanError ?? undefined };
   const scanned = formatScanTime(folder.lastScanCompletedNs);
-  return { text: "", tone: "normal", detail: scanned ? `Last scanned ${scanned}` : undefined };
+  return {
+    text: "",
+    tone: "normal",
+    detail: scanned ? m.library_status_last_scanned({ time: scanned }) : undefined,
+  };
 }
 
 /** The selected library's folders that are offline, whose files cannot be shown. */

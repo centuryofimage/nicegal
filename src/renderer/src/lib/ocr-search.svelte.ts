@@ -13,6 +13,7 @@ import type { ExternalVisualReference } from "../../../shared/backend";
 import type { CatalogController } from "./catalog.svelte";
 import type { GallerySection } from "./gallery/types";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { errorCode, errorMessage } from "./errors";
 import { localDateToExclusiveNs, localDateToNs } from "./job-params";
 import { parseQuery, withScope, type DateFilter, type SearchScope } from "./search-query";
@@ -229,17 +230,21 @@ export class OcrSearchController {
   get allMode(): boolean {
     return this.parsed.scope === "all" && Boolean(this.searchBody);
   }
-  get sliderLabel(): string {
-    return this.parsed.scope === "meaning" ? "Match quality" : "Visual similarity";
+  get sliderKind(): "meaning" | "visual" {
+    return this.parsed.scope === "meaning" ? "meaning" : "visual";
   }
   get allError(): string {
     return [
-      this.error ? `Names and text: ${this.error}` : "",
-      this.broadErrors.meaning ? `Related text: ${this.broadErrors.meaning}` : "",
-      this.broadErrors.visual ? `Visual results: ${this.broadErrors.visual}` : "",
+      this.error ? m.ocr_search_names_text_message({ message: this.error }) : "",
+      this.broadErrors.meaning
+        ? m.ocr_search_related_text_message({ message: this.broadErrors.meaning })
+        : "",
+      this.broadErrors.visual
+        ? m.ocr_search_visual_results_message({ message: this.broadErrors.visual })
+        : "",
     ]
       .filter(Boolean)
-      .join(" · ");
+      .join(m.common_separator());
   }
   error = $state("");
   /** The backend rejected `error`'s query syntax, so retyping fixes it and syntax help applies. */
@@ -256,11 +261,15 @@ export class OcrSearchController {
   get setupMessage(): string {
     if (!this.allMode) return this.setupNotice;
     return [
-      this.broadSetup.meaning ? `Related text: ${this.broadSetup.meaning}` : "",
-      this.broadSetup.visual ? `Visual results: ${this.broadSetup.visual}` : "",
+      this.broadSetup.meaning
+        ? m.ocr_search_related_text_message({ message: this.broadSetup.meaning })
+        : "",
+      this.broadSetup.visual
+        ? m.ocr_search_visual_results_message({ message: this.broadSetup.visual })
+        : "",
     ]
       .filter(Boolean)
-      .join(" · ");
+      .join(m.common_separator());
   }
   textSetupRequired = $state(false);
   imageSetupRequired = $state(false);
@@ -507,22 +516,22 @@ export class OcrSearchController {
   get pendingLabel(): string {
     switch (this.parsed.scope) {
       case "all":
-        if (this.parsed.filters.length && !this.searchBody) return "Searching files…";
+        if (this.parsed.filters.length && !this.searchBody) return m.ocr_search_pending_files();
         return this.literalPending
-          ? "Searching names and text…"
+          ? m.ocr_search_pending_names_text()
           : this.broadPending.meaning && this.broadPending.visual
-            ? "Searching related text and images…"
+            ? m.ocr_search_pending_related_and_images()
             : this.broadPending.meaning
-              ? "Searching related text…"
-              : "Searching images…";
+              ? m.ocr_search_pending_related_text()
+              : m.ocr_search_pending_images();
       case "ocr":
-        return "Searching text…";
+        return m.ocr_search_pending_text();
       case "name":
-        return "Searching file names…";
+        return m.ocr_search_pending_file_names();
       case "meaning":
-        return "Searching related text…";
+        return m.ocr_search_pending_related_text();
       case "like":
-        return "Searching images…";
+        return m.ocr_search_pending_images();
       default:
         return "";
     }
@@ -534,7 +543,7 @@ export class OcrSearchController {
   }
 
   get queryHint(): string {
-    return this.parsed.dates.some((date) => !date.valid) ? "Unrecognized date" : "";
+    return this.parsed.dates.some((date) => !date.valid) ? m.ocr_search_bad_date_hint() : "";
   }
 
   /** Offer the semantic engine only after the literal default search has a settled result. */
@@ -576,8 +585,7 @@ export class OcrSearchController {
     }
     if (scope === "like" && body && !supportsImageTextQueries) {
       this.clearResults();
-      this.error =
-        "This model supports image examples only. Remove text descriptions and add an image example.";
+      this.error = m.ocr_search_image_only_model();
       return;
     }
     if (!body && !references.length && !filters.length) {
@@ -592,7 +600,7 @@ export class OcrSearchController {
       return;
     }
     if (libraryId === null) {
-      this.error = "No library selected.";
+      this.error = m.ocr_search_no_library_selected();
       return;
     }
 
@@ -626,7 +634,7 @@ export class OcrSearchController {
     if (scope === "like" && hasImages === false) {
       this.clearResults();
       this.imageSetupRequired = true;
-      this.setupNotice = "Visual search isn't ready for this library yet.";
+      this.setupNotice = m.search_bar_visual_not_ready();
       this.total = 0;
       return;
     }
@@ -727,7 +735,7 @@ export class OcrSearchController {
 
   private noteLimit(response: SearchResponse): void {
     if (response.total > response.results.length)
-      this.limitNotice = "Result limit reached; narrow the search by date.";
+      this.limitNotice = m.ocr_search_result_limit_reached();
   }
 
   /**
@@ -773,10 +781,10 @@ export class OcrSearchController {
           this.broadErrors[lane] = errorMessage(error);
         } else if (lane === "visual") {
           this.imageSetupRequired = true;
-          this.broadSetup.visual = "Visual search isn't ready for this library yet.";
+          this.broadSetup.visual = m.search_bar_visual_not_ready();
         } else {
           this.textSetupRequired = true;
-          this.broadSetup.meaning = "Related text search isn't set up for this library.";
+          this.broadSetup.meaning = m.ocr_search_related_text_not_set_up();
         }
       },
       done: () => (this.broadPending[lane] = false),
@@ -797,7 +805,7 @@ export class OcrSearchController {
           run.scope === "meaning" ? response.embedded === 0 : response.indexed === 0;
         if (!notIndexed) return this.searchPrimary(run);
         this.textSetupRequired = true;
-        this.setupNotice = "Text search isn't set up for this library.";
+        this.setupNotice = m.search_bar_text_not_set_up();
         this.matches = new Set<string>();
         this.snippets = new Map<string, string>();
         this.total = this.filenameMatches?.size ?? 0;
@@ -857,9 +865,7 @@ export class OcrSearchController {
         if (scope === "like") this.imageSetupRequired = true;
         if (scope === "meaning") this.textSetupRequired = true;
         this.setupNotice =
-          scope === "like"
-            ? "Visual search isn't ready for this library yet."
-            : "Text search isn't set up for this library.";
+          scope === "like" ? m.search_bar_visual_not_ready() : m.search_bar_text_not_set_up();
       },
       done: () => (this.pending = false),
     });
@@ -917,7 +923,7 @@ export class OcrSearchController {
     const sources = new Map<string, string>();
     const groups: GallerySection[] = [];
     const combined: CatalogItem[] = [];
-    // First source wins placement, not membership. Keep all contributing source labels, but one
+    // First source wins placement, not membership. Keep all contributing section keys, but one
     // image/selection target. Filtering CLIP before this union cannot remove an admitted text hit.
     const add = (key: string, label: string, ids: string[], status: string): void => {
       const start = combined.length;
@@ -926,8 +932,8 @@ export class OcrSearchController {
         const item = byId?.get(id);
         if (!item) continue;
         const existing = sources.get(id);
-        if (!existing?.split(", ").includes(label))
-          sources.set(id, existing ? `${existing}, ${label}` : label);
+        if (!existing?.split(",").includes(key))
+          sources.set(id, existing ? `${existing},${key}` : key);
         if (!existing) combined.push(item);
       }
       const count = combined.length - start;
@@ -935,21 +941,23 @@ export class OcrSearchController {
     };
     add(
       "literal",
-      "Names and text",
+      m.ocr_search_names_text_label(),
       [...literal.map((item) => item.id), ...related.map((hit) => hit.assetId)],
       [
-        this.literalPending || this.broadPending.meaning ? "Searching…" : "",
+        this.literalPending || this.broadPending.meaning ? m.common_searching() : "",
         this.error || this.indexNotice,
         this.broadErrors.meaning || this.broadSetup.meaning,
       ]
         .filter(Boolean)
-        .join(" · "),
+        .join(m.common_separator()),
     );
     add(
       "visual",
-      "Visual results",
+      m.ocr_search_visual_results_label(),
       visual.map((hit) => hit.assetId),
-      this.broadPending.visual ? "Searching…" : this.broadErrors.visual || this.broadSetup.visual,
+      this.broadPending.visual
+        ? m.common_searching()
+        : this.broadErrors.visual || this.broadSetup.visual,
     );
     return {
       items: this.sortMode === "date" ? items.filter((item) => sources.has(item.id)) : combined,

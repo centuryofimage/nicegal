@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GalleryItem, GalleryLayout } from "../lib/gallery/types";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { timelineTickLabel, bucketLabel } from "../lib/gallery/dates";
   import { firstVisibleIndex } from "../lib/gallery/visible-range";
 
@@ -75,7 +76,7 @@
     const inset = Math.min(TICK_SPACING / 2, trackHeight / 2);
     const trackY = (y: number): number =>
       Math.max(inset, Math.min(trackHeight - inset, (y / content) * trackHeight));
-    const years: Tick[] = [];
+    const years: { y: number; first: number; last: number }[] = [];
     for (const start of yearStarts) {
       const position = currentLayout.positions[start.index];
       if (!position) continue;
@@ -83,11 +84,16 @@
       const previous = years[years.length - 1];
       if (previous && y - previous.y < TICK_SPACING) {
         // Tiny year sections share a range label instead of silently losing their year.
-        previous.label = `${previous.label.split("–")[0]}–${start.year}`;
+        previous.last = start.year;
         continue;
       }
-      years.push({ y, label: String(start.year), major: true });
+      years.push({ y, first: start.year, last: start.year });
     }
+    const yearTicks: Tick[] = years.map(({ y, first, last }) => ({
+      y,
+      label: first === last ? String(first) : m.timeline_scrollbar_year_range({ first, last }),
+      major: true,
+    }));
     // Sample finely, then thin out by label and by spacing — the track is short, and tile
     // positions are content-space, so many samples collapse onto the same few track pixels.
     const step = Math.max(1, Math.floor(galleryItems.length / Math.max(2, trackHeight / 8)));
@@ -110,7 +116,7 @@
     }
     // The first year (or compressed year range) only describes the start of the library.
     // Keep its spacing reserved, but show labels only for the later year sections.
-    return [...years.slice(1), ...result].sort((a, b) => a.y - b.y);
+    return [...yearTicks.slice(1), ...result].sort((a, b) => a.y - b.y);
   }
 
   function currentLabel(
@@ -180,7 +186,7 @@
   class="timeline-scrollbar"
   bind:this={trackEl}
   role="slider"
-  aria-label={showTicks ? "Scroll to date" : "Scroll results"}
+  aria-label={showTicks ? m.timeline_scrollbar_aria_by_date() : m.timeline_scrollbar_aria_results()}
   aria-orientation="vertical"
   aria-valuemin={0}
   aria-valuemax={100}

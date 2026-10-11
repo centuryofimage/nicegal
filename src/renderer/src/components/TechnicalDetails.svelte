@@ -4,11 +4,12 @@
   only what a bug report needs.
 -->
 <script lang="ts">
+  import { m } from "../../../shared/paraglide/messages.js";
   import { cleanDiagnostic } from "../lib/errors";
 
   let {
     text,
-    summary = "Technical details",
+    summary = m.technical_details_summary(),
     copyHeading,
   }: {
     text: string;
@@ -24,9 +25,9 @@
       await navigator.clipboard.writeText(
         copyHeading ? `${copyHeading}\n${diagnostic}` : diagnostic,
       );
-      copyStatus = "Copied";
+      copyStatus = m.common_copied();
     } catch {
-      copyStatus = "Select the details and copy them manually.";
+      copyStatus = m.common_copy_failed();
     }
   }
 </script>
@@ -35,7 +36,7 @@
   <summary>{summary}</summary>
   <textarea readonly aria-label={summary} value={diagnostic}></textarea>
   <button class="ui-button ui-button-compact" type="button" onclick={copyDetails}
-    >Copy details</button
+    >{m.common_copy_details()}</button
   >
   <span role="status">{copyStatus}</span>
 </details>

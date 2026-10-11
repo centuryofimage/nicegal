@@ -12,6 +12,7 @@ for (const scenario of [
   "manual restart",
   "quit",
   "update restart",
+  "language restart",
 ] as const)
   test(`${scenario} handles a backend exit`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "nicegal-shutdown-test-"));
@@ -19,6 +20,8 @@ for (const scenario of [
     const finishedQuit = Promise.withResolvers<void>();
     const respawned = Promise.withResolvers<void>();
     const restartForUpdate = scenario === "update restart";
+    const restartForLanguage = scenario === "language restart";
+    const restarting = restartForUpdate || restartForLanguage;
     const state = {
       starts: 0,
       stops: 0,
@@ -26,8 +29,12 @@ for (const scenario of [
       updateStops: 0,
       deferrals: 0,
       installs: 0,
+      relaunches: 0,
       requestRestart: (): void => {
         throw new Error("Update restart handler not attached");
+      },
+      requestLanguageRestart: (): void => {
+        throw new Error("Language restart handler not attached");
       },
       restartFailedBackend: (): Promise<void> => {
         throw new Error("Backend restart handler not attached");
@@ -56,7 +63,10 @@ for (const scenario of [
       }),
       quit: (): void => {
         state.quits++;
-        if (state.quits === (restartForUpdate ? 2 : 1)) finishedQuit.resolve();
+        if (state.quits === (restarting ? 2 : 1)) finishedQuit.resolve();
+      },
+      relaunch: (): void => {
+        state.relaunches++;
       },
     });
     const mocks = { app, state };
@@ -97,6 +107,8 @@ for (const scenario of [
       }
     `,
       "./backend/thumbnail-reader": "export class ThumbnailReader { close() {} }",
+      "./locale":
+        "export function initializeLocale() {} export function localeArgument() { return '--nicegal-locale=en'; } export function registerLanguageIpc(options) { globalThis.__shutdownMocks.state.requestLanguageRestart = options.restart; }",
       "./native/ipc": "export function registerNativeIpc() {}",
       "./remote/ipc": "export function registerRemoteIpc() {}",
       "./remote/remote-access":
@@ -169,6 +181,7 @@ for (const scenario of [
       return;
     }
     if (restartForUpdate) state.requestRestart();
+    if (restartForLanguage) state.requestLanguageRestart();
     let prevented = false;
     app.emit("before-quit", {
       preventDefault: () => {
@@ -179,12 +192,18 @@ for (const scenario of [
     assert.equal(prevented, true);
     assert.equal(state.stops, 1, "quit joins the existing stop instead of returning prematurely");
     assert.equal(state.installs, 0, "the updater cannot run before the backend exits");
-    assert.equal(state.quits, restartForUpdate ? 1 : 0);
+    assert.equal(state.quits, restarting ? 1 : 0);
+    assert.equal(
+      state.relaunches,
+      0,
+      "a language restart cannot relaunch before the backend exits",
+    );
     stopped.resolve();
     await finishedQuit.promise;
     assert.equal(state.starts, 1, "fallback must not respawn while the app is quitting");
     assert.equal(state.updateStops, 1);
     assert.equal(state.deferrals, 0);
     assert.equal(state.installs, restartForUpdate ? 1 : 0);
-    assert.equal(state.quits, restartForUpdate ? 2 : 1);
+    assert.equal(state.relaunches, restartForLanguage ? 1 : 0);
+    assert.equal(state.quits, restarting ? 2 : 1);
   });

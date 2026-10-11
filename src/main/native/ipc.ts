@@ -20,6 +20,7 @@ import type { IpcSenderValidator } from "../ipc";
 import appIcon from "../../../resources/icon.png?asset";
 import licenseInformation from "../../../resources/licenses/license-information.html?asset&asarUnpack";
 import { IPC_CHANNELS } from "../../shared/ipc-channels";
+import { m } from "../../shared/paraglide/messages.js";
 import { handleRemotableIpc, handleTrustedIpc } from "../ipc";
 import {
   copyFilePaths,
@@ -82,10 +83,7 @@ export function registerNativeIpc(context: NativeIpcContext): void {
         if (drags.get(event.sender) !== drag || event.sender.isDestroyed())
           throw new Error("File drag was superseded");
       }
-      if (files.length !== ids.length)
-        throw new Error(
-          "Some selected files are no longer available. Refresh the library and try again.",
-        );
+      if (files.length !== ids.length) throw new Error(m.native_files_unavailable());
       if (drags.get(event.sender) !== drag || event.sender.isDestroyed())
         throw new Error("File drag was superseded");
       drag.files = files;
@@ -95,7 +93,7 @@ export function registerNativeIpc(context: NativeIpcContext): void {
   handleTrustedIpc(IPC_CHANNELS.native.startFileDrag, context.isTrustedSender, (event, token) => {
     const drag = drags.get(event.sender);
     if (!drag || drag.token !== token || !drag.files.length || drag.expires < Date.now()) {
-      throw new Error("File drag expired. Drag the selection again.");
+      throw new Error(m.native_drag_expired());
     }
     drags.delete(event.sender);
     // Electron on Windows/Linux advertises COPY | LINK, never MOVE. There is deliberately no
@@ -154,18 +152,23 @@ export function registerNativeIpc(context: NativeIpcContext): void {
       if (!owner) throw new Error("Image picker requires an owning application window");
       const result = await dialog.showOpenDialog(owner, {
         properties: ["openFile"],
-        filters: [{ name: "Images", extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp"] }],
+        filters: [
+          {
+            name: m.native_image_filter_name(),
+            extensions: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
+          },
+        ],
       });
       const path = result.canceled ? undefined : result.filePaths[0];
       if (!path) return null;
       const info = await stat(path);
       const limit = 16 * 1024 * 1024;
       if (!info.isFile() || info.size > limit) {
-        throw new Error("Choose an image smaller than 16 MB for visual search.");
+        throw new Error(m.common_visual_image_too_large());
       }
       const bytes = await readFile(path);
       return {
-        displayName: path.split(/[\\/]/).pop() ?? "Selected image",
+        displayName: path.split(/[\\/]/).pop() ?? m.native_visual_search_default_name(),
         bytesBase64: bytes.toString("base64"),
       };
     },
@@ -206,18 +209,18 @@ export function registerNativeIpc(context: NativeIpcContext): void {
           {
             label: openFolderLabel(),
             click: () =>
-              runFileAction(owner, "Open failed", async () => {
+              runFileAction(owner, m.native_open_failed(), async () => {
                 const error = await shell.openPath(folder.path);
                 if (error) throw new Error(error);
               }),
           },
           {
-            label: "Copy path",
+            label: m.native_folder_copy_path(),
             click: () => clipboard.writeText(folder.externalPath),
           },
           { type: "separator" },
           {
-            label: "Remove from library…",
+            label: m.native_folder_remove_from_library(),
             enabled: folder.canRemove,
             click: () => resolve("remove"),
           },
@@ -257,41 +260,51 @@ function fileMenuTemplate(
   const multiple = files.length > 1;
   return [
     {
-      label: "Find similar images",
+      label: m.common_find_similar(),
       click: () => visualSearch(true),
     },
     {
-      label: multiple ? `Add ${files.length} images to visual search` : "Add to visual search",
+      label: multiple
+        ? m.native_file_add_many_to_visual_search({ count: files.length })
+        : m.common_add_to_visual_search(),
       click: () => visualSearch(false),
     },
     { type: "separator" },
     {
-      label: multiple ? `Open ${files.length} items in default apps` : "Open in default app",
-      click: () => runFileAction(owner, "Open failed", () => openFiles(files)),
+      label: multiple
+        ? m.native_file_open_many({ count: files.length })
+        : m.native_file_open_single(),
+      click: () => runFileAction(owner, m.native_open_failed(), () => openFiles(files)),
     },
     { type: "separator" },
     {
-      label: multiple ? `Copy ${files.length} items` : "Copy",
-      click: () => runFileAction(owner, "Copy failed", () => copyFiles(files)),
+      label: multiple ? m.native_file_copy_many({ count: files.length }) : m.native_file_copy(),
+      click: () => runFileAction(owner, m.native_copy_failed(), () => copyFiles(files)),
     },
     {
-      label: multiple ? `Copy ${files.length} paths` : "Copy as path",
-      click: () => runFileAction(owner, "Copy as Path failed", () => copyFilePaths(files)),
+      label: multiple
+        ? m.native_file_copy_paths_many({ count: files.length })
+        : m.native_file_copy_as_path(),
+      click: () => runFileAction(owner, m.native_copy_as_path_failed(), () => copyFilePaths(files)),
     },
     { type: "separator" },
     {
       label: revealLabel(multiple),
-      click: () => runFileAction(owner, "Reveal failed", () => revealFile(files[0])),
+      click: () => runFileAction(owner, m.native_reveal_failed(), () => revealFile(files[0])),
     },
   ];
 }
 
 function revealLabel(multiple: boolean): string {
   if (process.platform === "darwin")
-    return multiple ? "Reveal clicked item in Finder" : "Reveal in Finder";
+    return multiple ? m.native_file_reveal_clicked_in_finder() : m.native_file_reveal_in_finder();
   if (process.platform === "win32")
-    return multiple ? "Reveal clicked item in Explorer" : "Reveal in Explorer";
-  return multiple ? "Open clicked item's folder" : "Open Containing Folder";
+    return multiple
+      ? m.native_file_reveal_clicked_in_explorer()
+      : m.native_file_reveal_in_explorer();
+  return multiple
+    ? m.native_file_open_clicked_item_folder()
+    : m.native_file_open_containing_folder();
 }
 
 function runFileAction(owner: BrowserWindow, title: string, action: () => Promise<void>): void {

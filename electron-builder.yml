@@ -9,9 +9,6 @@ electronFuses:
   enableNodeOptionsEnvironmentVariable: false
   grantFileProtocolExtraPrivileges: true
   onlyLoadAppFromAsar: true
-electronLanguages:
-  - en-US
-  - en-GB
 files:
   - out/**/*
   - resources/**/*

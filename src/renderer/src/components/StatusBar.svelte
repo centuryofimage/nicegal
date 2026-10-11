@@ -19,6 +19,7 @@
   import type { LibraryRowStatus } from "../lib/catalog.svelte";
   import type { RuntimeController } from "../lib/runtime.svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
   import { jobRateText } from "../lib/job-format";
   import { searchIssue, type SearchIssue } from "../lib/search-issue";
   import ActivitySpinner from "./ActivitySpinner.svelte";
@@ -99,26 +100,32 @@
     if (!active) return undefined;
     const launched = runtime.status;
     if (launched?.restartRequired) {
-      return `Running on ${active}; restart to switch to ${launched.configuredExecutionProvider}`;
+      return m.status_bar_provider_restart_title({
+        provider: active,
+        configured: launched.configuredExecutionProvider,
+      });
     }
     if (
       launched &&
       launched.loadedExecutionProvider &&
       launched.loadedExecutionProvider !== launched.activeExecutionProvider
     ) {
-      return `Running on ${active}; ${launched.activeExecutionProvider} failed to load and fell back automatically`;
+      return m.status_bar_provider_fallback_title({
+        provider: active,
+        failed: launched.activeExecutionProvider,
+      });
     }
-    return `Execution provider: ${active}`;
+    return m.status_bar_provider_title({ provider: active });
   });
 
   const itemsText = $derived(
     filtering && matchedCount !== totalCount
-      ? `${matchedCount.toLocaleString()} / ${totalCount.toLocaleString()} items`
-      : `${totalCount.toLocaleString()} items`,
+      ? m.status_bar_items_filtered({ matched: matchedCount, total: totalCount })
+      : m.status_bar_items({ total: totalCount }),
   );
   const itemsTitle = $derived(
     filtering && matchedCount !== totalCount
-      ? `${matchedCount.toLocaleString()} of ${totalCount.toLocaleString()} items match the current search`
+      ? m.status_bar_items_filtered_title({ matched: matchedCount, total: totalCount })
       : undefined,
   );
 
@@ -126,9 +133,14 @@
     const coverage = status?.imageCoverage;
     if (!coverage || coverage.total === 0) return "";
     if (coverage.indexed === coverage.total) {
-      return coverage.total === totalCount ? "" : `${coverage.indexed.toLocaleString()} scanned`;
+      return coverage.total === totalCount
+        ? ""
+        : m.status_bar_index_scanned({ indexed: coverage.indexed.toLocaleString() });
     }
-    return `${coverage.indexed.toLocaleString()} / ${coverage.total.toLocaleString()} scanned`;
+    return m.status_bar_index_progress({
+      indexed: coverage.indexed.toLocaleString(),
+      total: coverage.total.toLocaleString(),
+    });
   });
   const rateText = $derived(job ? jobRateText(job) : "");
 </script>
@@ -138,21 +150,21 @@
   <span class="status-segment count item-count"
     ><span role="status" title={itemsTitle}>{itemsText}</span><button
       class={["check-button", { checking }]}
-      title="Check for new files (F5)"
-      aria-label="Check for new files"
+      title={m.status_bar_check_button_title()}
+      aria-label={m.status_bar_check_button_aria()}
       disabled={!backendReady}
       onclick={oncheck}><RefreshCw size={11} aria-hidden="true" /></button
     ></span
   >
   {#if selectedCount > 0}
     <span class="status-segment count selected-count" role="status"
-      >{selectedCount.toLocaleString()} selected</span
+      >{m.status_bar_selected_count({ count: selectedCount.toLocaleString() })}</span
     >
   {/if}
 {/if}
 {#if !backendReady && backendError}
   <span class="status-segment backend-crashed" role="status" title={backendError}
-    >Service unavailable</span
+    >{m.status_bar_service_unavailable()}</span
   >
 {:else if runtime.activeProvider}
   <span class="status-segment provider" title={providerTitle}>{providerText}</span>
@@ -170,14 +182,15 @@
     <button
       class="dismiss-setup"
       onclick={() => ondismisssetup(setupIssue.key)}
-      title="Dismiss this search warning"
-      aria-label="Dismiss this search warning"><X size={11} aria-hidden="true" /></button
+      title={m.status_bar_dismiss_warning_title()}
+      aria-label={m.status_bar_dismiss_warning_title()}><X size={11} aria-hidden="true" /></button
     >
   </span>
 {/if}
 {#if searching || mappingPatches || message}
   <span class="status-segment message" role="status">
-    {#if searching}Searching…{:else if mappingPatches}<ActivitySpinner /> Mapping…{:else}{message}{/if}
+    {#if searching}{m.common_searching()}{:else if mappingPatches}<ActivitySpinner />
+      {m.common_mapping()}{:else}{message}{/if}
   </span>
 {/if}
 {#if hasLibrary}
@@ -187,7 +200,8 @@
 {/if}
 
 {#if rateText}
-  <span class="status-segment count job-rate" title="Current phase throughput">{rateText}</span>
+  <span class="status-segment count job-rate" title={m.status_bar_job_rate_title()}>{rateText}</span
+  >
 {/if}
 
 <style>

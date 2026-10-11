@@ -4,6 +4,7 @@ import { get } from "svelte/store";
 import type { LibraryDefinition, LibraryId } from "../../../shared/backend";
 import type { ThumbnailBackfillOptions } from "./job-params";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { CatalogController, type LibraryRecord } from "./catalog.svelte";
 import { ONBOARDING_DISMISSED_STORAGE_KEY } from "./constants";
 import { errorMessage } from "./errors";
@@ -275,8 +276,8 @@ class Application implements ApplicationContext {
       if (!current()) return;
       this.initialized = true;
       this.problem = {
-        title: "Couldn't open the gallery",
-        guidance: "Nicegal couldn't reach its gallery service. Try again, or restart the app.",
+        title: m.app_open_failed_title(),
+        guidance: m.app_open_failed_guidance(),
         message: errorMessage(error),
         retry: true,
       };
@@ -296,8 +297,8 @@ class Application implements ApplicationContext {
       .catch((error: unknown) => {
         if (!current()) return;
         this.problem = {
-          title: "Couldn't reconnect to the gallery",
-          guidance: "Try again to refresh the library and resume indexing.",
+          title: m.app_reconnect_failed_title(),
+          guidance: m.app_reconnect_failed_guidance(),
           message: errorMessage(error),
           retry: true,
         };
@@ -340,18 +341,18 @@ class Application implements ApplicationContext {
     await jobs.sync();
     if (!jobs.running) return null;
     if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
-      return "Switch after the current job finishes.";
+      return m.common_switch_after_job();
     // Cancelling is cooperative, and the backend refuses the switch until the job has ended. A
     // scan the backend had queued can start in the meantime, so cancel whatever is running.
     const deadline = Date.now() + 30_000;
     while (this.started && jobs.running && Date.now() < deadline) {
       if (!jobs.active || !stopsForRuntimeSwitch(jobs.active.type))
-        return "Switch after the current job finishes.";
+        return m.common_switch_after_job();
       if (jobs.active?.status !== "cancelling") await orchestrator.cancel();
       await new Promise((resolve) => setTimeout(resolve, 250));
       await jobs.sync();
     }
-    return jobs.running ? "Indexing didn't stop in time. Try again." : null;
+    return jobs.running ? m.app_runtime_switch_timeout() : null;
   }
 
   private async afterJob(): Promise<void> {
@@ -370,14 +371,12 @@ class Application implements ApplicationContext {
     const { catalog } = this.services;
     await catalog.loadLibraries();
     if (catalog.librariesError)
-      throw new Error(`Couldn't check existing libraries: ${catalog.librariesError}`);
+      throw new Error(m.app_libraries_check_failed({ error: catalog.librariesError }));
     const existing = catalog.libraries.find((library) =>
       library.include.some((included) => sameFolder(included.path, folder)),
     );
     if (existing) {
-      throw new Error(
-        `That folder is already in “${existing.displayName}”. Select that library or add a different folder.`,
-      );
+      throw new Error(m.app_folder_already_in_library({ library_name: existing.displayName }));
     }
     return catalog.createLibrary(folder);
   }
@@ -423,15 +422,13 @@ class Application implements ApplicationContext {
   ): Promise<void> {
     const { catalog, jobs, orchestrator } = this.services;
     const library = catalog.definitions.find((candidate) => candidate.id === libraryId);
-    if (!library) throw new Error("That library no longer exists.");
-    if (deleteIndexedData && jobs.running)
-      throw new Error("Wait for the current job to finish before deleting indexed data.");
+    if (!library) throw new Error(m.common_library_missing());
+    if (deleteIndexedData && jobs.running) throw new Error(m.app_remove_folder_wait_for_job());
     const included = library.include.some((folder) => sameFolder(folder.path, path));
     const include = library.include
       .map((folder) => folder.path)
       .filter((folder) => !sameFolder(folder, path));
-    if (!include.length)
-      throw new Error("A library needs at least one folder. Remove the library instead.");
+    if (!include.length) throw new Error(m.app_remove_last_folder());
     // Exclusions inside the folder become redundant, and the backend rejects ones outside every
     // included folder.
     const exclude = library.exclude.filter((folder) => !isWithin(folder, path));
@@ -443,7 +440,7 @@ class Application implements ApplicationContext {
       videos: library.videos,
     });
     if (deleteIndexedData && !(await orchestrator.purgeRemovedFolders(libraryId, [path])))
-      throw new Error("The folder was removed, but deleting its indexed data couldn't start.");
+      throw new Error(m.app_folder_purge_failed());
   }
 
   private async startThumbnailBackfill(

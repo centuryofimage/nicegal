@@ -1,7 +1,11 @@
 import type { ExternalVisualReference } from "../../../shared/backend";
 import type { OcrSearchController } from "./ocr-search.svelte";
 
+import { m } from "../../../shared/paraglide/messages.js";
 import { visualFileBase64 } from "./visual-file";
+
+const MEBIBYTE = 1024 * 1024;
+const VISUAL_FILE_LIMIT_BYTES = 16 * MEBIBYTE;
 
 /** Image imports belong to the visual-search session that requested them.
  * Clearing or changing scope while a picker/read is pending discards the late result. */
@@ -10,11 +14,13 @@ export async function addDroppedVisualFiles(
   files: File[],
 ): Promise<void> {
   const session = ocrSearch.visualSessionRevision;
-  const limit = 16 * 1024 * 1024;
   const accepted: ExternalVisualReference[] = [];
   for (const file of files.slice(0, 16)) {
-    if (file.size > limit) {
-      ocrSearch.error = `${file.name} is larger than the 16 MB visual-search limit.`;
+    if (file.size > VISUAL_FILE_LIMIT_BYTES) {
+      ocrSearch.error = m.visual_search_file_too_large({
+        name: file.name,
+        limit: VISUAL_FILE_LIMIT_BYTES / MEBIBYTE,
+      });
       continue;
     }
     let bytesBase64: string;

@@ -3,6 +3,8 @@
   import ChevronUp from "@lucide/svelte/icons/chevron-up";
   import { untrack } from "svelte";
 
+  import { m } from "../../../shared/paraglide/messages.js";
+
   let {
     value,
     label,
@@ -73,11 +75,15 @@
     onblur={() => commit(Number(text))}
   />
   <span class="step-buttons" aria-hidden="false">
-    <button type="button" aria-label="Increase {label}" onclick={() => commit(value + 1, 1)}
-      ><ChevronUp size={10} aria-hidden="true" /></button
+    <button
+      type="button"
+      aria-label={m.numeric_stepper_increase({ label })}
+      onclick={() => commit(value + 1, 1)}><ChevronUp size={10} aria-hidden="true" /></button
     >
-    <button type="button" aria-label="Decrease {label}" onclick={() => commit(value - 1, -1)}
-      ><ChevronDown size={10} aria-hidden="true" /></button
+    <button
+      type="button"
+      aria-label={m.numeric_stepper_decrease({ label })}
+      onclick={() => commit(value - 1, -1)}><ChevronDown size={10} aria-hidden="true" /></button
     >
   </span>
 </div>

@@ -72,7 +72,7 @@
   </Modal>
 {:else if view.activeDialog === "settings"}
   <Modal labelledby="settings-title" onclose={view.closeDialog}>
-    <div class="settings-dialog">
+    <div class="dialog-shell settings-dialog">
       <SettingsPanel
         {runtime}
         bind:page={view.settingsPage}
@@ -106,13 +106,8 @@
   .settings-dialog {
     display: flex;
     flex-direction: column;
-    box-sizing: border-box;
-    width: 100%;
     height: min(var(--dialog-max-height), calc(100dvh - var(--space-16) * 2));
     max-height: min(var(--dialog-max-height), calc(100dvh - var(--space-16) * 2));
     overflow: hidden;
-    border: 1px solid var(--border-strong);
-    background: var(--surface-0);
-    box-shadow: var(--shadow-overlay);
   }
 </style>

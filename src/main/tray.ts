@@ -1,5 +1,7 @@
 import { app, Menu, nativeImage, Tray, type BrowserWindow } from "electron";
 
+import { m } from "../shared/paraglide/messages.js";
+
 /** Launch argument the login item passes, so a sign-in start stays in the tray. */
 export const HIDDEN_LAUNCH_ARG = "--hidden";
 
@@ -67,9 +69,9 @@ export class TrayController {
       this.tray.setToolTip("Nicegal");
       this.tray.setContextMenu(
         Menu.buildFromTemplate([
-          { label: "Open Nicegal", click: () => this.show() },
+          { label: m.tray_open_nicegal(), click: () => this.show() },
           { type: "separator" },
-          { label: "Quit", click: () => app.quit() },
+          { label: m.tray_quit(), click: () => app.quit() },
         ]),
       );
       this.tray.on("click", () => this.show());

@@ -1,5 +1,7 @@
 import type { FileFilter } from "../../../shared/backend";
 
+import { m } from "../../../shared/paraglide/messages.js";
+
 /**
  * What a query matches against, named for the target rather than the engine behind it — `meaning`
  * and the visual `like` scope are both "semantic", so that word cannot distinguish them.
@@ -188,11 +190,13 @@ export function textWithoutFolder(tokens: readonly QueryToken[]): string {
  * with a label beside it reads as a legend nobody parses, while each of these is a query you
  * could type as-is. Keep in step with `detectOcrMode`.
  */
-export const OCR_SYNTAX_NOTES: readonly string[] = [
-  "dre* (starts with)",
-  '"red dress" (exact phrase)',
-  "cat OR dog (either)",
-];
+export function ocrSyntaxNotes(): string[] {
+  return [
+    m.search_ocr_example_prefix(),
+    m.search_ocr_example_phrase(),
+    m.search_ocr_example_either(),
+  ];
+}
 
 /** Classifies the query body for OCR search. Quotes toggle operator detection off inside them,
  * so `"a * b"` is a phrase, but a quoted phrase itself (`"…"`) marks the query as raw FTS5. */
