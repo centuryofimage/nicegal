@@ -1,4 +1,6 @@
 <script lang="ts">
+  import type { ReleaseNoteSegment } from "../../../shared/updates";
+
   import { m } from "../../../shared/paraglide/messages.js";
   import Modal from "./Modal.svelte";
 
@@ -11,8 +13,8 @@
     onrestart,
   }: {
     version: string | null;
-    /** Plain-text changelog bullets from the release notes. */
-    notes: string[];
+    /** Changelog bullets from the release notes. */
+    notes: ReleaseNoteSegment[][];
     installReady: boolean;
     onclose: () => void;
     onnotes: () => Promise<void>;
@@ -41,6 +43,16 @@
     }
   }
 
+  async function openLink(event: MouseEvent & { currentTarget: HTMLAnchorElement }): Promise<void> {
+    event.preventDefault();
+    error = null;
+    try {
+      await window.nicegal.native.openExternalUrl(event.currentTarget.href);
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+    }
+  }
+
   async function restart(): Promise<void> {
     error = null;
     restarting = true;
@@ -64,7 +76,12 @@
     <p id="update-dialog-description">{body}</p>
     {#if notes.length > 0}
       <ul class="update-notes" aria-label={m.update_dialog_changes_aria()}>
-        {#each notes as note, index (index)}<li>{note}</li>{/each}
+        {#each notes as note, index (index)}<li>
+            {#each note as segment, part (part)}{#if segment.href}<a
+                  href={segment.href}
+                  onclick={openLink}>{segment.text}</a
+                >{:else}{segment.text}{/if}{/each}
+          </li>{/each}
       </ul>
     {/if}
     {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}

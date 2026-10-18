@@ -1,2 +1,3 @@
-- add localization
-- switch to libjpeg-turbo for faster image indexing
+- prepare for localization (help check my translations [here](https://fink.inlang.com/?repo=https%3A%2F%2Fgithub.com%2Fcenturyofimage%2Fnicegal&branch=main&project=project.drafts.inlang))
+- switch to libjpeg-turbo and now jpeg decode time is finally gone from all perf charts
+- add [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2)

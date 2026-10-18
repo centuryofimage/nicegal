@@ -73,16 +73,29 @@ export const imageModels: Record<string, ImageModelInfo> = {
     compactDescription: () => m.image_model_metaclip2_l14_compact(),
     license: ccByNc,
   },
+  "google/embeddinggemma-2@70": {
+    tier: "large",
+    description: () => m.image_model_embeddinggemma2_70_description(),
+    compactDescription: () => m.image_model_embeddinggemma2_70_compact(),
+    license: apache,
+  },
   "facebook/PE-Core-L14-336": {
     tier: "large",
     description: () => m.image_model_pe_l14_description(),
     compactDescription: () => m.image_model_pe_l14_compact(),
     license: apache,
+    recommended: true,
   },
   "deepghs/siglip_beta/smilingwolf/siglip_swinv2_base_2025_02_22_18h56m54s": {
     tier: "large",
     description: () => m.image_model_danbooru_siglip_description(),
     compactDescription: () => m.image_model_danbooru_siglip_compact(),
+    license: apache,
+  },
+  "google/embeddinggemma-2@140": {
+    tier: "large",
+    description: () => m.image_model_embeddinggemma2_140_description(),
+    compactDescription: () => m.image_model_embeddinggemma2_140_compact(),
     license: apache,
   },
 };

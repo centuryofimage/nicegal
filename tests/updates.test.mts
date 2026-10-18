@@ -683,6 +683,28 @@ test("latest release lookup accepts only a successful stable numeric release", a
   await assert.rejects(latestStableRelease(), /HTTP 403/);
 });
 
+test("release notes keep HTTPS links and flatten everything else to text", async () => {
+  const { releaseNotes } = await vite.ssrLoadModule("/src/main/updates.ts");
+  const body = [
+    "- check [translations](https://example.com/?repo=a%2Fb&branch=main) **here**",
+    "- [local](file:///C:/x) and [creds](https://user:pw@example.com) ![logo](https://e.com/a.png)",
+    "- `code` [js](javascript:alert(1))",
+    "## Downloads",
+    "- [table](https://github.com/x)",
+  ].join("\r\n");
+  assert.deepEqual(releaseNotes(body), [
+    [
+      { text: "check " },
+      { text: "translations", href: "https://example.com/?repo=a%2Fb&branch=main" },
+      { text: " here" },
+    ],
+    [{ text: "local" }, { text: " and " }, { text: "creds" }, { text: " " }, { text: "logo" }],
+    [{ text: "code " }, { text: "js" }, { text: ")" }],
+  ]);
+  const long = releaseNotes(`- ${"x".repeat(290)} [link text](https://example.com)`)[0];
+  assert.equal(long.map((segment: { text: string }) => segment.text).join("").length, 300);
+});
+
 test("opting out during the release lookup never starts an updater check", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
   userData = mkdtempSync(join(tmpdir(), "nicegal-update-lookup-optout-"));

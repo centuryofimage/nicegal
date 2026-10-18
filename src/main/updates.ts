@@ -3,7 +3,7 @@ import { autoUpdater } from "electron-updater";
 import { existsSync } from "node:fs";
 import { join, win32 } from "node:path";
 
-import type { UpdateStatus } from "../shared/updates";
+import type { ReleaseNoteSegment, UpdateStatus } from "../shared/updates";
 
 import { IPC_CHANNELS } from "../shared/ipc-channels";
 import { handleTrustedIpc } from "./ipc";
@@ -19,30 +19,56 @@ const DAILY_CHECK_MS = 24 * 60 * 60 * 1000;
 const MAX_NOTES = 20;
 const MAX_NOTE_LENGTH = 300;
 
-/** Pulls the changelog bullets out of a release body as plain text, ignoring everything after
- * the first heading that follows them (the generated download table). */
-export function releaseNotes(body: unknown): string[] {
+const MARKDOWN_LINK = /!?\[([^\]]*)\]\(([^)\s]*)\)/g;
+
+/** Pulls the changelog bullets out of a release body, ignoring everything after the first
+ * heading that follows them (the generated download table). Markdown links to HTTPS pages stay
+ * links; other links, images and emphasis become plain text. */
+export function releaseNotes(body: unknown): ReleaseNoteSegment[][] {
   if (typeof body !== "string") return [];
-  const notes: string[] = [];
+  const notes: ReleaseNoteSegment[][] = [];
   for (const line of body.split(/\r?\n/)) {
     if (/^\s*#/.test(line) && notes.length > 0) break;
     const bullet = /^\s*[-*+]\s+(.+)$/.exec(line);
     if (!bullet) continue;
-    const text = bullet[1]
-      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
-      .replace(/\*\*|`/g, "")
-      .trim();
-    if (text) notes.push(text.slice(0, MAX_NOTE_LENGTH));
+    const note = noteSegments(bullet[1].trim());
+    if (note.some((segment) => segment.text.trim())) notes.push(note);
     if (notes.length === MAX_NOTES) break;
   }
   return notes;
+}
+
+/** Split one bullet into text and link runs, keeping at most MAX_NOTE_LENGTH characters. */
+function noteSegments(markdown: string): ReleaseNoteSegment[] {
+  const segments: ReleaseNoteSegment[] = [];
+  let remaining = MAX_NOTE_LENGTH;
+  const add = (raw: string, href?: string): void => {
+    const text = raw.replace(/\*\*|`/g, "").slice(0, remaining);
+    if (!text) return;
+    remaining -= text.length;
+    segments.push(href ? { text, href } : { text });
+  };
+  let end = 0;
+  for (const match of markdown.matchAll(MARKDOWN_LINK)) {
+    add(markdown.slice(end, match.index));
+    add(match[1], match[0].startsWith("!") ? undefined : httpsLink(match[2]));
+    end = match.index + match[0].length;
+  }
+  add(markdown.slice(end));
+  return segments;
+}
+
+function httpsLink(value: string): string | undefined {
+  if (!URL.canParse(value)) return undefined;
+  const url = new URL(value);
+  return url.protocol === "https:" && !url.username && !url.password ? url.href : undefined;
 }
 
 /** GitHub's web /releases/latest redirects; updater feed requests expect JSON from it. */
 export async function latestStableRelease(): Promise<{
   version: string;
   feedUrl: string;
-  notes: string[];
+  notes: ReleaseNoteSegment[][];
 }> {
   const response = await net.fetch(LATEST_RELEASE_API, {
     headers: {
@@ -157,7 +183,7 @@ export function startUpdates(
   const enabled = mayUpdate() || mayNotify();
   let status: UpdateStatus = { phase: enabled ? "idle" : "disabled", version: null, notes: [] };
   // The release lookup's notes, matched by version to what the updater reports.
-  let latest: { version: string; notes: string[] } | undefined;
+  let latest: { version: string; notes: ReleaseNoteSegment[][] } | undefined;
   let stopped = false;
   const timers: {
     initial?: ReturnType<typeof setTimeout>;
