@@ -173,7 +173,7 @@ importers:
         specifier: ^0.6.1
         version: 0.6.1
       electron-updater:
-        specifier: ^7.0.0-alpha.9
+        specifier: ^7.0.0-alpha.12
         version: 7.0.0-alpha.12(supports-color@7.2.0)
       selfsigned:
         specifier: ^5.5.0

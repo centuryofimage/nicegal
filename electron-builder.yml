@@ -42,6 +42,7 @@ win:
         - onnxruntime/openvino/*.dll
         # - onnxruntime/cuda/*.dll
   sign: false
+  verifyUpdateCodeSignature: false
 nsis:
   include: build/installer.nsh
   artifactName: ${name}-${version}-windows-${arch}-setup.${ext}
