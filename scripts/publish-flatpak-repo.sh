@@ -16,8 +16,10 @@ flatpak build-commit-from --src-repo="$source_repo" --gpg-sign="$key_id" \
     --update-appstream "$site/repo" "app/$app_id/x86_64/master"
 gpg --batch --export "$key_id" > "$site/nicegal.gpg"
 test -s "$site/nicegal.gpg"
+# Keep the newest releases per ref; older clients fall back to a full download.
 flatpak build-update-repo --gpg-sign="$key_id" --gpg-import="$site/nicegal.gpg" \
-    --title=Nicegal --default-branch=master --generate-static-deltas "$site/repo"
+    --title=Nicegal --default-branch=master --generate-static-deltas \
+    --prune --prune-depth=3 "$site/repo"
 public_key=$(base64 --wrap=0 "$site/nicegal.gpg")
 cat > "$site/nicegal.flatpakrepo" <<EOF
 [Flatpak Repo]

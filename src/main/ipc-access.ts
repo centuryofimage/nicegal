@@ -36,7 +36,6 @@ export const IPC_ACCESS = {
   [IPC_CHANNELS.backend.catalogRevision]: "remote",
   [IPC_CHANNELS.backend.getTextEmbeddingCoverage]: "remote",
   [IPC_CHANNELS.backend.getImageEmbeddingCoverage]: "remote",
-  [IPC_CHANNELS.backend.getOcrModels]: "remote",
   [IPC_CHANNELS.backend.getSearchModels]: "remote",
   [IPC_CHANNELS.backend.search]: "remote",
   [IPC_CHANNELS.backend.cancelSearch]: "remote",

@@ -97,7 +97,6 @@ test("provider change accepts status after the backend disconnect resets control
             return changed;
           },
           getSearchModels: async () => ({}),
-          getOcrModels: async () => ({ loaded: null }),
         },
       },
     },
@@ -147,7 +146,6 @@ test("image model write invalidates an older runtime read", async () => {
         getRuntimeStatus: () => read.promise,
         setImageModel: async () => selected,
         getSearchModels: async () => ({}),
-        getOcrModels: async () => ({}),
       },
     },
   } as unknown as Window & typeof globalThis;
@@ -217,6 +215,29 @@ test("model refresh clears startup loading when it supersedes the first runtime 
   assert.equal(runtime.loading, false);
 });
 
+test("a failed indexing model asks for a rescan", () => {
+  const status = (
+    state: string,
+    error: string | null = null,
+  ): { state: string; error: string | null; resident: boolean } => ({
+    state,
+    error,
+    resident: false,
+  });
+  const issue = searchIssue({
+    models: {
+      text: status("ready"),
+      clipImage: status("ready"),
+      clipText: status("unsupported"),
+      textIndex: status("notLoaded"),
+      ocr: status("failed", "compiling the PaddleOCR models"),
+    },
+  });
+  assert.equal(issue?.label, "Search model failed");
+  assert.equal(issue?.action, "rescan");
+  assert.match(issue?.guidance ?? "", /text recognition/);
+});
+
 test("a failed image model switch exposes diagnostics and preserves the active model", async () => {
   const previous = { imageModel: { activeModel: "old", models: [] } };
   let fail = true;
@@ -231,6 +252,8 @@ test("a failed image model switch exposes diagnostics and preserves the active m
           text: { state: "notLoaded", error: null },
           clipImage: { state: "notLoaded", error: null },
           clipText: { state: "notLoaded", error: null },
+          textIndex: { state: "notLoaded", error: null },
+          ocr: { state: "notLoaded", error: null },
         }),
         getRuntimeStatus: async () => previous,
       },

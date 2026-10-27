@@ -227,7 +227,6 @@
   ],
   "job_cancel_label_library_scan": "ライブラリのスキャン",
   "job_cancel_label_model_prepare": "検索モデルの準備",
-  "job_cancel_label_ocr_model_load": "OCR モデルの読み込み",
   "job_cancel_label_prune": "整理",
   "job_cancel_label_thumbnail_generate": "サムネイルの生成",
   "job_cancelled": "キャンセル済み",
@@ -309,7 +308,6 @@
   ],
   "job_loading_models": "モデルを読み込み中",
   "job_ocr": "OCR",
-  "job_ocr_models_ready": "OCR モデルの準備が完了",
   "job_processing_files": [
     {
       "declarations": [
@@ -328,7 +326,6 @@
   "job_progress_metric_candidates": "候補",
   "job_progress_metric_deleted": "削除済み",
   "job_progress_metric_failed": "失敗",
-  "job_progress_metric_model_data": "モデルデータ",
   "job_progress_metric_skipped": "スキップ済み",
   "job_progress_phase_complete_aria": "{phase}、完了",
   "job_progress_phase_current_aria": "{phase}、現在のフェーズ",
@@ -436,9 +433,7 @@
   ],
   "job_scanning": "スキャン中",
   "job_search_models_ready": "検索モデルの準備が完了",
-  "job_step_download": "ダウンロード",
   "job_step_images": "画像",
-  "job_step_load": "読み込み",
   "job_step_prepare": "準備",
   "job_step_prune": "整理",
   "job_step_remove": "削除",
@@ -913,6 +908,8 @@
   "search_issue_model_switch_failed_guidance": "画像検索モデルを切り替えられませんでした。検索設定を開いて現在のモデルを確認し、再試行してください。",
   "search_issue_model_switch_failed_label": "モデルの切り替えに失敗しました",
   "search_issue_model_text": "関連テキスト",
+  "search_issue_model_text_index": "関連テキストのインデックス作成",
+  "search_issue_model_text_recognition": "テキスト認識",
   "search_issue_settings_problem_guidance": "検索設定を読み取れないか変更できませんでした。検索設定を開いて再試行してください。",
   "search_issue_settings_problem_label": "検索設定の問題",
   "search_issue_status_unavailable_guidance": "Nicegal は検索の準備状態を確認できませんでした。再試行してください。",

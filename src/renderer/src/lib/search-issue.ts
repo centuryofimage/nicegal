@@ -17,10 +17,15 @@ export interface SearchIssue {
   action: "rescan" | "settings" | "retry";
 }
 
-const modelNames: Record<keyof SearchModelsResponse, () => string> = {
+type NamedModel = keyof SearchModelsResponse;
+
+/** In reporting order: search models first, then the indexing models a rescan rebuilds. */
+const modelNames: Record<NamedModel, () => string> = {
   text: () => m.search_issue_model_text(),
   clipImage: () => m.search_issue_model_image(),
   clipText: () => m.search_issue_model_picture(),
+  textIndex: () => m.search_issue_model_text_index(),
+  ocr: () => m.search_issue_model_text_recognition(),
 };
 
 export function searchIssue(runtime: {
@@ -54,7 +59,7 @@ export function searchIssue(runtime: {
       action: "retry",
     };
   const failed = runtime.models
-    ? (Object.keys(modelNames) as (keyof SearchModelsResponse)[]).find(
+    ? (Object.keys(modelNames) as NamedModel[]).find(
         (key) => runtime.models![key].state === "failed" && runtime.models![key].error,
       )
     : undefined;

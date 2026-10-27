@@ -2,7 +2,7 @@
   import type { JobSnapshot } from "../../../shared/backend";
 
   import { m } from "../../../shared/paraglide/messages.js";
-  import { formatBytes, jobLabel, jobPhaseProgress, jobPhases } from "../lib/job-format";
+  import { jobLabel, jobPhaseProgress, jobPhases } from "../lib/job-format";
   import { isTerminalJobStatus } from "../lib/job-state";
   import JobMetric from "./JobMetric.svelte";
 
@@ -41,12 +41,6 @@
       metrics.push({
         label: m.job_progress_metric_skipped(),
         value: job.progress.skipped.toLocaleString(),
-      });
-    }
-    if (job.type === "ocrModelLoad" && job.progress.downloadedBytes > 0) {
-      metrics.push({
-        label: m.job_progress_metric_model_data(),
-        value: formatBytes(job.progress.downloadedBytes),
       });
     }
     if (job.type === "pruneMissing") {
@@ -112,6 +106,11 @@
       {#if job.progress.download}
         <div class="model-download-name">{job.progress.download.modelId}</div>
         <div class="model-download-file">{job.progress.download.filename}</div>
+      {:else if job.progress.loadingModel}
+        <!-- Technical detail, deliberately not localized. -->
+        <div class="model-download-file" title={job.progress.loadingModel.name}>
+          loading {job.progress.loadingModel.modelId}
+        </div>
       {/if}
       <div class="within-phase-heading">
         <span>{currentLabel}</span>

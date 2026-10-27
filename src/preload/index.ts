@@ -23,7 +23,6 @@ import type {
   NativeFolderMenuChoice,
   NativeFolderMenuRequest,
   NicegalBridge,
-  OcrModelsResponse,
   SearchModelsResponse,
   RuntimeStatus,
   SearchRequest,
@@ -154,9 +153,6 @@ const backend: NicegalBridge["backend"] = {
   },
   getImageEmbeddingCoverage(libraryId: LibraryId): Promise<ImageEmbeddingCoverage> {
     return invoke(IPC_CHANNELS.backend.getImageEmbeddingCoverage, libraryId);
-  },
-  getOcrModels(): Promise<OcrModelsResponse> {
-    return invoke(IPC_CHANNELS.backend.getOcrModels);
   },
   getSearchModels(): Promise<SearchModelsResponse> {
     return invoke(IPC_CHANNELS.backend.getSearchModels);

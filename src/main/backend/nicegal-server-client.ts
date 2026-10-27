@@ -19,7 +19,6 @@ import type {
   JobListResponse,
   JobRequest,
   JobSnapshot,
-  OcrModelsResponse,
   SearchModelsResponse,
   ResolveAssetsResponse,
   RuntimeStatus,
@@ -121,10 +120,6 @@ export class NicegalServerClient {
 
   async health(): Promise<{ instanceId: string }> {
     return this.requestJson("/v1/health", { method: "GET" });
-  }
-
-  async getOcrModels(): Promise<OcrModelsResponse> {
-    return this.requestJson<OcrModelsResponse>("/v1/ocr/models", { method: "GET" });
   }
 
   async getSearchModels(): Promise<SearchModelsResponse> {

@@ -188,7 +188,7 @@ export class RuntimeController {
       } catch (error) {
         if (this.disposed || errorCode(error) !== "job_busy" || attempt >= 2) throw error;
         const blocked = await this.stopBlockingJobs();
-        if (blocked) throw new Error(blocked);
+        if (blocked) throw new Error(blocked, { cause: error });
         if (this.disposed) throw error;
       }
     }

@@ -59,9 +59,7 @@
   const displayLabel = $derived(
     needsAttention && job.status === "completed" ? m.job_indicator_done_with_issues() : label,
   );
-  const downloading = $derived(
-    running && (Boolean(job.progress.download) || job.phase === "downloadingModels"),
-  );
+  const downloading = $derived(running && Boolean(job.progress.download));
   const compactLabel = $derived.by(() => {
     if (downloading) {
       const word =

@@ -11,7 +11,6 @@ import type {
   LibraryId,
   LibraryPurgeJobRequest,
   LibraryScanJobRequest,
-  OcrModelLoadTarget,
   SearchRequest,
   ThumbnailJobRequest,
   Timeline,
@@ -215,9 +214,6 @@ export function registerBackendIpc(context: BackendIpcContext): void {
     (_client, value: unknown) => {
       return requireBackend().getTextEmbeddingCoverage(validateLibraryId(value));
     },
-  );
-  handleRemotableIpc(IPC_CHANNELS.backend.getOcrModels, context.isTrustedSender, () =>
-    requireBackend().getOcrModels(),
   );
   handleRemotableIpc(IPC_CHANNELS.backend.getSearchModels, context.isTrustedSender, () =>
     requireBackend().getSearchModels(),
@@ -623,20 +619,6 @@ function validateJobRequest(value: unknown): JobRequest {
     };
     return job;
   }
-  if (request.type === "ocrModelLoad") {
-    const params = requireJobParams(
-      value,
-      ["detection", "recognition"],
-      "Invalid OCR model load job",
-    );
-    return {
-      type: "ocrModelLoad",
-      params: {
-        detection: validateOcrModelLoadTarget(params.detection),
-        recognition: validateOcrModelLoadTarget(params.recognition),
-      },
-    };
-  }
   if (request.type === "pruneMissing") {
     const params = requireJobParams(
       value,
@@ -697,26 +679,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function hasOnlyFields(value: Record<string, unknown>, fields: readonly string[]): boolean {
   return Object.keys(value).every((key) => fields.includes(key));
-}
-
-function validateOcrModelLoadTarget(value: unknown): OcrModelLoadTarget {
-  if (
-    !isRecord(value) ||
-    !hasOnlyFields(value, ["modelId", "revision", "filename", "configFilename"]) ||
-    typeof value.modelId !== "string" ||
-    value.modelId.length === 0 ||
-    (value.revision !== undefined && typeof value.revision !== "string") ||
-    (value.filename !== undefined && typeof value.filename !== "string") ||
-    (value.configFilename !== undefined && typeof value.configFilename !== "string")
-  ) {
-    throw new TypeError("Invalid OCR model load job");
-  }
-  return {
-    modelId: value.modelId,
-    ...(value.revision === undefined ? {} : { revision: value.revision }),
-    ...(value.filename === undefined ? {} : { filename: value.filename }),
-    ...(value.configFilename === undefined ? {} : { configFilename: value.configFilename }),
-  };
 }
 
 function isThumbnailGenerateParams(value: unknown): value is ThumbnailJobRequest["params"] {

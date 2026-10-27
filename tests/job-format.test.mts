@@ -74,7 +74,7 @@ test("a library scan shows only the index stages its library runs", () => {
     jobPhases(job).map((p) => p.label),
     ["Sync", "OCR", "Text", "Done"],
   );
-  assert.ok(jobPhases(job)[1].backendPhases.includes("downloadingModels"));
+  assert.ok(jobPhases(job)[1].backendPhases.includes("loadingModels"));
   job.indexStages = { ocr: false, image: false, text: false };
   assert.deepEqual(
     jobPhases(job).map((p) => p.label),

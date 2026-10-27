@@ -229,7 +229,6 @@
   ],
   "job_cancel_label_library_scan": "Examen de la biblioteca",
   "job_cancel_label_model_prepare": "Preparación del modelo de búsqueda",
-  "job_cancel_label_ocr_model_load": "Carga del modelo de OCR",
   "job_cancel_label_prune": "Depuración",
   "job_cancel_label_thumbnail_generate": "Generación de miniaturas",
   "job_cancelled": "Cancelado",
@@ -314,7 +313,6 @@
   ],
   "job_loading_models": "Cargando modelos",
   "job_ocr": "OCR",
-  "job_ocr_models_ready": "Modelos de OCR listos",
   "job_processing_files": [
     {
       "declarations": [
@@ -334,7 +332,6 @@
   "job_progress_metric_candidates": "Candidatos",
   "job_progress_metric_deleted": "Eliminados",
   "job_progress_metric_failed": "Fallidos",
-  "job_progress_metric_model_data": "Datos del modelo",
   "job_progress_metric_skipped": "Omitidos",
   "job_progress_phase_complete_aria": "{phase}, completado",
   "job_progress_phase_current_aria": "{phase}, fase actual",
@@ -448,9 +445,7 @@
   ],
   "job_scanning": "Examinando",
   "job_search_models_ready": "Modelos de búsqueda listos",
-  "job_step_download": "Descargar",
   "job_step_images": "Imágenes",
-  "job_step_load": "Cargar",
   "job_step_prepare": "Preparar",
   "job_step_prune": "Depurar",
   "job_step_remove": "Quitar",
@@ -936,6 +931,8 @@
   "search_issue_model_switch_failed_guidance": "No se pudo cambiar el modelo de búsqueda de imágenes. Abre Configuración de búsqueda para comprobar el modelo activo e inténtalo de nuevo.",
   "search_issue_model_switch_failed_label": "Error al cambiar el modelo",
   "search_issue_model_text": "texto relacionado",
+  "search_issue_model_text_index": "indexación de texto relacionado",
+  "search_issue_model_text_recognition": "reconocimiento de texto",
   "search_issue_settings_problem_guidance": "No se pudo leer o cambiar la configuración de búsqueda. Abre Configuración de búsqueda e inténtalo de nuevo.",
   "search_issue_settings_problem_label": "Problema de configuración de búsqueda",
   "search_issue_status_unavailable_guidance": "Nicegal no pudo comprobar si la búsqueda está lista. Inténtalo de nuevo.",

@@ -45,8 +45,6 @@ export function jobPhaseLabel(phase: JobPhase): string {
   switch (phase) {
     case "queued":
       return m.job_queued();
-    case "downloadingModels":
-      return m.job_downloading_models();
     case "loadingModels":
       return m.job_loading_models();
     // Distinct labels: the walk counts files found, then cataloging restarts at 0 of that count.
@@ -77,8 +75,6 @@ function cancelledSubject(type: JobType): string {
   switch (type) {
     case "modelPrepare":
       return m.job_cancel_label_model_prepare();
-    case "ocrModelLoad":
-      return m.job_cancel_label_ocr_model_load();
     case "libraryScan":
       return m.job_cancel_label_library_scan();
     case "thumbnailGenerate":
@@ -152,8 +148,8 @@ function itemProgress(progress: JobProgress, fallbackText?: string): PhaseProgre
 }
 
 /** Phase-aware display text + completion ratio, shared by the pill (JobIndicator) and the hover
- * card (JobProgress) so both agree on what a phase's progress bar and label show. Byte-counted
- * phases (`downloadingModels`) format as bytes; item-counted phases format as counts. */
+ * card (JobProgress) so both agree on what a phase's progress bar and label show. A model download (`progress.download`)
+ * formats as bytes; item-counted phases format as counts. */
 export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
   const { progress } = snapshot;
   if (progress.download) {
@@ -169,16 +165,6 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
         };
   }
   switch (snapshot.phase) {
-    case "downloadingModels": {
-      const { downloadedBytes, downloadTotalBytes } = progress;
-      if (downloadTotalBytes > 0) {
-        return {
-          text: `${formatBytes(downloadedBytes)} / ${formatBytes(downloadTotalBytes)}`,
-          ratio: Math.min(1, downloadedBytes / downloadTotalBytes),
-        };
-      }
-      return { text: formatBytes(downloadedBytes), ratio: null };
-    }
     case "loadingModels":
       // The phase label already says "Loading models"; without a total there is no count to add.
       return itemProgress(progress, "");
@@ -216,8 +202,6 @@ export function summarizeCompletion(snapshot: JobSnapshot): string {
   switch (snapshot.type) {
     case "modelPrepare":
       return m.job_search_models_ready();
-    case "ocrModelLoad":
-      return m.job_ocr_models_ready();
     case "libraryScan": {
       const n = snapshot.progress.cataloged;
       const embedded = snapshot.progress.embedded;
@@ -256,20 +240,14 @@ function phasesFor(type: JobType): readonly VisiblePhase[] {
   switch (type) {
     case "modelPrepare":
       return [
-        { label: m.job_step_prepare(), backendPhases: ["downloadingModels", "loadingModels"] },
-        { label: m.job_done(), backendPhases: ["finished"] },
-      ];
-    case "ocrModelLoad":
-      return [
-        { label: m.job_step_download(), backendPhases: ["downloadingModels"] },
-        { label: m.job_step_load(), backendPhases: ["loadingModels"] },
+        { label: m.job_step_prepare(), backendPhases: ["loadingModels"] },
         { label: m.job_done(), backendPhases: ["finished"] },
       ];
     case "libraryScan":
       return [
         { label: m.job_step_sync(), backendPhases: ["scanning", "cataloging", "pruning"] },
         { label: m.job_step_images(), backendPhases: ["imageEmbedding"] },
-        { label: m.job_ocr(), backendPhases: ["downloadingModels", "loadingModels", "ocr"] },
+        { label: m.job_ocr(), backendPhases: ["loadingModels", "ocr"] },
         { label: m.job_step_text(), backendPhases: ["textEmbedding"] },
         { label: m.job_done(), backendPhases: ["finished"] },
       ];

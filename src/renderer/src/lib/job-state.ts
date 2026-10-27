@@ -16,7 +16,7 @@ export function isActiveJob(job: JobSnapshot | null | undefined): boolean {
  * thumbnails or remove data finish first.
  */
 export function stopsForRuntimeSwitch(type: JobSnapshot["type"]): boolean {
-  return type === "libraryScan" || type === "modelPrepare" || type === "ocrModelLoad";
+  return type === "libraryScan" || type === "modelPrepare";
 }
 
 type RunningJobs = { running: boolean; active: JobSnapshot | null };

@@ -31,7 +31,6 @@ export const IPC_CHANNELS = {
     catalogRevision: "backend:catalog-revision",
     getTextEmbeddingCoverage: "backend:get-text-embedding-coverage",
     getImageEmbeddingCoverage: "backend:get-image-embedding-coverage",
-    getOcrModels: "backend:get-ocr-models",
     getSearchModels: "backend:get-search-models",
     search: "backend:search",
     cancelSearch: "backend:cancel-search",

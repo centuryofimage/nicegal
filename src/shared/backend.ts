@@ -227,7 +227,6 @@ export type JobStatus = "queued" | "running" | "cancelling" | "cancelled" | "com
 
 export type JobPhase =
   | "queued"
-  | "downloadingModels"
   | "loadingModels"
   | "scanning"
   | "cataloging"
@@ -259,8 +258,6 @@ export interface JobProgress {
   skipped: number;
   failed: number;
   deleted: number;
-  downloadedBytes: number;
-  downloadTotalBytes: number;
   /** Current model file; absent for cache hits and while loading sessions. */
   download?: {
     modelId: string;
@@ -268,6 +265,12 @@ export interface JobProgress {
     downloadedBytes: number;
     /** Zero while the remote size is unknown. */
     totalBytes: number;
+  };
+  /** The model whose session is being built, as technical detail; absent otherwise. */
+  loadingModel?: {
+    /** The backend's role for the model, such as "Image model". Not localized. */
+    name: string;
+    modelId: string;
   };
   modelsLoaded: number;
 }
@@ -282,13 +285,7 @@ export interface JobSnapshot {
   jobId: string;
   /** The library a library job belongs to; absent for model preparation. */
   libraryId?: LibraryId;
-  type:
-    | "ocrModelLoad"
-    | "modelPrepare"
-    | "libraryScan"
-    | "thumbnailGenerate"
-    | "pruneMissing"
-    | "libraryPurge";
+  type: "modelPrepare" | "libraryScan" | "thumbnailGenerate" | "pruneMissing" | "libraryPurge";
   /** Per-folder progress of a `libraryScan`, in walk order. */
   folders?: ScanFolderProgress[];
   status: JobStatus;
@@ -395,60 +392,17 @@ export interface JobListResponse {
   jobs: JobSnapshot[];
 }
 
-export interface OcrModelLoadTarget {
-  modelId: string;
-  revision?: string;
-  filename?: string;
-  configFilename?: string;
-}
-
-export interface OcrModelLoadJobRequest {
-  type: "ocrModelLoad";
-  params: {
-    detection: OcrModelLoadTarget;
-    recognition: OcrModelLoadTarget;
-  };
-}
-
-export const DEFAULT_OCR_MODEL_LOAD_REQUEST: OcrModelLoadJobRequest = {
-  type: "ocrModelLoad",
-  params: {
-    detection: {
-      modelId: "PaddlePaddle/PP-OCRv6_small_det_onnx",
-      revision: "main",
-      filename: "inference.onnx",
-      configFilename: "inference.yml",
-    },
-    recognition: {
-      modelId: "PaddlePaddle/PP-OCRv6_small_rec_onnx",
-      revision: "main",
-      filename: "inference.onnx",
-      configFilename: "inference.yml",
-    },
-  },
-};
-
-export interface OcrLoadedModel {
-  modelId: string;
-  revision: string;
-  filename: string;
-}
-
-export interface OcrModelsResponse {
-  loaded?: {
-    detection: OcrLoadedModel;
-    recognition: OcrLoadedModel;
-    executionProvider: string;
-  };
-}
-
 export interface SearchModelStatus {
   state: "notLoaded" | "preparing" | "ready" | "failed" | "unsupported";
   error: string | null;
+  /** Whether a session is in memory; "ready" stays usable after idle unloading. */
+  resident: boolean;
 }
 
 export interface SearchModelsResponse {
   text: SearchModelStatus;
+  textIndex: SearchModelStatus;
+  ocr: SearchModelStatus;
   clipImage: SearchModelStatus;
   clipText: SearchModelStatus;
 }
@@ -486,7 +440,6 @@ export interface LibraryPurgeJobRequest {
 
 export type JobRequest =
   | { type: "modelPrepare"; params: Record<string, never> }
-  | OcrModelLoadJobRequest
   | LibraryScanJobRequest
   | ThumbnailJobRequest
   | PruneMissingJobRequest
@@ -528,7 +481,6 @@ export interface BackendBridge {
   countAssets(libraryId: LibraryId): Promise<number>;
   getAssetMetadata(assetId: string): Promise<AssetMetadata>;
   getCatalogRevision(): Promise<string>;
-  getOcrModels(): Promise<OcrModelsResponse>;
   getSearchModels(): Promise<SearchModelsResponse>;
   searchOcr(request: SearchRequest): Promise<SearchResponse>;
   /** Abort all current searches and close their session. The next session must be newer. */

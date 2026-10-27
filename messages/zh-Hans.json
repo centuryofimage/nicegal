@@ -227,7 +227,6 @@
   ],
   "job_cancel_label_library_scan": "媒体库扫描",
   "job_cancel_label_model_prepare": "搜索模型准备",
-  "job_cancel_label_ocr_model_load": "OCR 模型加载",
   "job_cancel_label_prune": "清理",
   "job_cancel_label_thumbnail_generate": "缩略图生成",
   "job_cancelled": "已取消",
@@ -309,7 +308,6 @@
   ],
   "job_loading_models": "正在加载模型",
   "job_ocr": "OCR",
-  "job_ocr_models_ready": "OCR 模型已就绪",
   "job_processing_files": [
     {
       "declarations": [
@@ -328,7 +326,6 @@
   "job_progress_metric_candidates": "候选",
   "job_progress_metric_deleted": "已删除",
   "job_progress_metric_failed": "失败",
-  "job_progress_metric_model_data": "模型数据",
   "job_progress_metric_skipped": "已跳过",
   "job_progress_phase_complete_aria": "{phase}，完成",
   "job_progress_phase_current_aria": "{phase}，当前阶段",
@@ -436,9 +433,7 @@
   ],
   "job_scanning": "正在扫描",
   "job_search_models_ready": "搜索模型已就绪",
-  "job_step_download": "下载",
   "job_step_images": "图像",
-  "job_step_load": "加载",
   "job_step_prepare": "准备",
   "job_step_prune": "清理",
   "job_step_remove": "移除",
@@ -913,6 +908,8 @@
   "search_issue_model_switch_failed_guidance": "无法切换图像搜索模型。请打开搜索设置检查当前模型，然后重试。",
   "search_issue_model_switch_failed_label": "模型切换失败",
   "search_issue_model_text": "相关文本",
+  "search_issue_model_text_index": "相关文本索引",
+  "search_issue_model_text_recognition": "文本识别",
   "search_issue_settings_problem_guidance": "无法读取或更改搜索设置。请打开搜索设置后重试。",
   "search_issue_settings_problem_label": "搜索设置问题",
   "search_issue_status_unavailable_guidance": "Nicegal 无法检查搜索是否就绪。请重试。",

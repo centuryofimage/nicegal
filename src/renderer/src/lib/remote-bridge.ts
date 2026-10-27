@@ -151,7 +151,6 @@ export function createRemoteBridge(): NicegalBridge {
     countAssets: (libraryId) => call(channels.countAssets, libraryId),
     getAssetMetadata: (assetId) => call(channels.assetMetadata, assetId),
     getCatalogRevision: () => call(channels.catalogRevision),
-    getOcrModels: () => call(channels.getOcrModels),
     getSearchModels: () => call(channels.getSearchModels),
     searchOcr: (request) => call(channels.search, request, clientId),
     cancelSearch: (throughSession) => call(channels.cancelSearch, throughSession, clientId),
