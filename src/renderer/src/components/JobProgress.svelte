@@ -2,7 +2,7 @@
   import type { JobSnapshot } from "../../../shared/backend";
 
   import { m } from "../../../shared/paraglide/messages.js";
-  import { jobLabel, jobPhaseProgress, jobPhases } from "../lib/job-format";
+  import { jobLabel, jobPhaseProgress, jobPhases, jobStepIndex } from "../lib/job-format";
   import { isTerminalJobStatus } from "../lib/job-state";
   import JobMetric from "./JobMetric.svelte";
 
@@ -11,14 +11,9 @@
   type ContextMetric = { label: string; value: string };
 
   const phases = $derived(jobPhases(job));
-  // -1 (not found) is a real, valid result here — it means the current backend phase (e.g.
-  // `queued`, or any phase not yet mapped for this job type) isn't one of the visible steps.
-  // Leaving it as -1 rather than clamping to 0 means no step is marked current/complete, instead
-  // of incorrectly snapping the strip back to the first step.
-  const currentPhaseIndex = $derived.by(() => {
-    if (job.status === "completed") return phases.length - 1;
-    return phases.findIndex((phase) => phase.backendPhases.includes(job.phase));
-  });
+  // -1 is left as is rather than clamped to 0, so a phase without a step, such as `queued`,
+  // marks no step instead of snapping the strip back to the first one.
+  const currentPhaseIndex = $derived(jobStepIndex(job, phases));
   const currentLabel = $derived(jobLabel(job));
   const phaseProgress = $derived(jobPhaseProgress(job));
   const activeAssetPaths = $derived(job.activeAssetPaths ?? []);

@@ -227,13 +227,14 @@
       }
     }
   ],
+  "job_cancel_label_image_embed": "Indexación de imágenes",
   "job_cancel_label_library_scan": "Examen de la biblioteca",
   "job_cancel_label_model_prepare": "Preparación del modelo de búsqueda",
   "job_cancel_label_prune": "Depuración",
+  "job_cancel_label_text_embed": "Indexación de texto",
   "job_cancel_label_thumbnail_generate": "Generación de miniaturas",
   "job_cancelled": "Cancelado",
   "job_cancelled_summary": "{label} cancelado",
-  "job_cleaning_up": "Limpiando",
   "job_connecting": "Conectando…",
   "job_done": "Listo",
   "job_downloading_models": "Descargando modelos",
@@ -252,6 +253,20 @@
     }
   ],
   "job_failed": "Fallido",
+  "job_files_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Se indexó {countText} archivo",
+        "countPlural=*": "Se indexaron {countText} archivos"
+      }
+    }
+  ],
   "job_indexing": "Indexando",
   "job_indexing_text": "Indexando texto",
   "job_indicator_cancel_aria": "Cancelar {label}",

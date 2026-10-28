@@ -3,7 +3,12 @@ import { test } from "node:test";
 
 import type { JobSnapshot } from "../src/shared/backend.ts";
 
-import { jobPhaseProgress, jobPhases, jobRateText } from "../src/renderer/src/lib/job-format.ts";
+import {
+  jobPhaseProgress,
+  jobPhases,
+  jobRateText,
+  jobStepIndex,
+} from "../src/renderer/src/lib/job-format.ts";
 
 test("video embedding shows active work before its first asset is committed", () => {
   const job = {
@@ -74,7 +79,6 @@ test("a library scan shows only the index stages its library runs", () => {
     jobPhases(job).map((p) => p.label),
     ["Sync", "OCR", "Text", "Done"],
   );
-  assert.ok(jobPhases(job)[1].backendPhases.includes("loadingModels"));
   job.indexStages = { ocr: false, image: false, text: false };
   assert.deepEqual(
     jobPhases(job).map((p) => p.label),
@@ -85,4 +89,50 @@ test("a library scan shows only the index stages its library runs", () => {
     jobPhases(job).map((p) => p.label),
     ["Sync", "Images", "OCR", "Text", "Done"],
   );
+});
+
+test("a scan's model load shows under the stage it loads for", () => {
+  const job = {
+    type: "libraryScan",
+    status: "running",
+    phase: "loadingModels",
+    progress: { loadingFor: "imageEmbedding", phaseCompleted: 0, total: 1 },
+  } as JobSnapshot;
+  const phases = jobPhases(job);
+  assert.equal(phases[jobStepIndex(job, phases)].label, "Images");
+  job.progress.loadingFor = "textEmbedding";
+  assert.equal(phases[jobStepIndex(job, phases)].label, "Text");
+  delete job.progress.loadingFor;
+  assert.equal(jobStepIndex(job, phases), -1);
+
+  const prepare = { ...job, type: "modelPrepare" } as JobSnapshot;
+  const steps = jobPhases(prepare);
+  assert.equal(steps[jobStepIndex(prepare, steps)].label, "Prepare");
+});
+
+test("a standalone embedding job shows its model load and work on its one stage", () => {
+  for (const [type, phase, label] of [
+    ["textEmbed", "textEmbedding", "Text"],
+    ["imageEmbed", "imageEmbedding", "Images"],
+  ] as const) {
+    const job = {
+      type,
+      status: "running",
+      phase: "loadingModels",
+      progress: { loadingFor: phase, phaseCompleted: 0, total: 1 },
+    } as JobSnapshot;
+    const phases = jobPhases(job);
+    assert.equal(phases[jobStepIndex(job, phases)].label, label);
+    const working = { ...job, phase, progress: { phaseCompleted: 0, total: 5 } } as JobSnapshot;
+    assert.equal(phases[jobStepIndex(working, phases)].label, label);
+  }
+});
+
+test("a stage checking for pending work shows no count before its total", () => {
+  const job = {
+    status: "running",
+    phase: "imageEmbedding",
+    progress: { phaseCompleted: 0, total: null },
+  } as JobSnapshot;
+  assert.deepEqual(jobPhaseProgress(job), { text: "", ratio: null });
 });

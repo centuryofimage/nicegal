@@ -183,6 +183,7 @@ export interface ImageQuery {
 export interface TextEmbeddingCoverage {
   indexed: number;
   embedded: number;
+  /** Rows with text but no current vector. Images without text are never pending. */
   pending: number;
   /**
    * Unix seconds of the newest indexed source file under the root, or null when nothing is
@@ -234,7 +235,6 @@ export type JobPhase =
   | "ocr"
   | "imageEmbedding"
   | "textEmbedding"
-  | "cleanup"
   | "pruning"
   | "finished";
 
@@ -272,6 +272,8 @@ export interface JobProgress {
     name: string;
     modelId: string;
   };
+  /** During a scan's `loadingModels`, the stage phase that needs the models being loaded. */
+  loadingFor?: JobPhase;
   modelsLoaded: number;
 }
 
@@ -285,7 +287,15 @@ export interface JobSnapshot {
   jobId: string;
   /** The library a library job belongs to; absent for model preparation. */
   libraryId?: LibraryId;
-  type: "modelPrepare" | "libraryScan" | "thumbnailGenerate" | "pruneMissing" | "libraryPurge";
+  /** `textEmbed` and `imageEmbed` are started only through the backend API, never by the gallery. */
+  type:
+    | "modelPrepare"
+    | "libraryScan"
+    | "thumbnailGenerate"
+    | "textEmbed"
+    | "imageEmbed"
+    | "pruneMissing"
+    | "libraryPurge";
   /** Per-folder progress of a `libraryScan`, in walk order. */
   folders?: ScanFolderProgress[];
   status: JobStatus;

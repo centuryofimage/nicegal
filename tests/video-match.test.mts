@@ -95,7 +95,7 @@ test("thumbnail reader returns the exact indexed sample and keeps the poster sep
   const path = join(directory, "thumbnails.db");
   const db = new DatabaseSync(path);
   db.exec(`
-    PRAGMA user_version = 4;
+    PRAGMA user_version = 5;
     CREATE TABLE thumbnails (
       asset_id INTEGER, size_bucket INTEGER, generator_version INTEGER,
       source_modified_ns INTEGER, source_size INTEGER,

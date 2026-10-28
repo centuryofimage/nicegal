@@ -19,7 +19,7 @@ interface ThumbnailRow {
   data: Uint8Array;
 }
 
-const THUMBNAIL_SCHEMA_VERSION = 4n;
+const THUMBNAIL_SCHEMA_VERSION = 5n;
 // Keep in sync with nicegal-core's video::SAMPLING_VERSION.
 const VIDEO_SAMPLING_VERSION = 4n;
 

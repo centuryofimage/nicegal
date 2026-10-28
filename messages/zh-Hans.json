@@ -225,13 +225,14 @@
       }
     }
   ],
+  "job_cancel_label_image_embed": "图像索引",
   "job_cancel_label_library_scan": "媒体库扫描",
   "job_cancel_label_model_prepare": "搜索模型准备",
   "job_cancel_label_prune": "清理",
+  "job_cancel_label_text_embed": "文本索引",
   "job_cancel_label_thumbnail_generate": "缩略图生成",
   "job_cancelled": "已取消",
   "job_cancelled_summary": "{label}已取消",
-  "job_cleaning_up": "正在清理",
   "job_connecting": "正在连接…",
   "job_done": "完成",
   "job_downloading_models": "正在下载模型",
@@ -250,6 +251,19 @@
     }
   ],
   "job_failed": "失败",
+  "job_files_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "已索引 {countText} 个文件"
+      }
+    }
+  ],
   "job_indexing": "正在索引",
   "job_indexing_text": "正在索引文本",
   "job_indicator_cancel_aria": "取消{label}",

@@ -225,13 +225,14 @@
       }
     }
   ],
+  "job_cancel_label_image_embed": "画像のインデックス作成",
   "job_cancel_label_library_scan": "ライブラリのスキャン",
   "job_cancel_label_model_prepare": "検索モデルの準備",
   "job_cancel_label_prune": "整理",
+  "job_cancel_label_text_embed": "テキストのインデックス作成",
   "job_cancel_label_thumbnail_generate": "サムネイルの生成",
   "job_cancelled": "キャンセル済み",
   "job_cancelled_summary": "{label} はキャンセルされました",
-  "job_cleaning_up": "クリーンアップ中",
   "job_connecting": "接続中…",
   "job_done": "完了",
   "job_downloading_models": "モデルをダウンロード中",
@@ -250,6 +251,19 @@
     }
   ],
   "job_failed": "失敗",
+  "job_files_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=*": "{countText} 件のファイルをインデックス作成しました"
+      }
+    }
+  ],
   "job_indexing": "インデックス作成中",
   "job_indexing_text": "テキストをインデックス作成中",
   "job_indicator_cancel_aria": "{label} をキャンセル",

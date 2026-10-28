@@ -227,13 +227,14 @@
       }
     }
   ],
+  "job_cancel_label_image_embed": "Image indexing",
   "job_cancel_label_library_scan": "Library scan",
   "job_cancel_label_model_prepare": "Search model preparation",
   "job_cancel_label_prune": "Pruning",
+  "job_cancel_label_text_embed": "Text indexing",
   "job_cancel_label_thumbnail_generate": "Thumbnail generation",
   "job_cancelled": "Cancelled",
   "job_cancelled_summary": "{label} cancelled",
-  "job_cleaning_up": "Cleaning up",
   "job_connecting": "Connecting…",
   "job_done": "Done",
   "job_downloading_models": "Downloading models",
@@ -252,6 +253,20 @@
     }
   ],
   "job_failed": "Failed",
+  "job_files_indexed": [
+    {
+      "declarations": [
+        "input count",
+        "local countPlural = count: plural",
+        "local countText = count: number"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Indexed {countText} file",
+        "countPlural=*": "Indexed {countText} files"
+      }
+    }
+  ],
   "job_indexing": "Indexing",
   "job_indexing_text": "Indexing text",
   "job_indicator_cancel_aria": "Cancel {label}",

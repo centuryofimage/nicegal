@@ -25,7 +25,6 @@ export function jobRateText(job: JobSnapshot): string {
       "ocr",
       "imageEmbedding",
       "textEmbedding",
-      "cleanup",
       "pruning",
     ].includes(job.phase) ||
     typeof rate !== "number" ||
@@ -61,8 +60,6 @@ export function jobPhaseLabel(phase: JobPhase): string {
       return m.job_indexing();
     case "textEmbedding":
       return m.job_indexing_text();
-    case "cleanup":
-      return m.job_cleaning_up();
     case "pruning":
       return m.job_removing();
     case "finished":
@@ -79,6 +76,10 @@ function cancelledSubject(type: JobType): string {
       return m.job_cancel_label_library_scan();
     case "thumbnailGenerate":
       return m.job_cancel_label_thumbnail_generate();
+    case "textEmbed":
+      return m.job_cancel_label_text_embed();
+    case "imageEmbed":
+      return m.job_cancel_label_image_embed();
     case "pruneMissing":
       return m.job_cancel_label_prune();
     case "libraryPurge":
@@ -144,7 +145,8 @@ function itemProgress(progress: JobProgress, fallbackText?: string): PhaseProgre
       ratio: Math.min(1, completed / total),
     };
   }
-  return { text: fallbackText ?? completed.toLocaleString(), ratio: null };
+  // A stage checking for pending work has no total yet; a bare "0" reads as finished.
+  return { text: fallbackText ?? (completed > 0 ? completed.toLocaleString() : ""), ratio: null };
 }
 
 /** Phase-aware display text + completion ratio, shared by the pill (JobIndicator) and the hover
@@ -174,7 +176,6 @@ export function jobPhaseProgress(snapshot: JobSnapshot): PhaseProgress {
       return itemProgress(progress, progress.discovered.toLocaleString());
     case "cataloging":
     case "ocr":
-    case "cleanup":
     case "textEmbedding":
     case "thumbnails":
     case "pruning":
@@ -219,6 +220,9 @@ export function summarizeCompletion(snapshot: JobSnapshot): string {
     }
     case "thumbnailGenerate":
       return m.job_thumbnails_generated({ count: snapshot.progress.thumbnailsGenerated });
+    case "textEmbed":
+    case "imageEmbed":
+      return m.job_files_indexed({ count: snapshot.progress.embedded });
     case "pruneMissing": {
       const n = snapshot.progress.deleted;
       return n ? m.job_prune_deleted({ count: n }) : "";
@@ -247,13 +251,23 @@ function phasesFor(type: JobType): readonly VisiblePhase[] {
       return [
         { label: m.job_step_sync(), backendPhases: ["scanning", "cataloging", "pruning"] },
         { label: m.job_step_images(), backendPhases: ["imageEmbedding"] },
-        { label: m.job_ocr(), backendPhases: ["loadingModels", "ocr"] },
+        { label: m.job_ocr(), backendPhases: ["ocr"] },
         { label: m.job_step_text(), backendPhases: ["textEmbedding"] },
         { label: m.job_done(), backendPhases: ["finished"] },
       ];
     case "thumbnailGenerate":
       return [
         { label: m.job_step_thumbs(), backendPhases: ["thumbnails"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "textEmbed":
+      return [
+        { label: m.job_step_text(), backendPhases: ["textEmbedding"] },
+        { label: m.job_done(), backendPhases: ["finished"] },
+      ];
+    case "imageEmbed":
+      return [
+        { label: m.job_step_images(), backendPhases: ["imageEmbedding"] },
         { label: m.job_done(), backendPhases: ["finished"] },
       ];
     case "pruneMissing":
@@ -267,6 +281,14 @@ function phasesFor(type: JobType): readonly VisiblePhase[] {
         { label: m.job_done(), backendPhases: ["finished"] },
       ];
   }
+}
+
+/** The visible step a job is on, or -1 when its phase has no step, such as `queued`. A scan's
+ * model load counts towards the stage it loads for. */
+export function jobStepIndex(job: JobSnapshot, phases: readonly VisiblePhase[]): number {
+  if (job.status === "completed") return phases.length - 1;
+  const phase = job.phase === "loadingModels" ? (job.progress.loadingFor ?? job.phase) : job.phase;
+  return phases.findIndex((step) => step.backendPhases.includes(phase));
 }
 
 /** A scan shows only the index stages its library runs; without `indexStages`, all of them. */
