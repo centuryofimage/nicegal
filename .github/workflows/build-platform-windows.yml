@@ -79,9 +79,7 @@ jobs:
         run: pnpm run build:backend:win
 
       - name: Stamp the version
-        run: npm pkg set version=$env:INPUTS_VERSION
-        env:
-          INPUTS_VERSION: ${{ inputs.version }}
+        run: npm pkg set version=${{ inputs.version }}
 
       # Generate update metadata without uploading. The release job owns all assets so clients
       # cannot discover a version before both platform builds and attestations are complete.
@@ -95,7 +93,7 @@ jobs:
       - name: Verify Windows installer and update artifacts
         shell: pwsh
         run: |
-          $prefix = 'dist/nicegal-$env:INPUTS_VERSION-windows-x64'
+          $prefix = 'dist/nicegal-${{ inputs.version }}-windows-x64'
           $expected = @(
             "$prefix-setup.exe", "$prefix-setup.exe.blockmap",
             "$prefix.zip", 'dist/latest.yml',
@@ -108,8 +106,6 @@ jobs:
               throw "Missing or empty Windows release artifact: $artifact"
             }
           }
-        env:
-          INPUTS_VERSION: ${{ inputs.version }}
 
       - name: Upload packages
         uses: actions/upload-artifact@v7.0.2

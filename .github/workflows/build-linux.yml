@@ -57,9 +57,7 @@ jobs:
       # Written into package.json rather than committed: electron-builder reads the version from
       # there, and it is what lands in every artifact name.
       - name: Stamp the version
-        run: npm pkg set version=${INPUTS_VERSION}
-        env:
-          INPUTS_VERSION: ${{ inputs.version }}
+        run: npm pkg set version=${{ inputs.version }}
 
       # Generate update metadata without uploading. The release job owns all assets so clients
       # cannot discover a version before both platform builds and attestations are complete.
@@ -77,26 +75,22 @@ jobs:
           for artifact in \
             dist/latest-linux.yml \
             dist/linux-unpacked/resources/app-update.yml \
-            'dist/nicegal-${INPUTS_VERSION}-linux-x86_64.AppImage' \
-            'dist/nicegal-${INPUTS_VERSION}-linux-amd64.deb'; do
+            'dist/nicegal-${{ inputs.version }}-linux-x86_64.AppImage' \
+            'dist/nicegal-${{ inputs.version }}-linux-amd64.deb'; do
             if [ ! -s "$artifact" ]; then
               echo "Missing or empty Linux release artifact: $artifact" >&2
               exit 1
             fi
           done
-        env:
-          INPUTS_VERSION: ${{ inputs.version }}
 
       - name: Verify AppImage ABI baseline
         run: |
           # AppImage uses host libraries; Flatpak is checked against its own runtime.
-          appimage="$GITHUB_WORKSPACE/dist/nicegal-${INPUTS_VERSION}-linux-x86_64.AppImage"
+          appimage="$GITHUB_WORKSPACE/dist/nicegal-${{ inputs.version }}-linux-x86_64.AppImage"
           chmod +x "$appimage"
           cd "$(mktemp -d)"
           "$appimage" --appimage-extract > /dev/null
           python3 "$GITHUB_WORKSPACE/scripts/check-linux-abi.py" squashfs-root
-        env:
-          INPUTS_VERSION: ${{ inputs.version }}
 
       - name: Share the built app with Flatpak
         run: tar -cf dist/linux-unpacked.tar -C dist linux-unpacked
