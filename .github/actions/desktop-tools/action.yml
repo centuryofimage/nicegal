@@ -21,7 +21,7 @@ runs:
 
     # The Rust workspace lives in the nicegal-server submodule.
     - name: Setup Rust
-      uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+      uses: actions-rust-lang/setup-rust-toolchain@v1.17.0
       with:
         toolchain: ${{ steps.rust-toolchain.outputs.channel }}
         rust-src-dir: nicegal-server
@@ -33,19 +33,19 @@ runs:
 
     # Backend build scripts use uv for the provider-specific ONNX Runtime environment.
     - name: Setup uv
-      uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+      uses: astral-sh/setup-uv@v10.0.1
       with:
         enable-cache: true
 
     - name: Setup Node
-      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      uses: actions/setup-node@v7.1.0
       with:
         node-version: 24
 
     # Electron's install script uses @electron/get, whose cache is separate from
     # electron-builder's cache for packaging tools such as NSIS and 7zip.
     - name: Restore Electron download caches
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      uses: actions/cache@v6.1.0
       with:
         key: electron-${{ inputs.platform }}-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: |
@@ -60,7 +60,7 @@ runs:
 
     - name: Setup pnpm
       if: inputs.platform != 'macos-intel'
-      uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+      uses: pnpm/setup@v2.1.0
       with:
         version: ${{ env.PNPM_VERSION }}
         cache: true
