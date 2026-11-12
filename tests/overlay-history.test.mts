@@ -111,3 +111,50 @@ test("a reload clears a leftover overlay entry and skips stale ones", async () =
   await settle(reloaded);
   assert.equal(backs, 1);
 });
+
+test("base entries step with Back and Forward and stay below overlays", async () => {
+  const { browser, overlays } = setup();
+  const landed: unknown[] = [];
+  overlays.onBaseTraversal((state) => landed.push(state));
+  overlays.setBase("a", false);
+  overlays.setBase("b", true);
+  overlays.setBase("c", true);
+  assert.equal(browser.index, 2);
+  browser.back();
+  await settle(browser);
+  assert.deepEqual(landed, ["b"]);
+  browser.go(1);
+  await settle(browser);
+  assert.deepEqual(landed, ["b", "c"]);
+
+  // A base write while the viewer is open waits for it to close, then lands below nothing.
+  const viewer = overlays.open(() => assert.fail("closed from the UI"));
+  overlays.setBase("d", true);
+  assert.equal(browser.index, 3, "the viewer's entry is not cut off");
+  viewer.close();
+  await settle(browser);
+  assert.equal(browser.index, 3);
+  assert.deepEqual(browser.state, { nicegalBase: "d" });
+  assert.deepEqual(landed, ["b", "c"], "the class's own traversal is not reported");
+  browser.back();
+  await settle(browser);
+  assert.deepEqual(landed, ["b", "c", "c"]);
+});
+
+test("Back closes an open overlay without moving between base entries", async () => {
+  const { browser, overlays } = setup();
+  const landed: unknown[] = [];
+  overlays.onBaseTraversal((state) => landed.push(state));
+  overlays.setBase("a", false);
+  overlays.setBase("b", true);
+  let closed = 0;
+  const entry = overlays.open(() => {
+    closed++;
+    entry.close();
+  });
+  browser.back();
+  await settle(browser);
+  assert.equal(closed, 1);
+  assert.deepEqual(landed, []);
+  assert.deepEqual(browser.state, { nicegalBase: "b" });
+});

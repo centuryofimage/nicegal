@@ -16,10 +16,13 @@
   import X from "@lucide/svelte/icons/x";
   import { tick } from "svelte";
 
+  import type { SearchHistory } from "../lib/search-history.svelte";
+
   import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { folderName } from "../lib/library-root";
   import { popoverDismiss } from "../lib/popover-dismiss";
+  import { matchingRecent } from "../lib/search-history";
   import {
     ocrSyntaxNotes,
     parseQuery,
@@ -54,6 +57,7 @@
     onaddlibraryvisual,
     ondropvisualfiles,
     selectedPhotoCount = 0,
+    history,
   }: {
     value?: string;
     composerOpen?: boolean;
@@ -74,6 +78,8 @@
     onaddlibraryvisual?: () => void;
     ondropvisualfiles?: (files: File[]) => void;
     selectedPhotoCount?: number;
+    /** Recent searches for the dropdown, and where Enter or leaving the field settles a search. */
+    history?: SearchHistory;
   } = $props();
 
   type ScopeOption = {
@@ -220,6 +226,87 @@
     return parsed.scope === "all" ? text : text.replace(/^\s+/, "");
   });
   const inputTokens = $derived(parseQuery(inputValue).tokens);
+
+  // Recent searches drop down from the field, as in Explorer's search box: clicking the empty
+  // field or pressing Down opens them, and typing narrows them.
+  const recentId = `${hintId}-recent`;
+  let recentOpen = $state(false);
+  /** The highlighted row, or -1 while the field itself is active. */
+  let recentActive = $state(-1);
+  const recentMatches = $derived(
+    recentOpen && history ? matchingRecent(history.recent, inputValue) : [],
+  );
+  const recentVisible = $derived(recentMatches.length > 0 && !menuOpen && !composerOpen);
+
+  function openRecent(): void {
+    if (!history?.recent.length) return;
+    menuOpen = false;
+    composerOpen = false;
+    recentOpen = true;
+    recentActive = -1;
+  }
+
+  function closeRecent(): void {
+    recentOpen = false;
+    recentActive = -1;
+  }
+
+  function runRecent(query: string): void {
+    closeRecent();
+    history?.run(query);
+    void tick().then(() => {
+      inputEl?.focus();
+      const end = inputEl?.value.length ?? 0;
+      inputEl?.setSelectionRange(end, end);
+    });
+  }
+
+  function removeRecent(query: string): void {
+    history?.remove(query);
+    recentActive = Math.min(recentActive, recentMatches.length - 1);
+    inputEl?.focus();
+  }
+
+  function clearRecent(): void {
+    history?.clearRecent();
+    closeRecent();
+    inputEl?.focus();
+  }
+
+  /** Keys the dropdown takes from the field; true when one was handled. */
+  function recentKeydown(event: KeyboardEvent): boolean {
+    if (event.key === "ArrowDown" && !recentVisible) {
+      if (!history?.recent.length || event.ctrlKey || event.metaKey) return false;
+      openRecent();
+      return true;
+    }
+    if (!recentVisible) return false;
+    const active = recentMatches[recentActive];
+    switch (event.key) {
+      case "ArrowDown":
+        recentActive = Math.min(recentActive + 1, recentMatches.length - 1);
+        return true;
+      case "ArrowUp":
+        recentActive = Math.max(recentActive - 1, -1);
+        return true;
+      case "Enter":
+        if (active === undefined) return false;
+        runRecent(active);
+        return true;
+      case "Delete":
+        if (active === undefined) return false;
+        removeRecent(active);
+        return true;
+      case "Escape":
+        closeRecent();
+        return true;
+      case "Tab":
+        closeRecent();
+        return false;
+      default:
+        return false;
+    }
+  }
   function setInputValue(text: string): void {
     const typed = parseQuery(text);
     const scoped =
@@ -320,6 +407,7 @@
 
   function toggleMenu(): void {
     composerOpen = false;
+    closeRecent();
     if (!menuOpen) exampleDate = localIsoDate(new Date());
     menuOpen = !menuOpen;
   }
@@ -345,18 +433,21 @@
   function dismissPopovers(): void {
     menuOpen = false;
     composerOpen = false;
+    closeRecent();
   }
 
   function focusout(event: FocusEvent): void {
-    if (event.relatedTarget instanceof Node && !searchBarEl.contains(event.relatedTarget)) {
-      dismissPopovers();
-    }
+    if (event.relatedTarget instanceof Node && searchBarEl.contains(event.relatedTarget)) return;
+    // Leaving the field settles the search as a Back step.
+    history?.commit();
+    if (event.relatedTarget instanceof Node) dismissPopovers();
   }
 
   function clear(): void {
     dismissPopovers();
     onvisualreferenceschange?.([]);
     value = withScope("", parsed.scope);
+    history?.commit();
     inputEl?.focus();
   }
 
@@ -369,6 +460,7 @@
     if (event.key === "Enter" && event.target instanceof HTMLInputElement && !event.isComposing) {
       event.preventDefault();
       dismissPopovers();
+      history?.commit();
       inputEl?.focus();
       return;
     }
@@ -418,6 +510,13 @@
   }
 </script>
 
+{#snippet queryText(
+  query: string,
+)}{#each parseQuery(query).tokens as token, index (index)}{#if token.kind === "scope"}<span
+        class="recent-scope">{token.raw}</span
+      >{:else if token.kind === "text"}{token.raw}{:else}<span class="token">{token.raw}</span
+      >{/if}{/each}{/snippet}
+
 <!-- Keyboard events are delegated from the search controls and the nested composer. -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
@@ -428,7 +527,7 @@
   onfocusout={focusout}
   ondragover={(event) => parsed.scope === "like" && event.preventDefault()}
   ondrop={dropVisualFiles}
-  {@attach popoverDismiss(menuOpen || composerOpen, dismissPopovers)}
+  {@attach popoverDismiss(menuOpen || composerOpen || recentVisible, dismissPopovers)}
 >
   <div class="search-field">
     <div class="scope-control">
@@ -513,8 +612,15 @@
         onclick={() => {
           if (parsed.scope === "like" && !runtime.supportsImageTextQueries && !composerOpen)
             toggleComposer();
+          else if (!inputValue && !recentOpen) openRecent();
         }}
+        oninput={() => (recentActive = -1)}
         onkeydown={(event) => {
+          if (!event.isComposing && recentKeydown(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+          }
           // The box is read-only here; typing opens the composer, which explains why.
           const typing =
             event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
@@ -533,6 +639,13 @@
         autocomplete="off"
         aria-label={m.search_bar_input_label()}
         aria-describedby={scopeHint ? hintId : undefined}
+        role="combobox"
+        aria-autocomplete="list"
+        aria-expanded={recentVisible}
+        aria-controls={recentId}
+        aria-activedescendant={recentVisible && recentActive >= 0
+          ? `${recentId}-${recentActive}`
+          : undefined}
       />
       <span id={hintId} class="search-hint-accessible">{scopeHint.trim()}</span>
     </div>
@@ -576,6 +689,47 @@
       >
         <X size={11} aria-hidden="true" />
       </button>
+    {/if}
+
+    {#if recentVisible}
+      <!-- Rows take the pointer but never focus, so the field keeps the caret and the keys.
+           Keyboard access is the field's Up/Down/Enter/Delete via aria-activedescendant. -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="recent-popup" onpointerdown={(event) => event.preventDefault()}>
+        <ul id={recentId} role="listbox" aria-label={m.search_bar_recent_label()}>
+          {#each recentMatches as query, index (query)}
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <li
+              id="{recentId}-{index}"
+              role="option"
+              aria-selected={index === recentActive}
+              class={{ active: index === recentActive }}
+              title={query}
+              onpointerenter={() => (recentActive = index)}
+              onclick={() => runRecent(query)}
+            >
+              <span class="recent-text">{@render queryText(query)}</span>
+              <button
+                class="recent-remove"
+                type="button"
+                tabindex="-1"
+                title={m.search_bar_recent_remove()}
+                aria-label={m.search_bar_recent_remove()}
+                onclick={(event) => {
+                  event.stopPropagation();
+                  removeRecent(query);
+                }}
+              >
+                <X size={11} aria-hidden="true" />
+              </button>
+            </li>
+          {/each}
+        </ul>
+        <div class="recent-separator" role="separator"></div>
+        <button class="recent-clear" type="button" tabindex="-1" onclick={clearRecent}
+          >{m.search_bar_recent_clear()}</button
+        >
+      </div>
     {/if}
   </div>
   {#if parsed.scope === "like"}
@@ -664,6 +818,7 @@
   }
 
   .search-field {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--space-4);
@@ -969,6 +1124,98 @@
 
   .scope-menu button:disabled {
     color: var(--text-tertiary);
+  }
+
+  /* A Win32 drop-down list under the whole field: flat field, hairline border, hot-tracked rows. */
+  .recent-popup {
+    position: absolute;
+    z-index: var(--z-popover);
+    top: calc(100% + var(--space-1));
+    right: -1px;
+    left: -1px;
+    padding: var(--space-2);
+    border: 1px solid var(--border);
+    background: var(--surface-0);
+    box-shadow: var(--shadow-overlay);
+    font-size: 12px;
+  }
+
+  .recent-popup ul {
+    max-height: calc(10 * 22px);
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  .recent-popup li,
+  .recent-clear {
+    display: flex;
+    box-sizing: border-box;
+    width: 100%;
+    height: 22px;
+    align-items: center;
+    gap: var(--space-6);
+    padding: 0 var(--space-2) 0 var(--space-4);
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    /* Lists keep the arrow cursor on Windows. */
+    cursor: default;
+  }
+
+  .recent-popup li.active,
+  .recent-clear:hover {
+    border-color: var(--btn-border-hover);
+    background: var(--surface-hover);
+  }
+
+  .recent-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: pre;
+  }
+
+  .recent-scope {
+    color: var(--text-tertiary);
+  }
+
+  .recent-remove {
+    display: inline-flex;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-secondary);
+    visibility: hidden;
+  }
+
+  .recent-popup li.active .recent-remove {
+    visibility: visible;
+  }
+
+  .recent-remove:hover {
+    border-color: var(--border);
+    color: var(--text-primary);
+  }
+
+  .recent-separator {
+    height: 1px;
+    margin: var(--space-1) 0;
+    background: var(--border-subtle);
+  }
+
+  .recent-clear {
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    text-align: left;
   }
 
   .input-wrap {

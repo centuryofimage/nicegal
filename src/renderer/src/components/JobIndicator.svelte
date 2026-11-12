@@ -99,7 +99,6 @@
 
 <div
   class:pinned={cardOpen}
-  class:needs-attention={needsAttention}
   class="job-anchor"
   {@attach popoverDismiss(cardOpen && !reviewingErrors, closeCard)}
 >
@@ -113,15 +112,13 @@
     onclick={toggleCard}
     onkeydown={onIndicatorKeydown}
   >
-    <span class="job-spinner" class:running>
-      {#if running}
-        <LoaderCircle size={13} aria-hidden="true" />
-      {:else if needsAttention}
-        <TriangleAlert size={13} aria-hidden="true" />
-      {:else}
-        <CircleCheck size={13} aria-hidden="true" />
-      {/if}
-    </span>
+    {#if running}
+      <span class="job-icon spinning"><LoaderCircle size={13} aria-hidden="true" /></span>
+    {:else if needsAttention}
+      <span class="job-icon attention"><TriangleAlert size={13} aria-hidden="true" /></span>
+    {:else}
+      <span class="job-icon"><CircleCheck size={13} aria-hidden="true" /></span>
+    {/if}
     <span class="job-status">
       <span class="job-label">{compactLabel}</span>
     </span>
@@ -235,20 +232,16 @@
     color: var(--text-primary);
   }
 
-  .job-spinner {
+  .job-icon {
     display: inline-flex;
   }
 
-  .job-spinner.running :global(svg) {
+  .job-icon.spinning {
     animation: spin 1s linear infinite;
   }
 
-  .needs-attention .job-spinner {
+  .job-icon.attention {
     color: var(--danger);
-  }
-
-  .needs-attention .job-spinner :global(svg) {
-    animation: none;
   }
 
   .job-status {
@@ -384,7 +377,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .job-spinner.running :global(svg),
+    .job-icon.spinning,
     .mini-track.indeterminate .indeterminate-fill {
       animation: none;
     }

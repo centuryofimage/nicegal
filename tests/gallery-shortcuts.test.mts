@@ -19,16 +19,38 @@ Object.assign(globalThis, {
   document: { fullscreenElement: null },
 });
 
-function fixture(): {
+/** What Escape finds open, and whether a popover is showing. */
+interface Layers {
+  view: boolean;
+  search: boolean;
+  popover: boolean;
+}
+
+function fixture(layers: Partial<Layers> = {}): {
   calls: string[];
+  layers: Layers;
   press: (key: string, options?: Partial<KeyboardEvent>) => KeyboardEvent;
 } {
   const calls: string[] = [];
+  const open: Layers = { view: true, search: false, popover: false, ...layers };
   const handle = createGalleryShortcutHandler({
     focusSearch: () => calls.push("search"),
     toggleInfo: () => calls.push("info"),
     closeInfo: () => calls.push("close-info"),
-    dismissView: () => calls.push("dismiss"),
+    dismissView: () => {
+      if (!open.view) return false;
+      calls.push("dismiss");
+      open.view = false;
+      return true;
+    },
+    clearSearch: () => {
+      if (!open.search) return false;
+      calls.push("clear");
+      open.search = false;
+      return true;
+    },
+    popoverOpen: () => open.popover,
+    navigateHistory: (delta) => calls.push(delta < 0 ? "back" : "forward"),
     checkForChanges: () => calls.push("check"),
   });
   function press(key: string, options: Partial<KeyboardEvent> = {}): KeyboardEvent {
@@ -49,7 +71,7 @@ function fixture(): {
     handle(event);
     return event;
   }
-  return { calls, press };
+  return { calls, layers: open, press };
 }
 
 test("Ctrl/Cmd+L and F focus search from editing controls, excluding modified/repeated or consumed keys", () => {
@@ -115,4 +137,32 @@ test("F5 checks for changes unless modified or repeated", () => {
   press("F5", { shiftKey: true });
   press("F5", { repeat: true });
   assert.deepEqual(calls, ["check"]);
+});
+
+test("Escape peels one layer per press: the view, then the search, then nothing", () => {
+  const { calls, press } = fixture({ view: true, search: true });
+  assert.equal(press("Escape").defaultPrevented, true);
+  assert.equal(press("Escape").defaultPrevented, true);
+  assert.equal(press("Escape").defaultPrevented, false, "an already clear search is left alone");
+  assert.deepEqual(calls, ["dismiss", "clear"]);
+});
+
+test("Escape leaves the view and search alone while a popover closes", () => {
+  const { calls, layers, press } = fixture({ view: true, search: true, popover: true });
+  press("Escape");
+  assert.deepEqual(calls, []);
+  layers.popover = false;
+  press("Escape");
+  assert.deepEqual(calls, ["dismiss"]);
+});
+
+test("Alt+Left and Alt+Right move through history, even from the search field", () => {
+  const { calls, press } = fixture();
+  const field = new Target("input") as unknown as EventTarget;
+  assert.equal(press("ArrowLeft", { altKey: true, target: field }).defaultPrevented, true);
+  press("ArrowRight", { altKey: true });
+  press("ArrowLeft");
+  press("ArrowLeft", { altKey: true, shiftKey: true });
+  press("ArrowLeft", { altKey: true, ctrlKey: true });
+  assert.deepEqual(calls, ["back", "forward"]);
 });

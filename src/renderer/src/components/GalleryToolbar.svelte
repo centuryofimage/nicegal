@@ -81,6 +81,7 @@
       selectedPhotoCount={view.gallerySelection.count}
       onaddlibraryvisual={addSelectedImages}
       ondropvisualfiles={dropImages}
+      history={view.searchHistory}
     />
     <div class="toolbar-actions">
       {#if start}<div class="toolbar-start">{@render start()}</div>{/if}

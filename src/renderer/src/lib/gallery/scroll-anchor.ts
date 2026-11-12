@@ -14,7 +14,8 @@ export type ScrollAnchor =
   | { kind: "top" }
   /** Inside a search section header, `offset` pixels below its top. */
   | { kind: "section"; key: string; offset: number }
-  /** `progress` is how far down the item the viewport top is, from 0 to 1. */
+  /** `progress` is how far down the item the viewport top is, in item heights: 0 to 1 when the
+   * item spans the top, negative when the item sits lower in the viewport. */
   | { kind: "item"; id: string; progress: number };
 
 /** The anchor for `scrollTop`, or undefined when the layout has nothing to anchor to. */

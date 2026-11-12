@@ -3,13 +3,13 @@
   Gallery workspace status segments. AppShell owns the window's one physical status bar and lays
   these out left to right, divided by hairlines the way an Explorer status bar is:
 
-      [catcopy] [84 / 103 items] [provider] … [transient message] [98 / 103 scanned]
+      [catcopy] [84 / 103 items, 95% scanned] [provider] … [transient message]
 
   The item count lives here rather than inside the search field: search-bar width is scarce and
   the status bar can give it room when available. One segment carries both readings — the library
-  size at rest, matched-of-total during a search — so there is no duplicated denominator. Indexing
-  sits at the far right while image-search coverage is incomplete. Once scanning catches up, that
-  segment disappears only when its eligible-image total also duplicates the library count.
+  size at rest, matched-of-total during a search — so there is no duplicated denominator. While
+  image-search coverage is incomplete the same segment appends a scanned percent; exact counts
+  are in its tooltip.
 -->
 <script lang="ts">
   import RefreshCw from "@lucide/svelte/icons/refresh-cw";
@@ -129,26 +129,38 @@
       : undefined,
   );
 
-  const indexText = $derived.by(() => {
-    const coverage = status?.imageCoverage;
-    if (!coverage || coverage.total === 0) return "";
-    if (coverage.indexed === coverage.total) {
-      return coverage.total === totalCount
-        ? ""
-        : m.status_bar_index_scanned({ indexed: coverage.indexed.toLocaleString() });
-    }
-    return m.status_bar_index_progress({
-      indexed: coverage.indexed.toLocaleString(),
-      total: coverage.total.toLocaleString(),
-    });
-  });
+  const coverage = $derived(status?.imageCoverage);
+  const indexIncomplete = $derived(
+    coverage !== undefined && coverage.total > 0 && coverage.indexed < coverage.total,
+  );
+  // Floored so an almost-finished scan never reads 100%.
+  const indexText = $derived(
+    indexIncomplete && coverage
+      ? m.status_bar_index_percent({
+          percent: Math.floor((coverage.indexed / coverage.total) * 100),
+        })
+      : "",
+  );
+  const indexTitle = $derived(
+    coverage && coverage.total > 0
+      ? m.status_bar_index_title({
+          indexed: coverage.indexed.toLocaleString(),
+          total: coverage.total.toLocaleString(),
+        })
+      : undefined,
+  );
+  const countTitle = $derived(
+    [itemsTitle, indexTitle].filter((part) => part !== undefined).join("\n") || undefined,
+  );
   const rateText = $derived(job ? jobRateText(job) : "");
 </script>
 
 <span class="status-segment library" title={libraryTitle || undefined}>{libraryName}</span>
 {#if hasLibrary}
   <span class="status-segment count item-count"
-    ><span role="status" title={itemsTitle}>{itemsText}</span><button
+    ><span role="status" title={countTitle}
+      >{itemsText}{#if indexText}<span class="index-status">, {indexText}</span>{/if}</span
+    ><button
       class={["check-button", { checking }]}
       title={m.status_bar_check_button_title()}
       aria-label={m.status_bar_check_button_aria()}
@@ -193,12 +205,6 @@
       {m.common_mapping()}{:else}{message}{/if}
   </span>
 {/if}
-{#if hasLibrary}
-  {#if indexText}
-    <span class="status-segment count index-status">{indexText}</span>
-  {/if}
-{/if}
-
 {#if rateText}
   <span class="status-segment count job-rate" title={m.status_bar_job_rate_title()}>{rateText}</span
   >
@@ -212,11 +218,6 @@
   .count {
     flex: none;
     font-variant-numeric: tabular-nums;
-  }
-
-  .index-status {
-    display: inline-flex;
-    align-items: center;
   }
 
   .item-count {
@@ -344,14 +345,14 @@
   }
 
   @container (max-width: 330px) {
-    .item-count,
+    .index-status,
     .message {
       display: none;
     }
   }
 
   @container (max-width: 220px) {
-    .index-status {
+    .item-count {
       display: none;
     }
   }

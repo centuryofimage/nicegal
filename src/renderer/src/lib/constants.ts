@@ -7,6 +7,9 @@ export const LIBRARIES_STORAGE_KEY = "nicegal.libraries.v2";
 /** Selected backend library ID and per-library view preferences (name, query, scroll). */
 export const LIBRARY_VIEWS_STORAGE_KEY = "nicegal.libraries.v3";
 
+/** Recent searches for the search field's dropdown, most recent first. */
+export const SEARCH_HISTORY_STORAGE_KEY = "nicegal.searchHistory.v1";
+
 /** The persisted gallery settings blob. */
 export const SETTINGS_STORAGE_KEY = "nicegal.settings.v1";
 

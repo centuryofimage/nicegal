@@ -1,7 +1,7 @@
 <script lang="ts">
   import PanelLeft from "@lucide/svelte/icons/panel-left";
   import PanelRight from "@lucide/svelte/icons/panel-right";
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
 
   import { m } from "../../shared/paraglide/messages.js";
   import AppMessage from "./components/AppMessage.svelte";
@@ -27,6 +27,7 @@
   import { offlineFolders } from "./lib/library-status";
   import { createLibraryViewController } from "./lib/library-view.svelte";
   import { isRemote } from "./lib/platform";
+  import { hasOpenPopover } from "./lib/popover-dismiss";
   import { galleryLayoutState, settings } from "./lib/settings.svelte";
   import { phoneWidth } from "./lib/viewport";
 
@@ -112,8 +113,18 @@
     toggleInfo,
     closeInfo,
     dismissView: view.dismissSelectionOrDetail,
+    clearSearch: view.clearSearch,
+    popoverOpen: hasOpenPopover,
+    // A browser already maps these keys and mouse buttons to Back and Forward.
+    navigateHistory: isRemote() ? undefined : view.navigateHistory,
     checkForChanges: () => commands.checkForChanges("manual"),
   });
+  /** Mouse Back and Forward buttons, which the desktop window does not map on its own. */
+  function onMouseUp(event: MouseEvent): void {
+    if (isRemote() || (event.button !== 3 && event.button !== 4)) return;
+    event.preventDefault();
+    view.navigateHistory(event.button === 3 ? -1 : 1);
+  }
   function openDetail(index: number): void {
     const item = view.filteredItems[index];
     // Visual-search results open from the beginning even if a hover preview was playing.
@@ -124,11 +135,22 @@
     initialVideoPlayback = item && playback ? { id: item.id, ...playback } : null;
     view.openDetail(index);
   }
+  // The gallery stays laid out behind the viewer. Keep the viewed item in view so closing the
+  // viewer, by any route, returns to where stepping through ended. The viewer hides the
+  // libraries pane, so the gallery relays out on close; revealIndex anchors for that.
+  $effect(() => {
+    const index = view.detailIndex;
+    if (index !== null) untrack(() => gallery?.revealIndex(index));
+  });
   onDestroy(() => view.dispose());
 </script>
 
 <!-- Returning to the gallery checks for new files; a window hidden in the tray never focuses. -->
-<svelte:window onkeydown={handleKeydown} onfocus={() => commands.checkForChanges("automatic")} />
+<svelte:window
+  onkeydown={handleKeydown}
+  onmouseup={onMouseUp}
+  onfocus={() => commands.checkForChanges("automatic")}
+/>
 <svelte:document
   onvisibilitychange={() =>
     document.visibilityState === "visible" && commands.checkForChanges("automatic")}

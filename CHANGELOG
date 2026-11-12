@@ -1,1 +1,3 @@
-- cleanups and version bumps
+- Update versions, github actions
+- Add history
+- Make esc key act like it should

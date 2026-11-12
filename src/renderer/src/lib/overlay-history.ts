@@ -2,6 +2,8 @@ import { tick } from "svelte";
 
 /** History state key holding an entry's overlay depth (1 for the bottom overlay). */
 const DEPTH_KEY = "nicegalOverlay";
+/** History state key holding the page state of an entry below every overlay. */
+const BASE_KEY = "nicegalBase";
 
 export type HistoryPort = Pick<History, "state" | "pushState" | "replaceState" | "go">;
 export interface PopStateSource {
@@ -25,16 +27,27 @@ function depthOf(state: unknown): number {
   return typeof depth === "number" ? depth : 0;
 }
 
+function baseOf(state: unknown): unknown {
+  return (state as Record<string, unknown> | null)?.[BASE_KEY] ?? null;
+}
+
 /**
  * Gives each open overlay (viewer, dialog) one browser history entry, so Back or the Android
  * back gesture closes the topmost overlay instead of leaving the app. Pushed slots form a prefix
  * of the stack; slots opened while a traversal is in flight are pushed when it lands.
+ *
+ * Entries below every overlay are base entries: page states such as searches, which Back and
+ * Forward move between once no overlay is open. A base write waits until no overlay owns an
+ * entry and no traversal is in flight, so it never cuts off an overlay's entry.
  */
 export class OverlayHistory {
   readonly #history: HistoryPort;
   readonly #stack: Slot[] = [];
   /** `go()` calls whose popstate has not arrived yet. */
   #pending = 0;
+  /** The latest base write waiting for overlays to close; `push` sticks once requested. */
+  #queuedBase: { state: unknown; push: boolean } | null = null;
+  #onBase: ((state: unknown) => void) | undefined;
 
   constructor(history: HistoryPort, events: PopStateSource) {
     this.#history = history;
@@ -50,6 +63,19 @@ export class OverlayHistory {
     this.#stack.push(slot);
     this.#sync();
     return { close: () => this.#close(slot) };
+  }
+
+  /** Records the page state at the base. `push` adds a Back step; otherwise the current base
+   * entry is updated in place. */
+  setBase(state: unknown, push: boolean): void {
+    this.#queuedBase = { state, push: push || (this.#queuedBase?.push ?? false) };
+    this.#sync();
+  }
+
+  /** `listener` receives the base state when Back or Forward lands on another base entry. It is
+   * not called for traversals this class makes, or for a Back that closes an overlay. */
+  onBaseTraversal(listener: (state: unknown) => void): void {
+    this.#onBase = listener;
   }
 
   #pushedCount(): number {
@@ -82,6 +108,13 @@ export class OverlayHistory {
 
   #sync(): void {
     if (this.#pending > 0) return;
+    const base = this.#queuedBase;
+    if (base && this.#pushedCount() === 0) {
+      this.#queuedBase = null;
+      const state = { [BASE_KEY]: base.state };
+      if (base.push) this.#history.pushState(state, "");
+      else this.#history.replaceState(state, "");
+    }
     for (const [index, slot] of this.#stack.entries()) {
       if (slot.pushed) continue;
       this.#history.pushState({ [DEPTH_KEY]: index + 1 }, "");
@@ -90,9 +123,17 @@ export class OverlayHistory {
   }
 
   #onPopState(): void {
-    if (this.#pending > 0) this.#pending--;
+    const ownTraversal = this.#pending > 0;
+    if (ownTraversal) this.#pending--;
     const depth = depthOf(this.#history.state);
     const pushed = this.#pushedCount();
+    if (!ownTraversal && depth === 0 && pushed === 0) {
+      // Moving between base entries. A base write still queued belongs to the entry just left.
+      this.#queuedBase = null;
+      this.#onBase?.(baseOf(this.#history.state));
+      this.#sync();
+      return;
+    }
     if (depth > pushed) {
       // An entry from before a reload, or one already closed: nothing is open there.
       this.#go(pushed - depth);

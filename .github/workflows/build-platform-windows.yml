@@ -18,27 +18,27 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           token: ${{ secrets.NICEGAL_PAT || github.token }}
           persist-credentials: false
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@v1.13.0
 
       - name: Install NASM for libjpeg-turbo
-        uses: ilammy/setup-nasm@v1
+        uses: ilammy/setup-nasm@v1.5.2
 
       - name: Restore static FFmpeg
         id: ffmpeg-cache
-        uses: actions/cache@v6
+        uses: actions/cache@v6.1.0
         with:
           path: nicegal-server/.deps/ffmpeg
           key: ffmpeg-n9.0.1-windows-${{ hashFiles('.github/ffmpeg/windows-x64.args', '.github/ffmpeg/nasm-windows.patch', '.github/actions/ffmpeg-windows/action.yml') }}-v1
 
       - name: Prepare static FFmpeg
-        uses: ./.github/actions/ffmpeg-windows
+        uses: $/.github/actions/ffmpeg-windows
         with:
           cache-hit: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
 
@@ -70,7 +70,7 @@ jobs:
           "NICEGAL_CRT_LIB_PATH=$($runtimeDirectory.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Set up desktop build tools
-        uses: ./.github/actions/desktop-tools
+        uses: $/.github/actions/desktop-tools
         with:
           platform: windows
 
@@ -79,7 +79,9 @@ jobs:
         run: pnpm run build:backend:win
 
       - name: Stamp the version
-        run: npm pkg set version=${{ inputs.version }}
+        run: npm pkg set version=$env:INPUTS_VERSION
+        env:
+          INPUTS_VERSION: ${{ inputs.version }}
 
       # Generate update metadata without uploading. The release job owns all assets so clients
       # cannot discover a version before both platform builds and attestations are complete.
@@ -93,7 +95,7 @@ jobs:
       - name: Verify Windows installer and update artifacts
         shell: pwsh
         run: |
-          $prefix = 'dist/nicegal-${{ inputs.version }}-windows-x64'
+          $prefix = 'dist/nicegal-$env:INPUTS_VERSION-windows-x64'
           $expected = @(
             "$prefix-setup.exe", "$prefix-setup.exe.blockmap",
             "$prefix.zip", 'dist/latest.yml',
@@ -106,9 +108,11 @@ jobs:
               throw "Missing or empty Windows release artifact: $artifact"
             }
           }
+        env:
+          INPUTS_VERSION: ${{ inputs.version }}
 
       - name: Upload packages
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: packages-windows
           if-no-files-found: error

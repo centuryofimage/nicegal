@@ -902,6 +902,9 @@
   "search_bar_placeholder": "Buscar nombres de archivo, texto e imágenes",
   "search_bar_placeholder_no_images": "Buscar nombres de archivo y texto",
   "search_bar_preparing_visual": "Preparando la búsqueda visual. Puedes seguir explorando.",
+  "search_bar_recent_clear": "Borrar búsquedas recientes",
+  "search_bar_recent_label": "Búsquedas recientes",
+  "search_bar_recent_remove": "Quitar de las búsquedas recientes",
   "search_bar_reference_chip_label": [
     {
       "declarations": [
@@ -1020,8 +1023,8 @@
   "status_bar_check_button_aria": "Buscar archivos nuevos",
   "status_bar_check_button_title": "Buscar archivos nuevos (F5)",
   "status_bar_dismiss_warning_title": "Descartar esta advertencia de búsqueda",
-  "status_bar_index_progress": "{indexed} / {total} examinados",
-  "status_bar_index_scanned": "{indexed} examinados",
+  "status_bar_index_percent": "{percent} % examinado",
+  "status_bar_index_title": "{indexed} / {total} imágenes examinadas para la búsqueda",
   "status_bar_items": [
     {
       "declarations": [

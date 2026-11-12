@@ -879,6 +879,9 @@
   "search_bar_placeholder": "ファイル名、テキスト、画像を検索",
   "search_bar_placeholder_no_images": "ファイル名とテキストを検索",
   "search_bar_preparing_visual": "ビジュアル検索を準備しています。閲覧は続けられます。",
+  "search_bar_recent_clear": "最近の検索をクリア",
+  "search_bar_recent_label": "最近の検索",
+  "search_bar_recent_remove": "最近の検索から削除",
   "search_bar_reference_chip_label": [
     {
       "declarations": [
@@ -995,8 +998,8 @@
   "status_bar_check_button_aria": "新しいファイルを確認",
   "status_bar_check_button_title": "新しいファイルを確認 (F5)",
   "status_bar_dismiss_warning_title": "この検索警告を閉じる",
-  "status_bar_index_progress": "{indexed} / {total} スキャン済み",
-  "status_bar_index_scanned": "{indexed} スキャン済み",
+  "status_bar_index_percent": "{percent}% スキャン済み",
+  "status_bar_index_title": "検索用に {indexed} / {total} 枚の画像をスキャン済み",
   "status_bar_items": [
     {
       "declarations": [

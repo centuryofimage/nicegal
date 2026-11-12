@@ -902,6 +902,9 @@
   "search_bar_placeholder": "Search file names, text, and images",
   "search_bar_placeholder_no_images": "Search file names and text",
   "search_bar_preparing_visual": "Preparing visual search. You can keep browsing.",
+  "search_bar_recent_clear": "Clear recent searches",
+  "search_bar_recent_label": "Recent searches",
+  "search_bar_recent_remove": "Remove from recent searches",
   "search_bar_reference_chip_label": [
     {
       "declarations": [
@@ -1020,8 +1023,8 @@
   "status_bar_check_button_aria": "Check for new files",
   "status_bar_check_button_title": "Check for new files (F5)",
   "status_bar_dismiss_warning_title": "Dismiss this search warning",
-  "status_bar_index_progress": "{indexed} / {total} scanned",
-  "status_bar_index_scanned": "{indexed} scanned",
+  "status_bar_index_percent": "{percent}% scanned",
+  "status_bar_index_title": "{indexed} / {total} images scanned for search",
   "status_bar_items": [
     {
       "declarations": [

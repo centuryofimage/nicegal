@@ -25,7 +25,10 @@ import { resolveProtocolAssetPath } from "../protocol-path";
 import { handleApiRequest, handleThumbnailRequest, resolveOriginalPath } from "../protocols";
 import { guessBrowser, guessDeviceName, pairPage } from "./pair-page";
 
+/** Over HTTP. A `Secure` cookie of the same name left from HTTPS could never be replaced by an
+ * HTTP response, so each protocol has its own. */
 const COOKIE = "nicegal_device";
+const SECURE_COOKIE = "__Secure-nicegal_device";
 /** First byte of every TLS connection: a handshake record. */
 const TLS_HANDSHAKE = 0x16;
 /** A phone that locks its screen drops the event stream; keep its searches and job
@@ -211,10 +214,10 @@ ${client.browser}`,
       return sendFile(request, response, path, "private, max-age=3600");
     }
     if (method === "GET" || method === "HEAD") {
-      // A device paired before HTTPS was turned on holds a cookie without Secure. Loading the page
-      // over HTTPS replaces it with one that plain HTTP can never carry.
-      const token = readCookie(request, COOKIE);
-      if (this.tls && token && acceptsHtml(request))
+      // A device paired over HTTP holds the plain cookie. Loading the page over HTTPS swaps it for
+      // the `Secure` one, which plain HTTP can never carry.
+      const token = this.deviceToken(request);
+      if (this.tls && token && !readCookie(request, SECURE_COOKIE) && acceptsHtml(request))
         response.setHeader("set-cookie", this.deviceCookie(token));
       return this.handleStatic(request, response, url);
     }
@@ -223,8 +226,17 @@ ${client.browser}`,
 
   /** Secure once HTTPS is on, so the browser never sends it over plain HTTP. */
   private deviceCookie(token: string): string {
+    const name = this.tls ? SECURE_COOKIE : COOKIE;
     const secure = this.tls ? "; Secure" : "";
-    return `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 400}${secure}`;
+    return `${name}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24 * 400}${secure}`;
+  }
+
+  /** The device token this server's protocol issues. Over HTTPS a plain cookie from before the
+   * switch still counts, until the page load above replaces it. */
+  private deviceToken(request: IncomingMessage): string | null {
+    return this.tls
+      ? (readCookie(request, SECURE_COOKIE) ?? readCookie(request, COOKIE))
+      : readCookie(request, COOKIE);
   }
 
   private ownOrigin(request: IncomingMessage): string | null {
@@ -233,7 +245,7 @@ ${client.browser}`,
   }
 
   private deviceOf(request: IncomingMessage): RemoteDevice | null {
-    const token = readCookie(request, COOKIE);
+    const token = this.deviceToken(request);
     return token ? this.host.authenticate(token) : null;
   }
 

@@ -574,6 +574,25 @@
     trackAnchor();
   }
 
+  /**
+   * Scrolls the tile at `index` to the top of the viewport if any part of it is outside, and
+   * anchors on that tile so a following relayout keeps it at the same place in the viewport.
+   */
+  export function revealIndex(index: number): void {
+    const position = layout.positions[index];
+    const item = items[index];
+    if (!viewport || !position || !item || !viewportHeight) return;
+    const previous = viewport.scrollTop;
+    if (position.y < previous || position.y + position.height > previous + viewportHeight) {
+      // Its scroll event must not re-anchor onto the row's first tile; see `onscroll`.
+      restoringAnchor = true;
+      viewport.scrollTop = position.y;
+      scrollTop = viewport.scrollTop;
+      if (Math.abs(scrollTop - previous) < SCROLL_EPSILON_PX) restoringAnchor = false;
+    }
+    anchor = { kind: "item", id: item.id, progress: (scrollTop - position.y) / position.height };
+  }
+
   /** Scrolls to the top of the search section with this key. */
   export function scrollToSection(key: string): void {
     const section = layout.dividers.find((divider) => divider.key === key);

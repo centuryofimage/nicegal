@@ -27,7 +27,7 @@ jobs:
     runs-on: ${{ inputs.os }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
         with:
           submodules: recursive
           token: ${{ secrets.NICEGAL_PAT || github.token }}
@@ -35,13 +35,13 @@ jobs:
 
       - name: Restore static FFmpeg
         id: ffmpeg-cache
-        uses: actions/cache@v6
+        uses: actions/cache@v6.1.0
         with:
           path: nicegal-server/.deps/ffmpeg
           key: ffmpeg-n9.0.1-${{ inputs.platform }}-${{ hashFiles('.github/ffmpeg/posix.args', '.github/actions/ffmpeg-posix/action.yml') }}-v1
 
       - name: Prepare static FFmpeg
-        uses: ./.github/actions/ffmpeg-posix
+        uses: $/.github/actions/ffmpeg-posix
         with:
           cache-hit: ${{ steps.ffmpeg-cache.outputs.cache-hit }}
 
@@ -49,7 +49,7 @@ jobs:
         run: brew install nasm
 
       - name: Set up desktop build tools
-        uses: ./.github/actions/desktop-tools
+        uses: $/.github/actions/desktop-tools
         with:
           platform: ${{ inputs.platform }}
 
@@ -73,7 +73,7 @@ jobs:
       - name: Verify macOS DMG, signing, and bundled server
         shell: bash
         run: |
-          case '${{ inputs.arch }}' in
+          case '${INPUTS_ARCH}' in
             arm64) expected_arch=arm64 ; package_arch=arm64 ; unpacked_dir=mac-arm64 ;;
             x64) expected_arch=x86_64 ; package_arch=x64 ; unpacked_dir=mac ;;
             *) echo 'Unexpected macOS architecture' >&2; exit 1 ;;
@@ -81,7 +81,7 @@ jobs:
           server="dist/$unpacked_dir/nicegal.app/Contents/Resources/nicegal-server/nicegal-server"
           runtime="dist/$unpacked_dir/nicegal.app/Contents/Resources/nicegal-server/onnxruntime/coreml/libonnxruntime.dylib"
           for artifact in \
-            "dist/nicegal-${{ inputs.version }}-macos-$package_arch.dmg" \
+            "dist/nicegal-${INPUTS_VERSION}-macos-$package_arch.dmg" \
             "$server" \
             "$runtime"; do
             if [ ! -s "$artifact" ]; then
@@ -99,9 +99,12 @@ jobs:
           app="dist/$unpacked_dir/nicegal.app"
           codesign --verify --deep --strict --verbose=2 "$app"
           codesign --display --verbose=4 "$app" 2>&1 | grep -q 'Signature=adhoc'
+        env:
+          INPUTS_ARCH: ${{ inputs.arch }}
+          INPUTS_VERSION: ${{ inputs.version }}
 
       - name: Upload packages
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: packages-${{ inputs.platform }}
           if-no-files-found: error

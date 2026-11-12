@@ -254,8 +254,11 @@
   }
 
   function onFilterKeydown(event: KeyboardEvent): void {
-    if (event.key === "Escape" && filter) clearFilter();
-    else if (event.key === "ArrowDown" || event.key === "Enter") {
+    if (event.key === "Escape" && filter) {
+      // The filter's own Escape; the window's would also clear the search.
+      event.preventDefault();
+      clearFilter();
+    } else if (event.key === "ArrowDown" || event.key === "Enter") {
       const first = rows.find((row) => row.match);
       if (!first) return;
       if (event.key === "Enter") activate(first.node.path);

@@ -18,7 +18,9 @@ import { collapseSearchSections } from "./gallery/search-sections";
 import { GallerySelection, type SelectionModifiers } from "./gallery/selection.svelte";
 import { isActiveJob } from "./job-state";
 import { overlayHistory, type OverlayEntry } from "./overlay-history";
-import { withScope } from "./search-query";
+import { isBlankQuery } from "./search-history";
+import { SearchHistory } from "./search-history.svelte";
+import { parseQuery, withScope } from "./search-query";
 import { layoutOptions, settings } from "./settings.svelte";
 
 export type SettingsPage = "gallery" | "search" | "remote" | "about";
@@ -56,7 +58,13 @@ export interface LibraryViewController {
   /** Opens Settings, on `page` when given. Also switches straight from Library manager. */
   openSettingsDialog(page?: SettingsPage): void;
   openSearchProblem(issue: SearchIssue): void;
-  dismissSelectionOrDetail(): void;
+  /** Closes the viewer, or else clears the selection. False when there was neither. */
+  dismissSelectionOrDetail(): boolean;
+  readonly searchHistory: SearchHistory;
+  /** Clears the query, filters and visual examples, keeping the scope. False when already clear. */
+  clearSearch(): boolean;
+  /** Back (-1) or Forward (1) through searches; Back closes an open viewer or dialog first. */
+  navigateHistory(delta: -1 | 1): void;
   switchToMeaningSearch(): void;
   openDetail(index: number): void;
   openFileMenu(index: number): void;
@@ -188,6 +196,12 @@ export function createLibraryViewController(
   });
   let detailStatus = $state<DetailViewStatus | null>(null);
   const overlays = overlayHistory();
+  const searchHistory = new SearchHistory(ocrSearch, overlays);
+  $effect(() => {
+    void ocrSearch.query;
+    void ocrSearch.visualReferenceRevision;
+    untrack(() => searchHistory.noteChange());
+  });
   /** The open viewer's history entry, so Back closes it. */
   let detailEntry: OverlayEntry | undefined;
   /** Every viewer change goes through here: the status belongs to the item it describes. */
@@ -195,6 +209,8 @@ export function createLibraryViewController(
     selectedDetail = item;
     detailStatus = null;
     if (item && !detailEntry) {
+      // Opening a result settles the search that found it, below the viewer's entry.
+      searchHistory.commit();
       detailEntry = overlays.open(() => showDetail(undefined));
     } else if (!item) {
       detailEntry?.close();
@@ -355,9 +371,23 @@ export function createLibraryViewController(
     setActiveDialog("settings");
     if (catalog.backendStatus.ready && !runtime.status && !runtime.loading) void runtime.refresh();
   }
-  function dismissSelectionOrDetail(): void {
+  function dismissSelectionOrDetail(): boolean {
     if (detailId !== null) closeDetail();
     else if (gallerySelection.count > 0) gallerySelection.clear();
+    else return false;
+    return true;
+  }
+  function clearSearch(): boolean {
+    if (isBlankQuery(ocrSearch.query) && !ocrSearch.visualReferences.length) return false;
+    ocrSearch.resetVisualSearch();
+    ocrSearch.query = withScope("", parseQuery(ocrSearch.query).scope);
+    searchHistory.commit();
+    return true;
+  }
+  function navigateHistory(delta: -1 | 1): void {
+    // Typing that has not settled yet is the step Back returns from.
+    if (delta < 0) searchHistory.commit();
+    history.go(delta);
   }
   function switchToMeaningSearch(): void {
     ocrSearch.query = withScope(ocrSearch.query, "meaning");
@@ -529,6 +559,7 @@ export function createLibraryViewController(
       libraryId === null ? { query: "", scrollTop: 0 } : catalog.viewState(libraryId);
     ocrSearch.resetVisualSearch();
     ocrSearch.query = query;
+    searchHistory.adopt();
     galleryScroll.prepareRestore(scrollTop);
     preparedLibraryViewRestoreGeneration = generation;
     await tick();
@@ -656,6 +687,9 @@ export function createLibraryViewController(
     openSettingsDialog,
     openSearchProblem,
     dismissSelectionOrDetail,
+    searchHistory,
+    clearSearch,
+    navigateHistory,
     switchToMeaningSearch,
     openDetail,
     openFileMenu,
@@ -676,6 +710,7 @@ export function createLibraryViewController(
       flushLibraryViewState();
       disposed = true;
       unsubscribeComposer();
+      searchHistory.dispose();
       detailEntry?.close();
       cancelSearchWait?.();
       libraryViewGeneration += 1;
