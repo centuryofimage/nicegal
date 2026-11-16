@@ -48,7 +48,8 @@ export interface ApplicationCommands {
   ) => Promise<void>;
   /**
    * Takes a folder out of a library right away: an included folder is removed, a subfolder is
-   * excluded. With `deleteIndexedData`, then purges its data that no other library covers.
+   * excluded. With `deleteIndexedData`, then stops any running job and purges its data that no
+   * other library covers.
    */
   readonly removeFolder: (
     libraryId: LibraryId,
@@ -420,10 +421,9 @@ class Application implements ApplicationContext {
     path: string,
     deleteIndexedData: boolean,
   ): Promise<void> {
-    const { catalog, jobs, orchestrator } = this.services;
+    const { catalog, orchestrator } = this.services;
     const library = catalog.definitions.find((candidate) => candidate.id === libraryId);
     if (!library) throw new Error(m.common_library_missing());
-    if (deleteIndexedData && jobs.running) throw new Error(m.app_remove_folder_wait_for_job());
     const included = library.include.some((folder) => sameFolder(folder.path, path));
     const include = library.include
       .map((folder) => folder.path)

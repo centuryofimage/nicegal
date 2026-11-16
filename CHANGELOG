@@ -1,3 +1,2 @@
-- Update versions, github actions
-- Add history
-- Make esc key act like it should
+- light updates to dependencies
+- webgpu on windows support, not built for now

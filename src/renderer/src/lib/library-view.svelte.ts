@@ -12,6 +12,7 @@ import type { SearchView } from "./ocr-search.svelte";
 import type { SearchIssue } from "./search-issue";
 
 import { m } from "../../../shared/paraglide/messages.js";
+import { chooseDirectory } from "./choose-directory";
 import { errorMessage } from "./errors";
 import { GalleryScrollState } from "./gallery/scroll-state.svelte";
 import { collapseSearchSections } from "./gallery/search-sections";
@@ -584,7 +585,7 @@ export function createLibraryViewController(
     | { status: "error"; message: string }
   > {
     try {
-      const folder = await window.nicegal.native.chooseDirectory();
+      const folder = await chooseDirectory();
       if (!folder) return { status: "cancelled" };
       flushLibraryViewState();
       // Selection advances `librarySelectionRevision`, whose effect restores the new view.

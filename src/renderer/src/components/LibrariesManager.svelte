@@ -60,7 +60,7 @@
     }
   }
 
-  /** Saves the draft, then switches to Settings → Search without releasing the scan hold. */
+  /** Saves the draft, then switches to Settings → Search. */
   async function openSearchSettings(): Promise<void> {
     if (removeBusy || createBusy || navigationBusy) return;
     navigationBusy = true;

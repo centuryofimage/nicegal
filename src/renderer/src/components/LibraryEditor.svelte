@@ -9,6 +9,7 @@
   import { m } from "../../../shared/paraglide/messages.js";
   import { useApplication } from "../lib/application.svelte";
   import { derivedLibraryName } from "../lib/catalog.svelte";
+  import { chooseDirectory } from "../lib/choose-directory";
   import { cleanDiagnostic, errorMessage } from "../lib/errors";
   import {
     localDateToExclusiveNs,
@@ -109,7 +110,7 @@
 
   async function addFolder(): Promise<void> {
     try {
-      const folder = await window.nicegal.native.chooseDirectory();
+      const folder = await chooseDirectory();
       if (!folder) return;
       error = "";
       if (include.some((path) => isWithin(path, folder) && isWithin(folder, path))) return;
@@ -135,7 +136,7 @@
 
   async function excludeFolder(): Promise<void> {
     try {
-      const folder = await window.nicegal.native.chooseDirectory(include[0]);
+      const folder = await chooseDirectory(include[0]);
       if (!folder) return;
       error = "";
       if (!include.some((path) => isWithin(folder, path) && !isWithin(path, folder))) {
@@ -168,10 +169,6 @@
       error = m.library_editor_needs_folder();
       return false;
     }
-    if (purgeFolders.length && jobs.running) {
-      error = m.library_editor_wait_for_job();
-      return false;
-    }
     saving = true;
     error = "";
     try {
@@ -201,6 +198,12 @@
     } finally {
       saving = false;
     }
+  }
+
+  /** Leaves the saved library as it is, so a save that keeps failing never traps the dialog. */
+  function discardChanges(): void {
+    resetDraft();
+    error = "";
   }
 
   async function scan(
@@ -467,11 +470,17 @@
     </div>
   {/if}
 
-  {#if error || changeCount}
+  {#if error || changeCount || purgeFolders.length}
     <footer>
       <span class={["footer-status", { attention: Boolean(error) }]} role="status">
-        {error || m.library_editor_changes_status({ count: changeCount })}
+        {error ||
+          (saving && purgeFolders.length
+            ? m.libraries_manager_stopping_jobs()
+            : m.library_editor_changes_status({ count: changeCount }))}
       </span>
+      <button class="ui-button ui-button-compact" onclick={discardChanges} disabled={saving}
+        >{m.library_editor_discard_changes()}</button
+      >
     </footer>
   {/if}
 </section>

@@ -69,13 +69,41 @@ export class JobOrchestrator {
     );
   }
 
-  /** Removes indexed data for folders no longer covered by this library. */
+  /**
+   * Removes indexed data for folders no longer covered by this library. A purge needs the worker
+   * to itself, so whatever runs is stopped first; a stopped scan is requested again behind it.
+   */
   async purgeRemovedFolders(libraryId: LibraryId, folders: string[]): Promise<boolean> {
     if (!folders.length) return true;
+    const stopped = await this.stopForPurge();
+    if (!stopped) return false;
     const snapshot = await this.jobs.start({
       type: "libraryPurge",
       params: { libraryId, folders },
     });
+    if (snapshot && stopped.resumeScan !== null) await this.scan(stopped.resumeScan);
     return snapshot !== null;
+  }
+
+  /**
+   * Cancels the running job and queued scans, then waits for the backend to wind them down.
+   * Returns the library whose scan was stopped, or null when it did not stop in time.
+   */
+  private async stopForPurge(): Promise<{ resumeScan: LibraryId | null } | null> {
+    await this.jobs.sync();
+    const { active } = this.jobs;
+    const resumeScan =
+      (active?.type === "libraryScan" && !isTerminalJobStatus(active.status)
+        ? active.libraryId
+        : this.jobs.queued[0]?.libraryId) ?? null;
+    // Cancelling is cooperative, and a scan the backend had queued can start in the meantime.
+    const deadline = Date.now() + 30_000;
+    while (this.jobs.running || this.jobs.queued.length) {
+      if (Date.now() >= deadline) return null;
+      if (this.jobs.active?.status !== "cancelling") await this.cancel();
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await this.jobs.sync();
+    }
+    return { resumeScan };
   }
 }
