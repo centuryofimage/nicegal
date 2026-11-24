@@ -159,6 +159,11 @@ export function startUpdates(
   deferInstallation: () => void;
   installAndRestart: () => boolean;
 } {
+  // Required before any check or launch-time install. We authenticate nothing: the only
+  // cross-origin hop is GitHub's release-asset redirect, whose pre-signed URL carries its own
+  // authority, so none of our request headers need to follow it. Without this, electron-updater 7
+  // rejects checkForUpdates()/downloadUpdate() with ERR_UPDATER_CROSS_ORIGIN_HEADERS_NOT_CONFIGURED.
+  autoUpdater.crossOriginHeaders = () => [];
   const supported = supportsAutomaticUpdates(
     app.isPackaged && releaseBuild,
     platform,

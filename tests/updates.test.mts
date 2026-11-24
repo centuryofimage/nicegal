@@ -52,6 +52,7 @@ const updater = Object.assign(new EventEmitter(), {
   allowDowngrade: true,
   disableWebInstaller: false,
   disableDifferentialDownload: true,
+  crossOriginHeaders: null as null | ((headerNames: string[]) => string[]),
   setFeedURL: (configuration: { provider: string; url: string }) => {
     assert.equal(configuration.provider, "generic");
     feedUrls.push(configuration.url);
@@ -390,6 +391,7 @@ test("one check per launch, ready state, trusted notes and quit deferral", async
   assert.equal(updater.allowDowngrade, false);
   assert.equal(updater.disableDifferentialDownload, false);
   assert.equal(updater.disableWebInstaller, true);
+  assert.deepEqual(updater.crossOriginHeaders!(), []);
   await assert.rejects(async () => handlers.get("updates:status")!("foreign"), /Untrusted/);
   await assert.rejects(async () => handlers.get("updates:release-notes")!("foreign"), /Untrusted/);
   await assert.rejects(
