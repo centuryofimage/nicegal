@@ -131,7 +131,10 @@
 
   const coverage = $derived(status?.imageCoverage);
   const indexIncomplete = $derived(
-    coverage !== undefined && coverage.total > 0 && coverage.indexed < coverage.total,
+    coverage !== undefined &&
+      coverage !== null &&
+      coverage.total > 0 &&
+      coverage.indexed < coverage.total,
   );
   // Floored so an almost-finished scan never reads 100%.
   const indexText = $derived(

@@ -432,13 +432,6 @@
       height: tile.height,
     });
     if (!queued) return;
-    if (import.meta.env.DEV) {
-      console.debug("[nicegal:thumbnails] poster miss, queued", {
-        assetId: tile.itemId,
-        width: tile.width,
-        height: tile.height,
-      });
-    }
     if (media.scrollIdle) thumbnailScheduler.resume();
   }
 
@@ -961,14 +954,14 @@
             <span
               class="media-badge"
               class:has-match={matchingFrameAvailable}
-              title={matchingFrameAvailable
+              title={matchingFrameAvailable && tile.matchTimestampMs !== undefined
                 ? m.virtual_gallery_matched_frame_tooltip({
                     match_time: matchTime(tile.matchTimestampMs),
                     duration: videoDuration(tile.durationMs),
                   })
                 : m.virtual_gallery_video_tooltip()}
             >
-              {#if matchingFrameAvailable}
+              {#if matchingFrameAvailable && tile.matchTimestampMs !== undefined}
                 <span class="media-badge-match"
                   >{m.virtual_gallery_match_badge({
                     match_time: matchTime(tile.matchTimestampMs),

@@ -11,6 +11,10 @@ export const paraglideOptions = {
   // The desktop window sets a global from the locale main chose; a phone over remote access has
   // no preload, so it follows the browser's languages.
   strategy: ["globalVariable", "preferredLanguage", "baseLocale"],
+  // Keep physical per-message modules. Paraglide 3 defaults the Vite plugin to "virtual-modules",
+  // which rewrites messages.js into a `virtual:` facade and drops the on-disk message files. The
+  // Electron main process imports this shared output directly from disk, so it must stay physical.
+  outputStructure: "message-modules",
   emitTsDeclarations: true,
   emitReadme: false,
   emitPrettierIgnore: false,

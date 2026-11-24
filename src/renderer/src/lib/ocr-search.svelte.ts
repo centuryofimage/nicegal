@@ -1045,7 +1045,7 @@ export class OcrSearchController {
     if (this.broadTimer) clearTimeout(this.broadTimer);
     void window.nicegal.backend.cancelSearch?.(this.searchSession).catch(() => {});
     this.broadPending = { meaning: false, visual: false };
-    this.timer = null;
+    this.timer = undefined;
     this.pending = false;
     this.filePending = false;
     this.error = "";

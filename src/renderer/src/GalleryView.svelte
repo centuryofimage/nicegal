@@ -61,6 +61,7 @@
     infoButton?.focus();
   }
   let gallery = $state<VirtualGallery>();
+  let detailHost = $state<HTMLElement>();
   let initialVideoPlayback = $state<{ id: string; currentTime: number; muted: boolean } | null>(
     null,
   );
@@ -334,37 +335,43 @@
         />
       {/if}
       {#if view.detailItem}
-        {#key originalUrlOf(view.detailItem)}
-          <DetailView
-            item={view.detailItem}
-            initialPlayback={initialVideoPlayback?.id === view.detailItem.id
-              ? initialVideoPlayback
-              : null}
-            hasPrev={view.detailIndex !== null && view.detailIndex > 0}
-            hasNext={view.detailIndex !== null && view.detailIndex < view.filteredItems.length - 1}
-            onclose={() => {
-              initialVideoPlayback = null;
-              view.closeDetail();
-            }}
-            onprev={() => {
-              initialVideoPlayback = null;
-              view.showPrevDetail();
-            }}
-            onnext={() => {
-              initialVideoPlayback = null;
-              view.showNextDetail();
-            }}
-            onstatuschange={(status) => (view.detailStatus = status)}
-            onfilemenu={() => view.detailIndex !== null && view.openFileMenu(view.detailIndex)}
-            imageQuery={ocrSearch.visualImageQuery}
-            imageQueryLabel={ocrSearch.visualQueryLabel}
-            imageModelName={runtime.imageModelName}
-            imageModelVisualizes={runtime.imageModelVisualizes}
-            backendReady={catalog.backendStatus.ready}
-            toolbarEnd={phoneWidth.current ? infoToggle : undefined}
-            bind:showMatchAreas
-          />
-        {/key}
+        <!-- Fullscreen belongs to this host, which outlives the per-item viewer below, so
+             stepping between items stays fullscreen. -->
+        <div class="detail-host" bind:this={detailHost}>
+          {#key originalUrlOf(view.detailItem)}
+            <DetailView
+              item={view.detailItem}
+              initialPlayback={initialVideoPlayback?.id === view.detailItem.id
+                ? initialVideoPlayback
+                : null}
+              hasPrev={view.detailIndex !== null && view.detailIndex > 0}
+              hasNext={view.detailIndex !== null &&
+                view.detailIndex < view.filteredItems.length - 1}
+              onclose={() => {
+                initialVideoPlayback = null;
+                view.closeDetail();
+              }}
+              onprev={() => {
+                initialVideoPlayback = null;
+                view.showPrevDetail();
+              }}
+              onnext={() => {
+                initialVideoPlayback = null;
+                view.showNextDetail();
+              }}
+              onstatuschange={(status) => (view.detailStatus = status)}
+              onfilemenu={() => view.detailIndex !== null && view.openFileMenu(view.detailIndex)}
+              imageQuery={ocrSearch.visualImageQuery}
+              imageQueryLabel={ocrSearch.visualQueryLabel}
+              imageModelName={runtime.imageModelName}
+              imageModelVisualizes={runtime.imageModelVisualizes}
+              backendReady={catalog.backendStatus.ready}
+              toolbarEnd={phoneWidth.current ? infoToggle : undefined}
+              fullscreenTarget={detailHost}
+              bind:showMatchAreas
+            />
+          {/key}
+        </div>
       {/if}
     </div>
     {#if infoOpen}
@@ -481,5 +488,13 @@
   .content-row :global(.gallery-viewport) {
     flex: 1;
     min-width: 0;
+  }
+  .detail-host {
+    position: absolute;
+    z-index: var(--z-raised);
+    inset: 0;
+  }
+  .detail-host:fullscreen {
+    background: var(--surface-2);
   }
 </style>

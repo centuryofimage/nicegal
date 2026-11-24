@@ -17,8 +17,8 @@
     <button
       onclick={onopen}
       title={status.phase === "ready"
-        ? m.update_status_ready_tooltip({ version: status.version })
-        : m.update_status_available_tooltip({ version: status.version })}
+        ? m.update_status_ready_tooltip({ version: status.version ?? "" })
+        : m.update_status_available_tooltip({ version: status.version ?? "" })}
     >
       <CircleArrowUp size={13} aria-hidden="true" />{status.phase === "ready"
         ? m.update_status_ready()

@@ -64,6 +64,7 @@
     backendReady = true,
     showMatchAreas = $bindable(false),
     toolbarEnd,
+    fullscreenTarget,
   }: {
     item: GalleryItem;
     initialPlayback?: { currentTime: number; muted: boolean } | null;
@@ -86,6 +87,9 @@
     showMatchAreas?: boolean;
     /** Trailing toolbar control supplied by the gallery. */
     toolbarEnd?: Snippet;
+    /** The element to make fullscreen; it must outlive this viewer for stepping between items
+     * to stay fullscreen. Defaults to the viewer itself. */
+    fullscreenTarget?: HTMLElement;
   } = $props();
 
   let failed = $state(false);
@@ -290,14 +294,15 @@
   }
 
   function updateFullscreenState(): void {
-    fullscreen = document.fullscreenElement === viewer;
+    fullscreen = document.fullscreenElement === (fullscreenTarget ?? viewer);
   }
 
   async function toggleFullscreen(): Promise<void> {
-    if (!viewer) return;
+    const target = fullscreenTarget ?? viewer;
+    if (!target) return;
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
-      else await viewer.requestFullscreen();
+      else await target.requestFullscreen();
     } catch {
       // Native fullscreen can be unavailable or denied; retain the current viewer state.
     }
@@ -668,7 +673,6 @@
   .detail-viewer:fullscreen {
     max-width: none;
     max-height: none;
-    background: var(--surface-2);
   }
 
   .image-tools {

@@ -150,18 +150,9 @@ export function createThumbnailScheduler(options: ThumbnailSchedulerOptions): Th
       (largest, miss) => Math.max(largest, options.requiredSize(miss)),
       1,
     );
-    console.info("[nicegal:thumbnails] ensuring batch", { assetIds, requiredSize });
-    const startedAt = performance.now();
-
     try {
-      const result = await options.ensure({ assetIds, requiredSize });
+      await options.ensure({ assetIds, requiredSize });
       if (disposed) return;
-      console.info("[nicegal:thumbnails] ensured", {
-        assetIds: result.assetIds,
-        sizeBucket: result.sizeBucket,
-        generatorVersion: result.generatorVersion,
-        ms: Math.round(performance.now() - startedAt),
-      });
       options.onReady(assetIds);
     } catch (error) {
       if (disposed) return;

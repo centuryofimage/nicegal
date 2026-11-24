@@ -82,7 +82,7 @@ export function parseQuery(raw: string): ParsedQuery {
 
     // A scope may follow filters (for example `type:video like:cat`). Keep the first
     // scope authoritative so a second scope-like word remains searchable text.
-    const scopeMatch = scope === "all" ? part.match(scopePattern) : null;
+    const scopeMatch: RegExpMatchArray | null = scope === "all" ? part.match(scopePattern) : null;
     const temporalMatch = part.match(temporalPattern);
     const folderMatch = /^in:(?:"([^"]*)"|([^\s"]+))$/i.exec(part);
     const pathMatch = /^(!?)path:(?:"([^"]*)"|([^\s"]*))$/i.exec(part);

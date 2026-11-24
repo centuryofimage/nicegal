@@ -900,6 +900,7 @@
   "search_bar_scope_all": "全部",
   "search_bar_scope_all_summary": "文件名、精确文本、相关文本和视觉结果",
   "search_bar_scope_button_label": "搜索范围：{scope}",
+  "search_bar_scope_button_title": "搜索范围 (Ctrl+↑、Ctrl+↓)",
   "search_bar_scope_like": "视觉搜索",
   "search_bar_scope_like_summary": "使用描述或示例图像查找图像",
   "search_bar_scope_meaning": "相关文本",

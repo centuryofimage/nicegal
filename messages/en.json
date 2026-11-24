@@ -924,6 +924,7 @@
   "search_bar_scope_all": "All",
   "search_bar_scope_all_summary": "File names, exact text, related text, and visual results",
   "search_bar_scope_button_label": "Search scope: {scope}",
+  "search_bar_scope_button_title": "Search scope (Ctrl+Up, Ctrl+Down)",
   "search_bar_scope_like": "Visual search",
   "search_bar_scope_like_summary": "Find images using descriptions or example images",
   "search_bar_scope_meaning": "Related text",

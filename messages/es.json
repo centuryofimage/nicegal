@@ -924,6 +924,7 @@
   "search_bar_scope_all": "Todo",
   "search_bar_scope_all_summary": "Nombres de archivo, texto exacto, texto relacionado y resultados visuales",
   "search_bar_scope_button_label": "Ámbito de búsqueda: {scope}",
+  "search_bar_scope_button_title": "Ámbito de búsqueda (Ctrl+Arriba, Ctrl+Abajo)",
   "search_bar_scope_like": "Búsqueda visual",
   "search_bar_scope_like_summary": "Encontrar imágenes con descripciones o imágenes de ejemplo",
   "search_bar_scope_meaning": "Texto relacionado",

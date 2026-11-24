@@ -210,8 +210,11 @@
   }
 
   let inputEl: HTMLInputElement;
+  /** Focuses the field with its text selected, so typing replaces the query. Scope and folder
+   * live outside the editable text and are kept. */
   export function focus(): void {
     inputEl?.focus();
+    inputEl?.select();
   }
   let backdropEl: HTMLDivElement;
   let menuOpen = $state(false);
@@ -391,6 +394,14 @@
     inputEl?.focus();
   }
 
+  /** Ctrl+Up/Down steps through the scopes in menu order, wrapping at either end. */
+  function stepScope(delta: -1 | 1): void {
+    const index = scopeOptions.findIndex((option) => option.scope === parsed.scope);
+    const next = (index + delta + scopeOptions.length) % scopeOptions.length;
+    closeRecent();
+    selectScope(scopeOptions[next].scope);
+  }
+
   function insertFilter(token: string): void {
     value = `${value.trimEnd()}${value.trim() ? " " : ""}${token}`;
     menuOpen = false;
@@ -535,6 +546,7 @@
         class="scope-button"
         type="button"
         aria-label={m.search_bar_scope_button_label({ scope: selectedScope.label })}
+        title={m.search_bar_scope_button_title()}
         aria-haspopup="menu"
         aria-expanded={menuOpen}
         onclick={toggleMenu}
@@ -616,6 +628,19 @@
         }}
         oninput={() => (recentActive = -1)}
         onkeydown={(event) => {
+          if (
+            (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+            event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            !event.shiftKey &&
+            !event.isComposing
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            stepScope(event.key === "ArrowUp" ? -1 : 1);
+            return;
+          }
           if (!event.isComposing && recentKeydown(event)) {
             event.preventDefault();
             event.stopPropagation();

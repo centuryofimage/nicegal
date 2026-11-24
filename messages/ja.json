@@ -900,6 +900,7 @@
   "search_bar_scope_all": "すべて",
   "search_bar_scope_all_summary": "ファイル名、完全一致テキスト、関連テキスト、ビジュアル検索の結果",
   "search_bar_scope_button_label": "検索範囲: {scope}",
+  "search_bar_scope_button_title": "検索範囲 (Ctrl+↑、Ctrl+↓)",
   "search_bar_scope_like": "ビジュアル検索",
   "search_bar_scope_like_summary": "説明文または見本画像で画像を検索します",
   "search_bar_scope_meaning": "関連テキスト",

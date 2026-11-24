@@ -87,6 +87,12 @@ interface V2LibraryRecord {
   scrollTop: number;
 }
 
+/** The raw parsed shape of that registry; each field is validated before use. */
+interface StoredV2Registry {
+  libraries?: unknown;
+  selectedRoot?: unknown;
+}
+
 function emptyLibraryRowStatus(): LibraryRowStatus {
   return {
     cataloged: 0,
@@ -168,9 +174,9 @@ function readV2Registry(): {
   try {
     const serialized = localStorage.getItem(LIBRARIES_STORAGE_KEY);
     if (serialized !== null) {
-      let value: { libraries?: unknown; selectedRoot?: unknown } | null = null;
+      let value: StoredV2Registry | null = null;
       try {
-        value = JSON.parse(serialized) as typeof value;
+        value = JSON.parse(serialized) as StoredV2Registry;
       } catch {
         // A damaged v2 record should not hide the older single-root preference.
       }
